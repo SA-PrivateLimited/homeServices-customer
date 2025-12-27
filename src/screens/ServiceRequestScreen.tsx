@@ -803,11 +803,20 @@ export default function ServiceRequestScreen({
 
         // Combine results and remove duplicates
         const allProviderIds = new Set<string>();
-        onlineProvidersSnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
-        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
+        onlineProvidersSnapshot.docs.forEach(doc => {
+          allProviderIds.add(doc.id);
+          console.log(`📋 Found online provider: ${doc.id}, specialization: ${doc.data()?.specialization}`);
+        });
+        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => {
+          allProviderIds.add(doc.id);
+          console.log(`📋 Found online provider (by specialty): ${doc.id}, specialty: ${doc.data()?.specialty}`);
+        });
+
+        console.log(`📢 Notifying ${allProviderIds.size} provider(s) about service request: ${serviceRequestRef.id}`);
 
         // Emit WebSocket notification to each provider
         const notificationPromises = Array.from(allProviderIds).map(providerId => {
+          console.log(`📤 Sending WebSocket notification to provider: ${providerId}`);
           return WebSocketService.emitNewBooking(providerId, {
             consultationId: serviceRequestRef.id,
             id: serviceRequestRef.id,
