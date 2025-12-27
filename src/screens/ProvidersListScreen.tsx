@@ -140,7 +140,8 @@ export default function ProvidersListScreen({navigation}: any) {
       setProviders(providersList);
     } catch (error: any) {
       console.error('Error loading online providers:', error);
-      Alert.alert('Error', 'Failed to load providers. Please try again.');
+      const errorMessage = error?.message || 'Failed to load providers. Please try again.';
+      Alert.alert('Error', String(errorMessage));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -359,7 +360,7 @@ export default function ProvidersListScreen({navigation}: any) {
       {/* Providers List */}
       {filteredProviders.length === 0 ? (
         <EmptyState
-          icon="person-off"
+          icon="person-remove-outline"
           title="No Online Providers"
           message={
             searchQuery || selectedServiceType !== 'All'
