@@ -159,3 +159,59 @@ export const subscribeToCustomerJobCardStatuses = (
   };
 };
 
+/**
+ * Customer verifies task completion
+ * Updates job card status to 'completed'
+ */
+export const verifyTaskCompletion = async (jobCardId: string): Promise<void> => {
+  try {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+
+    // Verify the job card belongs to the customer
+    const jobCardDoc = await firestore()
+      .collection('jobCards')
+      .doc(jobCardId)
+      .get();
+
+    if (!jobCardDoc.exists) {
+      throw new Error('Job card not found');
+    }
+
+    const jobCardData = jobCardDoc.data();
+    if (jobCardData?.customerId !== currentUser.uid) {
+      throw new Error('You do not have permission to verify this job card');
+    }
+
+    // Update in Firestore
+    await firestore()
+      .collection('jobCards')
+      .doc(jobCardId)
+      .update({
+        status: 'completed',
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+    // Update in Realtime Database (for real-time synchronization)
+    await database()
+      .ref(`jobCards/${jobCardId}`)
+      .update({
+        status: 'completed',
+        updatedAt: Date.now(),
+      });
+
+    console.log('Task verified as completed by customer');
+  } catch (error: any) {
+    console.error('Error verifying task completion:', error);
+    
+    // Check for permission error
+    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+      throw new Error('Permission denied. Please ensure you are logged in and this is your job card.');
+    }
+    
+    throw new Error(error.message || 'Failed to verify task completion');
+  }
+};
+

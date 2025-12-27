@@ -35,7 +35,7 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import {subscribeToJobCardStatus} from '../services/jobCardService';
+import {subscribeToJobCardStatus, verifyTaskCompletion} from '../services/jobCardService';
 import {getDistanceToCustomer, formatDistance} from '../services/providerLocationService';
 import ReviewModal from '../components/ReviewModal';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
@@ -255,6 +255,43 @@ export default function ActiveServiceScreen({
               navigation.goBack();
             } catch (error) {
               Alert.alert('Error', 'Failed to cancel service');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleVerifyCompletion = () => {
+    Alert.alert(
+      'Verify Task Completion',
+      'Have you verified that the service has been completed to your satisfaction?',
+      [
+        {text: 'No', style: 'cancel'},
+        {
+          text: 'Yes, Verify',
+          onPress: async () => {
+            if (!jobCardId) {
+              Alert.alert('Error', 'Job card ID not found');
+              return;
+            }
+
+            try {
+              setLoading(true);
+              await verifyTaskCompletion(jobCardId);
+              setStatus('completed');
+              
+              // Reload job card to get updated status
+              await loadServiceData();
+              
+              // Show review modal after a short delay
+              setTimeout(() => {
+                checkReviewStatus();
+              }, 1000);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to verify task completion');
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -559,7 +596,24 @@ export default function ActiveServiceScreen({
 
           {/* Action Buttons */}
           <View style={styles.actionsContainer}>
-            {status !== 'completed' && status !== 'cancelled' && (
+            {status === 'in-progress' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionButton, {backgroundColor: '#34C759'}]}
+                  onPress={handleVerifyCompletion}>
+                  <Icon name="check-circle" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>Verify Task Completed</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                  onPress={handleCallProvider}>
+                  <Icon name="phone" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>Call Provider</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {status !== 'completed' && status !== 'cancelled' && status !== 'in-progress' && (
               <>
                 <TouchableOpacity
                   style={[styles.actionButton, {backgroundColor: theme.primary}]}
@@ -599,11 +653,22 @@ export default function ActiveServiceScreen({
         <ReviewModal
           visible={showReviewModal}
           jobCardId={jobCardId}
-          providerName={provider?.providerName || 'Provider'}
-          serviceType={provider?.serviceType || 'Service'}
+          providerName={providerProfile?.name || jobCard?.providerName || provider?.providerName || 'Provider'}
+          serviceType={providerProfile?.specialization || providerProfile?.specialty || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
           onReviewSubmitted={() => {
             setShowReviewModal(false);
-            navigation.navigate('ServiceHistory');
+            // Reload data to show updated status
+            loadServiceData();
+            Alert.alert(
+              'Thank You!',
+              'Your review with rating has been submitted successfully.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.navigate('ServiceHistory'),
+                },
+              ],
+            );
           }}
           onSkip={() => {
             setShowReviewModal(false);
