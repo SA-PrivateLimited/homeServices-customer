@@ -228,19 +228,21 @@ io.on('connection', (socket) => {
  */
 app.post('/emit-booking', (req, res) => {
   try {
-    const { providerId, bookingData } = req.body;
+    // Support both providerId and doctorId for backward compatibility
+    const { providerId, doctorId, bookingData } = req.body;
+    const targetProviderId = providerId || doctorId;
 
-    if (!providerId || !bookingData) {
+    if (!targetProviderId || !bookingData) {
       return res.status(400).json({
         success: false,
-        error: 'providerId and bookingData are required',
+        error: 'providerId (or doctorId) and bookingData are required',
       });
     }
 
     // Emit to specific provider's room
-    io.to(`provider-${providerId}`).emit('new-booking', bookingData);
+    io.to(`provider-${targetProviderId}`).emit('new-booking', bookingData);
 
-    console.log(`Booking notification sent to provider ${providerId}`);
+    console.log(`✅ Booking notification sent to provider ${targetProviderId}`);
 
     res.json({
       success: true,

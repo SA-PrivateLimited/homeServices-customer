@@ -6,7 +6,7 @@
 import io, { Socket } from 'socket.io-client';
 
 const SOCKET_URL = __DEV__
-  ? 'http://10.0.2.2:3000' // Android emulator localhost
+  ? 'http://10.0.2.2:3001' // Android emulator localhost (using port 3001 to avoid conflicts)
   : 'https://your-production-server.com'; // Replace with your production URL
 
 class WebSocketService {
@@ -64,7 +64,7 @@ class WebSocketService {
   /**
    * Emit a new booking event to notify the provider
    */
-  async emitNewBooking(doctorId: string, bookingData: any): Promise<void> {
+  async emitNewBooking(providerId: string, bookingData: any): Promise<void> {
     try {
       // Call the REST API endpoint to emit the booking
       const response = await fetch(`${SOCKET_URL}/emit-booking`, {
@@ -73,7 +73,7 @@ class WebSocketService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          doctorId,
+          providerId, // Use providerId instead of doctorId
           bookingData,
         }),
       });

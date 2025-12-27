@@ -36,6 +36,7 @@ import {
   type SavedAddress,
 } from '../services/addressService';
 import type {UserLocation} from '../types/consultation';
+import WebSocketService from '../services/websocketService';
 
 interface ServiceRequestScreenProps {
   navigation: any;
