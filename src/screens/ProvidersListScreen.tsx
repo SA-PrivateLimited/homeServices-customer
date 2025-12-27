@@ -87,9 +87,11 @@ export default function ProvidersListScreen({navigation}: any) {
         
         // Only include if truly online
         if (realtimeStatus?.isOnline === true) {
+          // Ensure all required fields are present and valid
           const provider: ProviderWithStatus = {
             ...providerData,
-            id: providerId,
+            id: providerId || '',
+            name: providerData.name || 'Provider',
             isOnline: true,
           };
 
@@ -140,6 +142,8 @@ export default function ProvidersListScreen({navigation}: any) {
       setProviders(providersList);
     } catch (error: any) {
       console.error('Error loading online providers:', error);
+      // Reset providers to empty array on error to prevent rendering invalid data
+      setProviders([]);
       const errorMessage = error?.message || 'Failed to load providers. Please try again.';
       Alert.alert('Error', String(errorMessage));
     } finally {
@@ -243,14 +247,14 @@ export default function ProvidersListScreen({navigation}: any) {
             {item.rating && (
               <View style={styles.ratingContainer}>
                 <Icon name="star" size={16} color="#FFD700" />
-            <Text style={[styles.ratingText, {color: theme.text}]}>
-              {item.rating ? item.rating.toFixed(1) : '0.0'}
-            </Text>
-            {item.totalConsultations && (
-              <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                ({String(item.totalConsultations)})
-              </Text>
-            )}
+                <Text style={[styles.ratingText, {color: theme.text}]}>
+                  {item.rating ? item.rating.toFixed(1) : '0.0'}
+                </Text>
+                {item.totalConsultations && (
+                  <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
+                    ({String(item.totalConsultations)})
+                  </Text>
+                )}
               </View>
             )}
           </View>
