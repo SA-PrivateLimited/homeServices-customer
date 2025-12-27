@@ -243,14 +243,14 @@ export default function ProvidersListScreen({navigation}: any) {
             {item.rating && (
               <View style={styles.ratingContainer}>
                 <Icon name="star" size={16} color="#FFD700" />
-                <Text style={[styles.ratingText, {color: theme.text}]}>
-                  {item.rating.toFixed(1)}
-                </Text>
-                {item.totalConsultations && (
-                  <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                    ({item.totalConsultations})
-                  </Text>
-                )}
+            <Text style={[styles.ratingText, {color: theme.text}]}>
+              {item.rating ? item.rating.toFixed(1) : '0.0'}
+            </Text>
+            {item.totalConsultations && (
+              <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
+                ({String(item.totalConsultations)})
+              </Text>
+            )}
               </View>
             )}
           </View>
@@ -261,7 +261,7 @@ export default function ProvidersListScreen({navigation}: any) {
 
           {item.experience && (
             <Text style={[styles.experience, {color: theme.textSecondary}]}>
-              {item.experience} years experience
+              {String(item.experience)} years experience
             </Text>
           )}
 
@@ -272,7 +272,7 @@ export default function ProvidersListScreen({navigation}: any) {
                 <View style={styles.distanceItem}>
                   <Icon name="location-on" size={14} color={theme.primary} />
                   <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                    {item.distance}
+                    {String(item.distance)}
                   </Text>
                 </View>
               )}
@@ -280,7 +280,7 @@ export default function ProvidersListScreen({navigation}: any) {
                 <View style={styles.distanceItem}>
                   <Icon name="access-time" size={14} color={theme.primary} />
                   <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                    ~{item.eta} min
+                    ~{String(item.eta)} min
                   </Text>
                 </View>
               )}
