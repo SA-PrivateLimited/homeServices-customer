@@ -273,7 +273,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             commonStyles.shadowSmall,
           ]}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            Patient Reviews
+            Customer Reviews
           </Text>
           <Text style={[styles.comingSoonText, {color: theme.textSecondary}]}>
             Reviews coming soon
