@@ -1,0 +1,449 @@
+import React, {useState, useEffect, useRef} from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  PermissionsAndroid,
+  Platform,
+  ActivityIndicator,
+} from 'react-native';
+import {
+  createAgoraRtcEngine,
+  IRtcEngine,
+  ChannelProfileType,
+  ClientRoleType,
+  RtcTextureView,
+} from 'react-native-agora';
+import Icon from 'react-native-vector-icons/Ionicons';
+import functions from '@react-native-firebase/functions';
+import firestore from '@react-native-firebase/firestore';
+import {useStore} from '../store';
+import {lightTheme, darkTheme} from '../utils/theme';
+import type {Consultation} from '../types/consultation';
+
+interface VideoCallScreenProps {
+  navigation: any;
+  route: {
+    params: {
+      consultation: Consultation;
+    };
+  };
+}
+
+const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
+  navigation,
+  route,
+}) => {
+  const {consultation} = route.params;
+  const {isDarkMode, currentUser} = useStore();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
+  const agoraEngineRef = useRef<IRtcEngine | null>(null);
+  const [isJoined, setIsJoined] = useState(false);
+  const [remoteUid, setRemoteUid] = useState<number>(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  const appId = process.env.AGORA_APP_ID || '';
+  const channelName = `consultation_${consultation.id}`;
+
+  // Convert user ID to number (simple hash function)
+  const hashCode = (str: string): number => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  };
+
+  const uid = currentUser?.id ? hashCode(currentUser.id) : 0;
+
+  useEffect(() => {
+    setupVideoSDKEngine();
+
+    return () => {
+      agoraEngineRef.current?.leaveChannel();
+      agoraEngineRef.current?.release();
+    };
+  }, []);
+
+  const getPermissions = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+
+        const cameraGranted =
+          granted['android.permission.CAMERA'] ===
+          PermissionsAndroid.RESULTS.GRANTED;
+        const audioGranted =
+          granted['android.permission.RECORD_AUDIO'] ===
+          PermissionsAndroid.RESULTS.GRANTED;
+
+        if (cameraGranted && audioGranted) {
+          console.log('Camera and Audio permissions granted');
+        } else {
+          Alert.alert(
+            'Permissions Required',
+            'Camera and microphone permissions are required for video calls',
+          );
+        }
+      } catch (err) {
+        console.warn('Permission error:', err);
+      }
+    }
+  };
+
+  const setupVideoSDKEngine = async () => {
+    try {
+      await getPermissions();
+
+      if (!agoraEngineRef.current) {
+        agoraEngineRef.current = createAgoraRtcEngine();
+        const engine = agoraEngineRef.current;
+
+        engine.initialize({
+          appId: appId,
+        });
+
+        engine.registerEventHandler({
+          onJoinChannelSuccess: () => {
+            console.log('Successfully joined channel');
+            setIsJoined(true);
+            setLoading(false);
+          },
+          onUserJoined: (_connection, uid) => {
+            console.log('Remote user joined:', uid);
+            setRemoteUid(uid);
+          },
+          onUserOffline: (_connection, uid) => {
+            console.log('Remote user left:', uid);
+            setRemoteUid(0);
+          },
+          onError: (err, msg) => {
+            console.error('Agora error:', err, msg);
+          },
+        });
+
+        engine.enableVideo();
+        engine.startPreview();
+      }
+
+      await join();
+    } catch (error) {
+      console.error('Setup error:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Failed to setup video call');
+    }
+  };
+
+  const join = async () => {
+    try {
+      // Get Agora token from Cloud Function
+      const generateToken = functions().httpsCallable('generateAgoraToken');
+      const result = await generateToken({
+        channelName,
+        uid: uid.toString(),
+      });
+
+      const {token} = result.data;
+
+      if (!token) {
+        throw new Error('Failed to get Agora token');
+      }
+
+      // Join channel
+      agoraEngineRef.current?.setChannelProfile(
+        ChannelProfileType.ChannelProfileCommunication,
+      );
+
+      agoraEngineRef.current?.joinChannel(token, channelName, uid, {
+        clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+      });
+
+      // Update consultation status to 'ongoing'
+      await firestore()
+        .collection('consultations')
+        .doc(consultation.id)
+        .update({
+          status: 'ongoing',
+          joinedAt: firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error: any) {
+      console.error('Join error:', error);
+      Alert.alert('Error', error.message || 'Failed to join video call');
+      setLoading(false);
+    }
+  };
+
+  const leave = async () => {
+    try {
+      agoraEngineRef.current?.leaveChannel();
+      setIsJoined(false);
+      setRemoteUid(0);
+
+      // Update consultation status
+      await firestore()
+        .collection('consultations')
+        .doc(consultation.id)
+        .update({
+          status: 'completed',
+          completedAt: firestore.FieldValue.serverTimestamp(),
+        });
+
+      navigation.goBack();
+    } catch (error) {
+      console.error('Leave error:', error);
+    }
+  };
+
+  const toggleMute = () => {
+    agoraEngineRef.current?.muteLocalAudioStream(!isMuted);
+    setIsMuted(!isMuted);
+  };
+
+  const toggleVideo = () => {
+    agoraEngineRef.current?.muteLocalVideoStream(!isVideoOff);
+    setIsVideoOff(!isVideoOff);
+  };
+
+  const toggleSpeaker = () => {
+    agoraEngineRef.current?.setEnableSpeakerphone(!isSpeakerOn);
+    setIsSpeakerOn(!isSpeakerOn);
+  };
+
+  const switchCamera = () => {
+    agoraEngineRef.current?.switchCamera();
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {backgroundColor: theme.background},
+          styles.centerContent,
+        ]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={[styles.loadingText, {color: theme.text}]}>
+          Connecting to video call...
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, {backgroundColor: '#000'}]}>
+      {/* Remote video (Doctor) */}
+      <View style={styles.remoteVideoContainer}>
+        {remoteUid !== 0 ? (
+          <RtcTextureView
+            canvas={{uid: remoteUid}}
+            style={styles.remoteVideo}
+          />
+        ) : (
+          <View style={styles.waitingContainer}>
+            <Icon name="person-circle-outline" size={80} color="#fff" />
+            <Text style={styles.waitingText}>Waiting for doctor to join...</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Local video (Patient) */}
+      <View style={styles.localVideoContainer}>
+        {!isVideoOff ? (
+          <RtcTextureView canvas={{uid: 0}} style={styles.localVideo} />
+        ) : (
+          <View style={[styles.localVideo, styles.videoOffContainer]}>
+            <Icon name="videocam-off" size={40} color="#fff" />
+          </View>
+        )}
+      </View>
+
+      {/* Top info bar */}
+      <View style={styles.topBar}>
+        <View style={styles.callInfo}>
+          <Icon name="videocam" size={20} color="#fff" />
+          <Text style={styles.callInfoText}>
+            Dr. {consultation.doctorName}
+          </Text>
+        </View>
+      </View>
+
+      {/* Bottom controls */}
+      <View style={styles.bottomBar}>
+        <View style={styles.controlsContainer}>
+          {/* Mute/Unmute */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              isMuted && styles.controlButtonActive,
+            ]}
+            onPress={toggleMute}>
+            <Icon
+              name={isMuted ? 'mic-off' : 'mic'}
+              size={28}
+              color="#fff"
+            />
+          </TouchableOpacity>
+
+          {/* Video On/Off */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              isVideoOff && styles.controlButtonActive,
+            ]}
+            onPress={toggleVideo}>
+            <Icon
+              name={isVideoOff ? 'videocam-off' : 'videocam'}
+              size={28}
+              color="#fff"
+            />
+          </TouchableOpacity>
+
+          {/* Switch Camera */}
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={switchCamera}>
+            <Icon name="camera-reverse" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Speaker */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              !isSpeakerOn && styles.controlButtonActive,
+            ]}
+            onPress={toggleSpeaker}>
+            <Icon
+              name={isSpeakerOn ? 'volume-high' : 'volume-mute'}
+              size={28}
+              color="#fff"
+            />
+          </TouchableOpacity>
+
+          {/* End Call */}
+          <TouchableOpacity style={styles.endCallButton} onPress={leave}>
+            <Icon name="call" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+  },
+  remoteVideoContainer: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  remoteVideo: {
+    flex: 1,
+  },
+  waitingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waitingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  localVideoContainer: {
+    position: 'absolute',
+    top: 80,
+    right: 16,
+    width: 120,
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  localVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  videoOffContainer: {
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  callInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  callInfoText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  controlsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  controlButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlButtonActive: {
+    backgroundColor: '#ff4444',
+  },
+  endCallButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ff4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    transform: [{rotate: '135deg'}],
+  },
+});
+
+export default VideoCallScreen;

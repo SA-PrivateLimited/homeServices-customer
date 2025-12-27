@@ -1,0 +1,250 @@
+/**
+ * Simple Express Server for Push Notifications
+ * 
+ * This server can be hosted for FREE on:
+ * - Railway.app (railway.app)
+ * - Render.com (render.com)
+ * - Fly.io (fly.io)
+ * 
+ * No Firebase Blaze plan needed!
+ * 
+ * Setup:
+ * 1. npm install express firebase-admin cors
+ * 2. Deploy to Railway/Render/Fly.io
+ * 3. Update pushNotificationService.ts to call this server instead of Cloud Functions
+ */
+
+const express = require('express');
+const admin = require('firebase-admin');
+const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+app.use(cors());
+app.use(express.json());
+
+// Initialize Firebase Admin
+// You'll need to download serviceAccountKey.json from Firebase Console
+// Go to: Project Settings > Service Accounts > Generate New Private Key
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = require('./serviceAccountKey.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch (error) {
+    console.error('Firebase Admin initialization error:', error);
+    console.log('Make sure serviceAccountKey.json is in the server directory');
+  }
+}
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({status: 'ok', message: 'Push Notification Server is running'});
+});
+
+/**
+ * Send push notification
+ * POST /send-notification
+ * Body: {
+ *   token: 'FCM_TOKEN',
+ *   notification: { title: 'Title', body: 'Body' },
+ *   data: { type: 'consultation', consultationId: '123' }
+ * }
+ */
+app.post('/send-notification', async (req, res) => {
+  try {
+    const {token, notification, data} = req.body;
+
+    if (!token || !notification) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and notification are required',
+      });
+    }
+
+    const message = {
+      token: token,
+      notification: {
+        title: notification.title || 'HomeServices',
+        body: notification.body || '',
+      },
+      data: {
+        ...data,
+        // Convert all data values to strings (FCM requirement)
+        ...Object.keys(data || {}).reduce((acc, key) => {
+          acc[key] = String(data[key] || '');
+          return acc;
+        }, {}),
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'consultation-updates',
+          sound: 'default',
+          priority: 'high',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+    
+    res.json({
+      success: true,
+      messageId: response,
+    });
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send notification',
+    });
+  }
+});
+
+/**
+ * Send notification to multiple tokens
+ * POST /send-notification-multiple
+ */
+app.post('/send-notification-multiple', async (req, res) => {
+  try {
+    const {tokens, notification, data} = req.body;
+
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tokens array is required',
+      });
+    }
+
+    const message = {
+      notification: {
+        title: notification.title || 'HomeServices',
+        body: notification.body || '',
+      },
+      data: {
+        ...data,
+        ...Object.keys(data || {}).reduce((acc, key) => {
+          acc[key] = String(data[key] || '');
+          return acc;
+        }, {}),
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'consultation-updates',
+          sound: 'default',
+          priority: 'high',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+      tokens: tokens,
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    
+    res.json({
+      success: true,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
+  } catch (error) {
+    console.error('Error sending notifications:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send notifications',
+    });
+  }
+});
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  // Join doctor-specific room
+  socket.on('join-doctor-room', (doctorId) => {
+    console.log(`Doctor ${doctorId} joined room`);
+    socket.join(`doctor-${doctorId}`);
+  });
+
+  // Join customer room
+  socket.on('join-customer-room', (customerId) => {
+    console.log(`Customer ${customerId} joined room`);
+    socket.join(`customer-${customerId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+/**
+ * Emit booking notification via WebSocket
+ * POST /emit-booking
+ * Body: {
+ *   doctorId: 'doctor123',
+ *   bookingData: { ... }
+ * }
+ */
+app.post('/emit-booking', (req, res) => {
+  try {
+    const { doctorId, bookingData } = req.body;
+
+    if (!doctorId || !bookingData) {
+      return res.status(400).json({
+        success: false,
+        error: 'doctorId and bookingData are required',
+      });
+    }
+
+    // Emit to specific doctor's room
+    io.to(`doctor-${doctorId}`).emit('new-booking', bookingData);
+
+    console.log(`Booking notification sent to doctor ${doctorId}`);
+
+    res.json({
+      success: true,
+      message: 'Booking notification emitted',
+    });
+  } catch (error) {
+    console.error('Error emitting booking:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to emit booking notification',
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Push Notification Server with WebSocket running on port ${PORT}`);
+  console.log(`WebSocket endpoint: ws://localhost:${PORT}`);
+});
+
+module.exports = { app, io, server };
+
+

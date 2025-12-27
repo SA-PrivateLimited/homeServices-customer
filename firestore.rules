@@ -1,0 +1,364 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user's role from Firestore
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Helper function to check if user is admin
+    // Safely checks if user document exists before reading role
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper function to check if user is accessing their own document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper function to check if a doctor is approved
+    // Checks if the doctor profile exists and has approvalStatus == 'approved'
+    // This is used to restrict doctor access to consultations/appointments
+    function isApprovedDoctor(doctorId) {
+      return exists(/databases/$(database)/documents/doctors/$(doctorId)) &&
+             (get(/databases/$(database)/documents/doctors/$(doctorId)).data.approvalStatus == 'approved' ||
+              (!('approvalStatus' in get(/databases/$(database)/documents/doctors/$(doctorId)).data) &&
+               get(/databases/$(database)/documents/doctors/$(doctorId)).data.verified == true));
+    }
+    
+    // Helper function to check if authenticated user is the doctor for a consultation
+    // Verifies that the doctorId in the consultation belongs to an approved doctor
+    // and that the authenticated user's email matches the doctor's email
+    function isApprovedDoctorForConsultation(doctorId) {
+      return isAuthenticated() &&
+             request.auth.token.email != null &&
+             exists(/databases/$(database)/documents/doctors/$(doctorId)) &&
+             get(/databases/$(database)/documents/doctors/$(doctorId)).data.email == request.auth.token.email &&
+             (get(/databases/$(database)/documents/doctors/$(doctorId)).data.approvalStatus == 'approved' ||
+              (!('approvalStatus' in get(/databases/$(database)/documents/doctors/$(doctorId)).data) &&
+               get(/databases/$(database)/documents/doctors/$(doctorId)).data.verified == true));
+    }
+    
+    // Users Collection
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if isOwner(userId);
+      
+      // Allow admins to read all user documents
+      allow read: if isAdmin();
+      
+      // NOTIFICATION SUPPORT: Allow authenticated users to read FCM tokens for sending notifications
+      // This allows the app to read FCM tokens from other users' documents to send push notifications
+      // Works for both single document reads (.doc().get()) and collection queries
+      allow read: if isAuthenticated();
+      
+      // Allow users to create their own document
+      // Role can be set during creation (for new users)
+      allow create: if isOwner(userId) &&
+                     (
+                       // Allow creation without role (will be set later)
+                       !('role' in request.resource.data) ||
+                       // Allow setting role to patient or doctor during creation
+                       (request.resource.data.role == 'patient' || request.resource.data.role == 'doctor')
+                     );
+      
+      // Allow users to update their own document
+      // SECURITY: Users CANNOT change their own role if it already exists
+      // - Can update any field EXCEPT role (if role already exists)
+      // - Can set role during first update if it doesn't exist yet
+      // - Can update fcmToken and location for notifications and geolocation
+      allow update: if isOwner(userId) && 
+                     (
+                       // If not changing role field, allow update (e.g., updating fcmToken, profile, etc.)
+                       !('role' in request.resource.data) ||
+                       // If role doesn't exist in current document, allow setting it to patient/doctor
+                       (!('role' in resource.data) && 
+                        (request.resource.data.role == 'patient' || request.resource.data.role == 'doctor')) ||
+                       // If role exists and is not being changed, allow update
+                       (('role' in resource.data) && 
+                        resource.data.role == request.resource.data.role)
+                     );
+      
+      // Allow admins to update any user document (including role)
+      allow update: if isAdmin();
+      
+      // Prevent users from deleting their own document
+      // Only admins can delete (if needed in future)
+      allow delete: if isAdmin();
+    }
+    
+    // Role Change Logs Collection (Admin only)
+    match /roleChangeLogs/{logId} {
+      // Only admins can read role change logs
+      allow read: if isAdmin();
+      
+      // Only admins can create role change logs
+      allow create: if isAdmin();
+      
+      // Prevent updates and deletes
+      allow update, delete: if false;
+    }
+    
+    // Consultations Collection
+    match /consultations/{consultationId} {
+      // Allow patients to read their own consultations
+      allow read: if isAuthenticated() && 
+                    resource.data.patientId == request.auth.uid;
+      
+      // Allow approved doctors to read consultations where they are the doctor
+      // Only approved doctors can see their consultations/appointments
+      allow read: if isAuthenticated() && 
+                    'doctorId' in resource.data &&
+                    isApprovedDoctorForConsultation(resource.data.doctorId);
+      
+      // Allow admins to read all consultations
+      allow read: if isAdmin();
+      
+      // Allow authenticated users to create consultations
+      allow create: if isAuthenticated() && 
+                      request.resource.data.patientId == request.auth.uid;
+      
+      // Allow patients to update their own consultations
+      allow update: if isAuthenticated() && 
+                       resource.data.patientId == request.auth.uid;
+      
+      // Allow approved doctors to update consultations where they are the doctor
+      allow update: if isAuthenticated() && 
+                       'doctorId' in resource.data &&
+                       isApprovedDoctorForConsultation(resource.data.doctorId);
+      
+      // Allow admins to update any consultation
+      allow update: if isAdmin();
+      
+      // Allow admins to delete consultations
+      allow delete: if isAdmin();
+    }
+    
+    // Doctors Collection
+    match /doctors/{doctorId} {
+      // PRIMARY RULE: Allow everyone (including unauthenticated users and patients) to read approved doctor profiles
+      // This is the main rule for collection queries - simple field check without get() calls
+      // Patients need this to browse and book consultations with approved doctors
+      // This rule must be simple for collection queries to work
+      allow read: if resource.data.approvalStatus == 'approved' || 
+                     (!('approvalStatus' in resource.data) && resource.data.verified == true);
+      
+      // DOCTOR RULE: Allow authenticated doctors to read their own profile
+      // This allows doctors to see their own profile even if pending/rejected
+      allow read: if isAuthenticated() && 
+                     request.auth.token.email != null &&
+                     'email' in resource.data &&
+                     resource.data.email == request.auth.token.email;
+      
+      // ADMIN RULE: Allow admins to read all doctor profiles
+      // Note: This uses get() which can be expensive for collection queries
+      // For regular users fetching approved doctors, the PRIMARY RULE above should handle it
+      allow read: if isAdmin();
+      
+      // NOTIFICATION SUPPORT: Allow authenticated users to read FCM tokens from doctors collection
+      // This is needed for sending push notifications to doctors
+      // Limited to prevent abuse
+      allow read: if isAuthenticated() && 
+                    (request.query.limit == null || request.query.limit <= 10);
+      
+      // Allow doctors to create their own profile (for profile setup)
+      allow create: if isAuthenticated() && 
+                     request.resource.data.email == request.auth.token.email &&
+                     request.resource.data.approvalStatus == 'pending';
+      
+      // Allow doctors to update their own profile (but cannot change approvalStatus or consultationFee)
+      // Doctors can request fee changes by setting pendingFeeChange, but cannot directly update consultationFee
+      // Can update fcmToken for notifications
+      allow update: if isAuthenticated() && 
+                     resource.data.email == request.auth.token.email &&
+                     (!('approvalStatus' in request.resource.data) ||
+                      request.resource.data.approvalStatus == resource.data.approvalStatus) &&
+                     // Prevent doctors from directly updating consultationFee
+                     (!('consultationFee' in request.resource.data) ||
+                      request.resource.data.consultationFee == resource.data.consultationFee);
+      
+      // Admins can create/update/delete any doctor profile (including approval status and fee)
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Prescriptions Collection
+    match /prescriptions/{prescriptionId} {
+      // Allow patients to read their own prescriptions
+      allow read: if isAuthenticated() && 
+                    resource.data.patientId == request.auth.uid;
+      
+      // Allow approved doctors to read prescriptions where they are the doctor
+      // Only approved doctors can see prescriptions they created
+      allow read: if isAuthenticated() && 
+                    'doctorId' in resource.data &&
+                    isApprovedDoctorForConsultation(resource.data.doctorId);
+      
+      // Allow admins to read all prescriptions
+      allow read: if isAdmin();
+      
+      // Allow approved doctors to create prescriptions
+      // Check if user is an approved doctor by verifying their doctor profile
+      allow create: if isAuthenticated() && 
+                      request.auth.token.email != null &&
+                      exists(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)) &&
+                      get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.email == request.auth.token.email &&
+                      (get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.approvalStatus == 'approved' ||
+                       (!('approvalStatus' in get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data) &&
+                        get(/databases/$(database)/documents/doctors/$(request.resource.data.doctorId)).data.verified == true));
+      
+      // Allow approved doctors to update their own prescriptions
+      allow update: if isAuthenticated() && 
+                      'doctorId' in resource.data &&
+                      isApprovedDoctorForConsultation(resource.data.doctorId);
+      
+      // Allow admins to update/delete prescriptions
+      allow update, delete: if isAdmin();
+    }
+    
+    // Doctor Availability Collection
+    match /availability/{availabilityId} {
+      // Allow everyone (patients) to read availability to book consultations
+      allow read: if true;
+      
+      // Allow doctors to create/update their own availability
+      // Availability ID format: {doctorId}_{date}
+      allow create: if isAuthenticated() && 
+                     (getUserRole() == 'doctor' || isAdmin());
+      
+      // Allow authenticated users (patients) to update availability when booking
+      // This is needed for the booking transaction to mark slots as booked
+      // Also allow doctors to update their own availability
+      allow update: if isAuthenticated();
+      
+      // Allow admins to delete availability
+      allow delete: if isAdmin();
+    }
+    
+    // Fee Change Requests Collection
+    // Doctors can request fee changes, admins approve/reject them
+    match /feeChangeRequests/{requestId} {
+      // Doctors can read their own fee change requests
+      allow read: if isAuthenticated() && 
+                    resource.data.doctorEmail == request.auth.token.email;
+      
+      // Admins can read all fee change requests
+      allow read: if isAdmin();
+      
+      // Doctors can create fee change requests
+      allow create: if isAuthenticated() && 
+                     request.resource.data.doctorEmail == request.auth.token.email &&
+                     request.resource.data.status == 'pending';
+      
+      // Only admins can update fee change requests (to approve/reject)
+      allow update: if isAdmin();
+      
+      // Only admins can delete fee change requests
+      allow delete: if isAdmin();
+    }
+    
+    // Chat Messages Collection
+    match /messages/{messageId} {
+      // Allow patients to read messages in their consultations
+      allow read: if isAuthenticated() && 
+                    resource.data.consultationId != null &&
+                    exists(/databases/$(database)/documents/consultations/$(resource.data.consultationId)) &&
+                    (get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.patientId == request.auth.uid ||
+                     (get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId != null &&
+                      isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId)));
+      
+      // Allow approved doctors to read messages in their consultations
+      allow read: if isAuthenticated() && 
+                    resource.data.consultationId != null &&
+                    exists(/databases/$(database)/documents/consultations/$(resource.data.consultationId)) &&
+                    get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId != null &&
+                    isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId);
+      
+      // Allow admins to read all messages
+      allow read: if isAdmin();
+      
+      // Allow authenticated users to create messages in their consultations
+      allow create: if isAuthenticated() && 
+                      request.resource.data.consultationId != null &&
+                      exists(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)) &&
+                      (get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.patientId == request.auth.uid ||
+                       (get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.doctorId != null &&
+                        isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.doctorId)));
+      
+      // Allow users to update their own messages (e.g., mark as read)
+      allow update: if isAuthenticated() && 
+                      resource.data.senderId == request.auth.uid;
+      
+      // Allow admins to update/delete messages
+      allow update, delete: if isAdmin();
+    }
+    
+    // Typing Indicators Collection
+    match /typingIndicators/{indicatorId} {
+      // Allow users to read typing indicators for their consultations
+      allow read: if isAuthenticated() && 
+                    resource.data.consultationId != null &&
+                    exists(/databases/$(database)/documents/consultations/$(resource.data.consultationId)) &&
+                    (get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.patientId == request.auth.uid ||
+                     (get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId != null &&
+                      isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId)));
+      
+      // Allow authenticated users to create/update typing indicators for their consultations
+      allow create, update: if isAuthenticated() && 
+                              request.resource.data.consultationId != null &&
+                              exists(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)) &&
+                              (get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.patientId == request.auth.uid ||
+                               (get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.doctorId != null &&
+                                isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.doctorId)));
+      
+      // Allow users to delete their own typing indicators
+      allow delete: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid;
+      
+      // Allow admins to delete any typing indicator
+      allow delete: if isAdmin();
+    }
+    
+    // Payments Collection
+    match /payments/{paymentId} {
+      // Allow patients to read their own payment records
+      allow read: if isAuthenticated() && 
+                    resource.data.consultationId != null &&
+                    exists(/databases/$(database)/documents/consultations/$(resource.data.consultationId)) &&
+                    get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.patientId == request.auth.uid;
+      
+      // Allow doctors to read payment records for their consultations
+      allow read: if isAuthenticated() && 
+                    resource.data.consultationId != null &&
+                    exists(/databases/$(database)/documents/consultations/$(resource.data.consultationId)) &&
+                    get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId != null &&
+                    isApprovedDoctorForConsultation(get(/databases/$(database)/documents/consultations/$(resource.data.consultationId)).data.doctorId);
+      
+      // Allow admins to read all payment records
+      allow read: if isAdmin();
+      
+      // Allow authenticated users to create payment records for their own consultations
+      // This covers both regular payments and COD payments
+      allow create: if isAuthenticated() && 
+                      request.resource.data.consultationId != null &&
+                      exists(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)) &&
+                      get(/databases/$(database)/documents/consultations/$(request.resource.data.consultationId)).data.patientId == request.auth.uid;
+      
+      // Allow admins to update/delete payment records
+      allow update, delete: if isAdmin();
+    }
+    
+    // Default: Deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

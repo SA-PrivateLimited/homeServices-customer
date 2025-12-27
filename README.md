@@ -1,250 +1,360 @@
-# Home Services Platform
+# HomeServices - Pharmacy Information App
 
-A comprehensive home services platform with three separate applications (Customer, Provider, Admin) sharing a single Firebase backend.
+<div align="center">
+  <h3>Professional Medicine Information App for Android</h3>
+  <p>Search medicines, get detailed information, and manage your medication schedule</p>
+</div>
+
+---
+
+## Features
+
+- **Medicine Search**: Search for medicines using FDA API and web scraping
+- **AI Assistant**: Get detailed information using OpenAI integration
+- **Search History**: Keep track of your searched medicines
+- **Favorites**: Save medicines for offline viewing
+- **Medication Reminders**: Set up dosage reminders with notifications
+- **Share**: Share medicine information with others
+- **Dark Mode**: Professional light and dark themes
+- **Offline Support**: Access saved favorites without internet
+
+## Tech Stack
+
+- **Framework**: React Native 0.73
+- **Language**: TypeScript
+- **State Management**: Zustand
+- **Navigation**: React Navigation
+- **Storage**: AsyncStorage
+- **APIs**: FDA Drug API, RxNav API, OpenAI API
+- **Notifications**: React Native Push Notification
+- **UI**: Custom components with professional design
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js**: Version 18 or higher
+- **npm** or **yarn**: Package manager
+- **Java Development Kit (JDK)**: Version 11 or higher
+- **Android Studio**: Latest version with Android SDK
+- **Android SDK**: API Level 34 (Android 14)
+- **Watchman**: (macOS only) `brew install watchman`
+
+## Installation
+
+### 1. Clone or Navigate to Project
+
+```bash
+cd "/Users/sandeepgupta/Desktop/Play Store/pharmacy_app/HomeServices"
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+# or
+yarn install
+```
+
+### 3. Configure Environment Variables
+
+#### Option 1: Local Development (using .env file)
+
+Create a `.env` file in the root directory:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your OpenAI API key:
+
+```
+OPENAI_API_KEY=your_openai_api_key_here
+APP_NAME=HomeServices
+COPYRIGHT_OWNER=SA-PrivateLimited
+```
+
+#### Option 2: GitHub Environments (for CI/CD)
+
+Environment variables are configured in GitHub Environments:
+- **Secret**: `OPENAI_API_KEY` - Your OpenAI API key
+- **Variables**: 
+  - `APP_NAME=HomeServices`
+  - `COPYRIGHT_OWNER=SA-PrivateLimited`
+
+These are accessible via GitHub Actions workflows in the `production` environment.
+
+### 4. Install iOS Dependencies (macOS only)
+
+```bash
+cd ios && pod install && cd ..
+```
+
+## Running the App
+
+### Development Mode
+
+#### Android
+```bash
+npm run android
+# or
+yarn android
+```
+
+#### iOS (macOS only)
+```bash
+npm run ios
+# or
+yarn ios
+```
+
+### Start Metro Bundler Separately
+
+```bash
+npm start
+# or
+yarn start
+```
+
+## Building for Production
+
+### Android APK/AAB for Play Store
+
+#### Step 1: Generate Signing Key
+
+```bash
+cd android/app
+keytool -genkeypair -v -storetype PKCS12 -keystore homeservices-release-key.keystore -alias homeservices-key-alias -keyalg RSA -keysize 2048 -validity 10000
+```
+
+**Important**: Save the passwords you create! You'll need them.
+
+#### Step 2: Configure Gradle Variables
+
+Create `android/gradle.properties` or edit the existing one and add:
+
+```properties
+MYAPP_RELEASE_STORE_FILE=homeservices-release-key.keystore
+MYAPP_RELEASE_KEY_ALIAS=homeservices-key-alias
+MYAPP_RELEASE_STORE_PASSWORD=your_keystore_password
+MYAPP_RELEASE_KEY_PASSWORD=your_key_password
+```
+
+**Security Note**: Never commit this file to version control!
+
+#### Step 3: Build Release APK
+
+```bash
+cd android
+./gradlew assembleRelease
+```
+
+The APK will be at: `android/app/build/outputs/apk/release/app-release.apk`
+
+#### Step 4: Build Release AAB (for Play Store)
+
+```bash
+cd android
+./gradlew bundleRelease
+```
+
+The AAB will be at: `android/app/build/outputs/bundle/release/app-release.aab`
+
+## Play Store Deployment Guide
+
+### 1. Prepare App Assets
+
+You'll need:
+- **App Icon**: 512x512 PNG
+- **Feature Graphic**: 1024x500 PNG
+- **Screenshots**: At least 2 screenshots (phone and tablet)
+- **Privacy Policy URL**: Required for Play Store
+
+### 2. Create Play Console Account
+
+1. Go to [Google Play Console](https://play.google.com/console)
+2. Pay one-time $25 registration fee
+3. Complete account setup
+
+### 3. Create New App
+
+1. Click "Create app"
+2. Fill in app details:
+   - **App name**: HomeServices
+   - **Default language**: English
+   - **App or game**: App
+   - **Free or paid**: Free
+
+### 4. Complete Store Listing
+
+#### Main Store Listing
+- **App name**: HomeServices
+- **Short description**: Medicine information and medication management app
+- **Full description**:
+```
+HomeServices is your comprehensive medicine information companion. Search for any medicine and get detailed information including ingredients, uses, side effects, and dosage recommendations.
+
+Features:
+✓ Medicine Search - Find detailed information about any medicine
+✓ AI Assistant - Get answers to your medicine-related questions
+✓ Search History - Keep track of searched medicines
+✓ Favorites - Save medicines for quick access
+✓ Medication Reminders - Never miss a dose
+✓ Dark Mode - Easy on the eyes
+✓ Share - Share information with family and friends
+
+Note: This app is for educational purposes only. Always consult healthcare professionals for medical advice.
+```
+
+- **App icon**: Upload your 512x512 icon
+- **Feature graphic**: Upload 1024x500 graphic
+- **Screenshots**: Upload at least 2 screenshots
+
+#### Content Rating
+1. Fill out the questionnaire
+2. Get your content rating
+
+#### Target Audience
+- Select appropriate age groups
+- Complete the questionnaire
+
+#### Privacy Policy
+- Required for apps that access internet
+- Host your privacy policy and provide URL
+
+### 5. Upload Release
+
+1. Go to "Production" → "Create new release"
+2. Upload `app-release.aab`
+3. Add release notes
+4. Review and rollout
+
+### 6. Version Updates
+
+To release updates:
+
+1. Update version in `android/app/build.gradle`:
+```gradle
+versionCode 2  // Increment by 1
+versionName "1.0.1"  // Update version string
+```
+
+2. Build new AAB
+3. Upload to Play Console
+4. Submit for review
+
+## App Icon Guidelines
+
+Create app icons for different densities:
+
+- **mdpi**: 48x48 px
+- **hdpi**: 72x72 px
+- **xhdpi**: 96x96 px
+- **xxhdpi**: 144x144 px
+- **xxxhdpi**: 192x192 px
+
+Place icons in:
+- `android/app/src/main/res/mipmap-{density}/ic_launcher.png`
+- `android/app/src/main/res/mipmap-{density}/ic_launcher_round.png`
+
+## Testing
+
+### Testing Checklist Before Release
+
+- [ ] Test medicine search functionality
+- [ ] Test OpenAI integration
+- [ ] Test search history
+- [ ] Test favorites (add/remove)
+- [ ] Test medication reminders
+- [ ] Test notifications
+- [ ] Test share functionality
+- [ ] Test dark mode toggle
+- [ ] Test on different Android versions
+- [ ] Test on different screen sizes
+- [ ] Test offline functionality
+- [ ] Verify all permissions work
+- [ ] Check app performance
+- [ ] Verify no crashes
+
+### Common Issues
+
+**Issue**: App crashes on start
+- **Solution**: Check if all dependencies are installed correctly
+
+**Issue**: OpenAI not working
+- **Solution**: Verify API key in `.env` file
+
+**Issue**: Notifications not working
+- **Solution**: Check notification permissions in device settings
+
+**Issue**: Build fails
+- **Solution**: Clean gradle cache: `cd android && ./gradlew clean`
 
 ## Project Structure
 
 ```
-home-services/
-├── HomeServices/           # Customer mobile app (Android + iOS)
-├── HomeServicesProvider/   # Service provider mobile app (Android + iOS)
-├── HomeServicesAdmin/      # Admin mobile app (Android + iOS)
-├── ARCHITECTURE.md         # Complete technical documentation
-└── README.md              # This file
+HomeServices/
+├── android/              # Android native code
+├── ios/                  # iOS native code
+├── src/
+│   ├── components/       # Reusable components
+│   ├── navigation/       # Navigation configuration
+│   ├── screens/          # App screens
+│   │   ├── HomeScreen.tsx
+│   │   ├── DetailsScreen.tsx
+│   │   ├── AIAssistantScreen.tsx
+│   │   ├── HistoryScreen.tsx
+│   │   ├── FavoritesScreen.tsx
+│   │   ├── RemindersScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   ├── services/         # API services
+│   │   ├── medicineService.ts
+│   │   └── notificationService.ts
+│   ├── store/            # State management
+│   ├── utils/            # Utilities
+│   └── types/            # TypeScript types
+├── App.tsx               # Root component
+├── index.js              # Entry point
+└── package.json          # Dependencies
 ```
 
-## Three Applications
+## Important Files
 
-### 1. HomeServices (Customer App)
-**Bundle ID:** `com.homeservices.customer`
+- **`.env`**: Environment variables (API keys)
+- **`package.json`**: Dependencies and scripts
+- **`android/app/build.gradle`**: Android build configuration
+- **`android/gradle.properties`**: Gradle properties (signing config)
 
-**For:** Customers who need home services
+## Security Notes
 
-**Features:**
-- Browse service categories (Plumber, Electrician, Carpenter, AC Repair, etc.)
-- Book services with auto-location detection
-- Track service provider on map in real-time
-- Multiple payment options (COD, UPI)
-- Rate and review providers
-- Service history
+### Never Commit These Files:
+- `.env` - Contains API keys
+- `android/gradle.properties` - Contains signing passwords
+- `*.keystore` - Signing keys
+- `node_modules/` - Dependencies
 
-### 2. HomeServicesProvider (Service Provider App)
-**Bundle ID:** `com.homeservices.provider`
+### Keep Secure:
+- OpenAI API key
+- Keystore file and passwords
+- Play Store credentials
 
-**For:** Service providers (Plumbers, Electricians, etc.)
+## License & Copyright
 
-**Features:**
-- Receive job requests with loud hooter sound (Uber/Ola style)
-- Accept/Reject jobs with 30-second timeout
-- Works even when phone is locked
-- Online/Offline toggle
-- Navigate to customer location
-- Update job status
-- View daily/weekly earnings
-- Job history and statistics
+© 2025 SA-PrivateLimited. All rights reserved.
 
-**Critical Requirement:**
-- High-priority FCM notifications
-- Foreground service for Android
-- Background audio for iOS
-- Looping hooter sound until provider responds
+This application is proprietary software. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
 
-### 3. HomeServicesAdmin (Admin App + Web Panel)
-**Bundle ID:** `com.homeservices.admin`
+## Support & Contact
 
-**For:** Platform administrators
+For issues or questions:
+- Create an issue in the project repository
+- Contact: SA-PrivateLimited
 
-**Features:**
-- Live dashboard of active jobs
-- Monitor providers online/offline
-- Manage service categories
-- Manual job assignment
-- Block/unblock providers
-- Analytics and reports
-- Commission settings
-- Broadcast notifications
+## Disclaimer
 
-## Architecture Highlights
-
-**Single Firebase Backend:**
-- Shared Firestore database
-- Shared Authentication (Phone OTP)
-- Shared Cloud Functions
-- Shared Cloud Messaging
-- Role-based access control via security rules
-
-**Separate Apps Benefits:**
-- Tailored UX for each user type
-- Smaller APK sizes (only include needed features)
-- Independent update cycles
-- Different permissions per app
-- Better App Store presence
-
-## Technology Stack
-
-**Mobile Apps:**
-- React Native
-- TypeScript
-- Firebase (Auth, Firestore, Storage, FCM)
-- React Navigation
-- Google Maps
-
-**Backend:**
-- Firebase Cloud Functions (Node.js/TypeScript)
-- Firestore (NoSQL database)
-- Firebase Cloud Messaging
-
-**Admin Web Panel (Future):**
-- Next.js 14
-- Tailwind CSS
-- Firebase Web SDK
-
-## Quick Start
-
-### Prerequisites
-- Node.js 18+
-- React Native CLI
-- Android Studio / Xcode
-- Firebase CLI
-
-### Installation
-
-1. **Install dependencies for each app:**
-```bash
-cd HomeServices && npm install
-cd ../HomeServicesProvider && npm install
-cd ../HomeServicesAdmin && npm install
-```
-
-2. **Configure Firebase:**
-- Add `google-services.json` to each app's `android/app/` directory
-- Add `GoogleService-Info.plist` to each app's iOS directory
-
-3. **Run the apps:**
-
-**Customer App:**
-```bash
-cd HomeServices
-npx react-native run-android
-# or
-npx react-native run-ios
-```
-
-**Provider App:**
-```bash
-cd HomeServicesProvider
-npx react-native run-android
-# or
-npx react-native run-ios
-```
-
-**Admin App:**
-```bash
-cd HomeServicesAdmin
-npx react-native run-android
-```
-
-## Key Differences from HomeServices
-
-| Feature | HomeServices | Home Services |
-|---------|----------|---------------|
-| User Types | Patient, Doctor, Admin | Customer, Provider, Admin |
-| Services | Medical consultations | Home services (Plumber, Electrician, etc.) |
-| Booking | Appointment scheduling | Immediate + scheduled requests |
-| Provider Notification | Normal priority | HIGH priority with hooter sound |
-| Location Tracking | Not critical | Real-time tracking essential |
-| Payment | Consultation fees | Service-based pricing |
-
-## Role Mapping
-
-| HomeServices | Home Services |
-|----------|---------------|
-| Patient | Customer |
-| Doctor | Service Provider |
-| Admin | Admin |
-| Consultation | Service Request |
-| Appointment | Job/Booking |
-
-## Documentation
-
-For complete technical details, see:
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Full system architecture, database schema, security rules, implementation guide
-
-## Implementation Status
-
-- [x] Architecture design completed
-- [x] Database schema defined
-- [x] Security rules documented
-- [x] FCM notification flow designed
-- [x] Hooter implementation specified
-- [ ] Customer app modifications
-- [ ] Provider app modifications (high priority)
-- [ ] Admin app modifications
-- [ ] Cloud Functions deployment
-- [ ] Testing
-- [ ] Production deployment
-
-## Next Steps
-
-1. **Update Firebase Configuration**
-   - Create new Firebase project for Home Services
-   - Add three apps (Customer, Provider, Admin)
-   - Deploy Firestore security rules
-
-2. **Modify Customer App (HomeServices)**
-   - Update bundle ID
-   - Change patient → customer terminology
-   - Replace doctor list with service categories
-   - Implement service request flow
-
-3. **Modify Provider App (HomeServicesProvider)** ⭐ PRIORITY
-   - Update bundle ID
-   - Change doctor → provider terminology
-   - Implement hooter sound service (Android native)
-   - Setup high-priority FCM
-   - Add job accept/reject with timer
-   - Implement online/offline toggle
-
-4. **Modify Admin App (HomeServicesAdmin)**
-   - Update bundle ID
-   - Update terminology
-   - Add service category management
-
-## Critical Features to Implement
-
-### Provider App Hooter (HIGHEST PRIORITY)
-
-The hooter sound is the most critical feature:
-- Must work when app is in background
-- Must work when phone is locked
-- Must bypass Do Not Disturb
-- Must loop continuously until provider responds
-- Must have full-screen notification
-
-**Android Implementation:**
-- Foreground Service (`JobNotificationService.java`)
-- Wake Lock
-- High-importance notification channel
-- Background audio
-
-**iOS Implementation:**
-- Background audio capability
-- `react-native-sound` with looping
-- High-priority push notifications
-
-## Support
-
-For questions or issues:
-1. Check [ARCHITECTURE.md](ARCHITECTURE.md)
-2. Review HomeServices codebase (reference implementation)
-3. Consult Firebase/React Native documentation
-
-## License
-
-Same as HomeServices project
+This app is for educational purposes only. The information provided should not be used as a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.
 
 ---
 
-**Created:** 2025-12-20
-**Based on:** HomeServices Architecture
-**Status:** Development
+**Built with ❤️ using React Native**
+# homeServices-customer

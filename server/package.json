@@ -1,0 +1,24 @@
+{
+  "name": "homeservices-push-server",
+  "version": "1.0.0",
+  "description": "Free push notification server for HomeServices",
+  "main": "push-notification-server.js",
+  "scripts": {
+    "start": "node push-notification-server.js",
+    "dev": "nodemon push-notification-server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.11.0",
+    "razorpay": "^2.9.6",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
