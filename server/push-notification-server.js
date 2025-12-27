@@ -25,8 +25,11 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 app.use(cors());
@@ -183,12 +186,22 @@ app.post('/send-notification-multiple', async (req, res) => {
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log('Client connected:', {
+    socketId: socket.id,
+    transport: socket.conn.transport.name,
+    remoteAddress: socket.handshake.address,
+  });
 
-  // Join doctor-specific room
-  socket.on('join-doctor-room', (doctorId) => {
-    console.log(`Doctor ${doctorId} joined room`);
-    socket.join(`doctor-${doctorId}`);
+  // Join provider-specific room
+  socket.on('join-provider-room', (providerId) => {
+    console.log(`Provider ${providerId} joined room: provider-${providerId}`);
+    socket.join(`provider-${providerId}`);
+    
+    // Send confirmation back to client
+    socket.emit('room-joined', {
+      room: `provider-${providerId}`,
+      providerId: providerId,
+    });
   });
 
   // Join customer room
@@ -206,25 +219,25 @@ io.on('connection', (socket) => {
  * Emit booking notification via WebSocket
  * POST /emit-booking
  * Body: {
- *   doctorId: 'doctor123',
+ *   providerId: 'provider123',
  *   bookingData: { ... }
  * }
  */
 app.post('/emit-booking', (req, res) => {
   try {
-    const { doctorId, bookingData } = req.body;
+    const { providerId, bookingData } = req.body;
 
-    if (!doctorId || !bookingData) {
+    if (!providerId || !bookingData) {
       return res.status(400).json({
         success: false,
-        error: 'doctorId and bookingData are required',
+        error: 'providerId and bookingData are required',
       });
     }
 
-    // Emit to specific doctor's room
-    io.to(`doctor-${doctorId}`).emit('new-booking', bookingData);
+    // Emit to specific provider's room
+    io.to(`provider-${providerId}`).emit('new-booking', bookingData);
 
-    console.log(`Booking notification sent to doctor ${doctorId}`);
+    console.log(`Booking notification sent to provider ${providerId}`);
 
     res.json({
       success: true,

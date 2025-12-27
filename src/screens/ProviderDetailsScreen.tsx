@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
@@ -15,20 +16,20 @@ import type {Doctor} from '../types/consultation';
 import StarRating from '../components/StarRating';
 import {serializeDoctorForNavigation} from '../utils/helpers';
 
-interface DoctorDetailsScreenProps {
+interface ProviderDetailsScreenProps {
   navigation: any;
   route: {
     params: {
-      doctor: Doctor;
+      provider: Doctor;
     };
   };
 }
 
-const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
+const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   navigation,
   route,
 }) => {
-  const {doctor} = route.params;
+  const {provider} = route.params || {provider: route.params?.doctor}; // Support both provider and doctor for backward compatibility
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [imageError, setImageError] = React.useState(false);
@@ -48,16 +49,16 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
     }
   };
 
-  // Check if doctor is approved (safety check)
-  const isApproved = doctor.approvalStatus === 'approved' || 
-                     (!doctor.approvalStatus && doctor.verified === true);
+  // Check if provider is approved (safety check)
+  const isApproved = provider.approvalStatus === 'approved' || 
+                     (!provider.approvalStatus && provider.verified === true);
 
   const handleBookConsultation = () => {
-    // Prevent booking if doctor is not approved
+    // Prevent booking if provider is not approved
     if (!isApproved) {
       Alert.alert(
-        'Doctor Not Available',
-        'This doctor is not currently available for consultations. Please select another doctor.',
+        'Provider Not Available',
+        'This provider is not currently available for service requests. Please select another provider.',
         [{text: 'OK', onPress: () => navigation.goBack()}],
       );
       return;
@@ -65,14 +66,14 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
     if (!currentUser) {
       Alert.alert(
         'Login Required',
-        'Please login to book a consultation',
+        'Please login to request a service',
         [
           {text: 'Cancel', style: 'cancel'},
           {
             text: 'Login',
             onPress: () => {
-              const serializableDoctor = serializeDoctorForNavigation(doctor);
-              setRedirectAfterLogin({route: 'DoctorDetails', params: {doctor: serializableDoctor}});
+              const serializableProvider = serializeDoctorForNavigation(provider);
+              setRedirectAfterLogin({route: 'ProviderDetails', params: {provider: serializableProvider}});
               navigation.navigate('Login');
             },
           },
@@ -81,14 +82,14 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
       return;
     }
 
-    const serializableDoctor = serializeDoctorForNavigation(doctor);
-    navigation.navigate('Booking', {doctor: serializableDoctor});
+    const serializableProvider = serializeDoctorForNavigation(provider);
+    navigation.navigate('ServiceRequest', {provider: serializableProvider});
   };
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Doctor Header */}
+        {/* Provider Header */}
         <View
           style={[
             styles.headerCard,
@@ -97,7 +98,7 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
           ]}>
           <View style={styles.imageContainer}>
             {(() => {
-              const imageUrl = (doctor.profileImage || doctor.photo || '').trim();
+              const imageUrl = (provider.profileImage || provider.photo || '').trim();
               const hasValidImage = imageUrl !== '' && !imageError && 
                 (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || 
                  imageUrl.startsWith('file://') || imageUrl.startsWith('content://'));
@@ -123,7 +124,7 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
               </View>
               );
             })()}
-            {doctor.verified && (
+            {provider.verified && (
               <View
                 style={[styles.verifiedBadge, {backgroundColor: '#4CAF50'}]}>
                 <Icon name="checkmark-circle" size={20} color="#fff" />
@@ -133,33 +134,44 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
 
           <View style={styles.headerInfo}>
             <Text style={[styles.name, {color: theme.text}]}>
-              Dr. {doctor.name}
+              {provider.name}
             </Text>
             <Text style={[styles.specialization, {color: theme.textSecondary}]}>
-              {doctor.specialization}
+              {provider.specialization || provider.specialty || 'Service Provider'}
             </Text>
 
             <View style={styles.ratingRow}>
-              <StarRating rating={doctor.rating} size={18} />
+              <StarRating rating={provider.rating || 0} size={18} />
               <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
-                {doctor.rating.toFixed(1)} ({doctor.totalConsultations}{' '}
-                consultations)
+                {provider.rating?.toFixed(1) || '0.0'} ({provider.totalConsultations || 0}{' '}
+                {provider.totalConsultations === 1 ? 'service' : 'services'})
               </Text>
             </View>
 
             <View style={styles.contactRow}>
               <Icon name="mail-outline" size={16} color={theme.textSecondary} />
               <Text style={[styles.contactText, {color: theme.textSecondary}]}>
-                {doctor.email}
+                {provider.email || 'Not provided'}
               </Text>
             </View>
 
-            <View style={styles.contactRow}>
-              <Icon name="call-outline" size={16} color={theme.textSecondary} />
-              <Text style={[styles.contactText, {color: theme.textSecondary}]}>
-                {doctor.phone}
-              </Text>
-            </View>
+            {provider.phone && (
+              <TouchableOpacity
+                style={styles.contactRow}
+                onPress={() => {
+                  const phoneNumber = provider.phone.replace(/[^\d+]/g, '');
+                  Linking.openURL(`tel:${phoneNumber}`).catch(() => {
+                    Alert.alert('Error', 'Unable to make phone call');
+                  });
+                }}
+                activeOpacity={0.7}>
+                <Icon name="call-outline" size={16} color={theme.primary} />
+                <Text style={[styles.contactText, styles.phoneText, {color: theme.primary}]}>
+                  {provider.phone}
+                </Text>
+                <Icon name="call" size={14} color={theme.primary} style={styles.callIcon} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -171,58 +183,83 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
             commonStyles.shadowSmall,
           ]}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            About Doctor
+            About Provider
           </Text>
 
+          {/* Address */}
+          {(provider as any).address && (
+            <View style={styles.detailRow}>
+              <Icon name="location-outline" size={20} color={theme.primary} />
+              <View style={styles.detailInfo}>
+                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                  Address
+                </Text>
+                <Text style={[styles.detailValue, {color: theme.text}]}>
+                  {(provider as any).address.address || ''}
+                  {(provider as any).address.city && `, ${(provider as any).address.city}`}
+                  {(provider as any).address.state && `, ${(provider as any).address.state}`}
+                  {(provider as any).address.pincode && ` - ${(provider as any).address.pincode}`}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Experience */}
+          {provider.experience && (
+            <View style={styles.detailRow}>
+              <Icon name="time-outline" size={20} color={theme.primary} />
+              <View style={styles.detailInfo}>
+                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                  Experience
+                </Text>
+                <Text style={[styles.detailValue, {color: theme.text}]}>
+                  {provider.experience} {provider.experience === 1 ? 'year' : 'years'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Languages */}
+          {provider.languages && provider.languages.length > 0 && (
+            <View style={styles.detailRow}>
+              <Icon name="language-outline" size={20} color={theme.primary} />
+              <View style={styles.detailInfo}>
+                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                  Languages
+                </Text>
+                <Text style={[styles.detailValue, {color: theme.text}]}>
+                  {provider.languages.join(', ')}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Qualifications (if available) */}
+          {provider.qualifications && provider.qualifications.length > 0 && (
+            <View style={styles.detailRow}>
+              <Icon name="school-outline" size={20} color={theme.primary} />
+              <View style={styles.detailInfo}>
+                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                  Qualifications
+                </Text>
+                <Text style={[styles.detailValue, {color: theme.text}]}>
+                  {Array.isArray(provider.qualifications) 
+                    ? provider.qualifications.join(', ')
+                    : provider.qualifications}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Service Type */}
           <View style={styles.detailRow}>
-            <Icon name="school-outline" size={20} color={theme.primary} />
+            <Icon name="build-outline" size={20} color={theme.primary} />
             <View style={styles.detailInfo}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Qualifications
+                Service Type
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
-                {doctor.qualifications.join(', ')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Icon name="time-outline" size={20} color={theme.primary} />
-            <View style={styles.detailInfo}>
-              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Experience
-              </Text>
-              <Text style={[styles.detailValue, {color: theme.text}]}>
-                {doctor.experience} years
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Icon name="language-outline" size={20} color={theme.primary} />
-            <View style={styles.detailInfo}>
-              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Languages
-              </Text>
-              <Text style={[styles.detailValue, {color: theme.text}]}>
-                {doctor.languages.join(', ')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Icon name="cash-outline" size={20} color={theme.primary} />
-            <View style={styles.detailInfo}>
-              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Consultation Fee
-              </Text>
-              <Text
-                style={[
-                  styles.detailValue,
-                  styles.feeText,
-                  {color: theme.primary},
-                ]}>
-                ₹{doctor.consultationFee}
+                {provider.specialization || provider.specialty || 'Service Provider'}
               </Text>
             </View>
           </View>
@@ -246,18 +283,10 @@ const DoctorDetailsScreen: React.FC<DoctorDetailsScreenProps> = ({
 
       {/* Book Button */}
       <View style={[styles.footer, {backgroundColor: theme.card}]}>
-        <View style={styles.feeInfo}>
-          <Text style={[styles.feeLabel, {color: theme.textSecondary}]}>
-            Consultation Fee
-          </Text>
-          <Text style={[styles.feeAmount, {color: theme.primary}]}>
-            ₹{doctor.consultationFee}
-          </Text>
-        </View>
         <TouchableOpacity
           style={[styles.bookButton, {backgroundColor: theme.primary}]}
           onPress={handleBookConsultation}>
-          <Text style={styles.bookButtonText}>Book Consultation</Text>
+          <Text style={styles.bookButtonText}>Request Service</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -410,4 +439,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DoctorDetailsScreen;
+export default ProviderDetailsScreen;

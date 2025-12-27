@@ -202,7 +202,7 @@ export default function ProvidersListScreen({navigation}: any) {
   };
 
   const handleProviderPress = (provider: ProviderWithStatus) => {
-    navigation.navigate('ProviderDetails', {provider});
+    navigation.navigate('ProviderDetails', {provider, doctor: provider}); // Support both for backward compatibility
   };
 
   const serviceTypes = [

@@ -20,7 +20,7 @@ import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 import ActiveServiceScreen from '../screens/ActiveServiceScreen';
 import ProvidersListScreen from '../screens/ProvidersListScreen';
-import DoctorDetailsScreen from '../screens/DoctorDetailsScreen';
+import ProviderDetailsScreen from '../screens/ProviderDetailsScreen';
 // import VideoCallScreen from '../screens/VideoCallScreen'; // Temporarily disabled
 
 const Stack = createNativeStackNavigator();
@@ -64,7 +64,7 @@ const ServicesStack = () => {
       />
       <Stack.Screen
         name="ProviderDetails"
-        component={DoctorDetailsScreen}
+        component={ProviderDetailsScreen}
         options={{title: 'Provider Details'}}
       />
       <Stack.Screen
