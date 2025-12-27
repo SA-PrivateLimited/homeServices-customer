@@ -61,6 +61,7 @@ export default function ActiveServiceScreen({
   const [serviceRequest, setServiceRequest] = useState<any>(null);
   const [jobCard, setJobCard] = useState<any>(null);
   const [providerLocation, setProviderLocation] = useState<any>(null);
+  const [providerProfile, setProviderProfile] = useState<any>(null);
   const [status, setStatus] = useState<string>('pending');
   const [loading, setLoading] = useState(true);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -87,8 +88,9 @@ export default function ActiveServiceScreen({
     }
 
     // Subscribe to provider location updates
-    if (jobCard?.providerId) {
-      const locationRef = database().ref(`providers/${jobCard.providerId}/location`);
+    const providerId = jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId;
+    if (providerId) {
+      const locationRef = database().ref(`providers/${providerId}/location`);
       const unsubscribe = locationRef.on('value', snapshot => {
         if (snapshot.exists()) {
           const location = snapshot.val();
@@ -99,7 +101,7 @@ export default function ActiveServiceScreen({
 
       return () => locationRef.off('value', unsubscribe);
     }
-  }, [jobCardId, jobCard?.providerId]);
+  }, [jobCardId, jobCard?.providerId, serviceRequest?.providerId, serviceRequest?.doctorId]);
 
   const loadServiceData = async () => {
     try {
@@ -135,8 +137,22 @@ export default function ActiveServiceScreen({
           });
           setStatus(jobCardData?.status || 'pending');
 
-          // Load provider location
+          // Load provider profile and location
           if (jobCardData?.providerId) {
+            // Fetch full provider profile
+            const providerDoc = await firestore()
+              .collection('providers')
+              .doc(jobCardData.providerId)
+              .get();
+
+            if (providerDoc.exists) {
+              setProviderProfile({
+                id: providerDoc.id,
+                ...providerDoc.data(),
+              });
+            }
+
+            // Load provider location
             const providerLocationRef = database().ref(
               `providers/${jobCardData.providerId}/location`,
             );
@@ -147,6 +163,20 @@ export default function ActiveServiceScreen({
               calculateDistanceAndETA(location);
             }
           }
+        }
+      } else if (requestData?.providerId || requestData?.doctorId) {
+        // If no job card yet but provider is assigned in consultation
+        const providerId = requestData.providerId || requestData.doctorId;
+        const providerDoc = await firestore()
+          .collection('providers')
+          .doc(providerId)
+          .get();
+
+        if (providerDoc.exists) {
+          setProviderProfile({
+            id: providerDoc.id,
+            ...providerDoc.data(),
+          });
         }
       }
 
@@ -183,9 +213,16 @@ export default function ActiveServiceScreen({
   };
 
   const handleCallProvider = () => {
-    const phoneNumber = jobCard?.providerPhone || serviceRequest?.providerPhone;
+    const phoneNumber = 
+      providerProfile?.phoneNumber || 
+      providerProfile?.phone || 
+      jobCard?.providerPhone || 
+      serviceRequest?.providerPhone;
+    
     if (phoneNumber) {
-      Linking.openURL(`tel:${phoneNumber}`);
+      // Ensure phone number has + prefix for tel: links
+      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      Linking.openURL(`tel:${formattedPhone}`);
     } else {
       Alert.alert('Phone number not available');
     }
@@ -378,7 +415,7 @@ export default function ActiveServiceScreen({
       </View>
 
       {/* Provider Details Card */}
-      {provider && (
+      {(provider || providerProfile) && (
         <ScrollView
           style={styles.detailsContainer}
           showsVerticalScrollIndicator={false}>
@@ -387,28 +424,88 @@ export default function ActiveServiceScreen({
               Provider Details
             </Text>
             <View style={styles.providerInfo}>
-              <View style={styles.providerAvatar}>
-                <Text style={styles.providerInitial}>
-                  {provider.providerName?.charAt(0).toUpperCase() || 'P'}
-                </Text>
-              </View>
+              {providerProfile?.profileImage ? (
+                <Image 
+                  source={{uri: providerProfile.profileImage}} 
+                  style={styles.providerImage}
+                />
+              ) : (
+                <View style={styles.providerAvatar}>
+                  <Text style={styles.providerInitial}>
+                    {(providerProfile?.name || provider?.providerName || 'P').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <View style={styles.providerDetails}>
                 <Text style={[styles.providerName, {color: theme.text}]}>
-                  {provider.providerName || 'Provider'}
+                  {providerProfile?.name || provider?.providerName || 'Provider'}
                 </Text>
                 <Text style={[styles.serviceType, {color: theme.textSecondary}]}>
-                  {provider.serviceType || serviceRequest?.serviceType || 'Service'}
+                  {providerProfile?.specialization || providerProfile?.specialty || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
                 </Text>
-                {provider.rating && (
+                {(providerProfile?.rating || provider?.rating) && (
                   <View style={styles.ratingContainer}>
                     <Icon name="star" size={16} color="#FFD700" />
                     <Text style={[styles.rating, {color: theme.text}]}>
-                      {provider.rating.toFixed(1)}
+                      {(providerProfile?.rating || provider?.rating || 0).toFixed(1)}
                     </Text>
+                    {providerProfile?.totalConsultations && (
+                      <Text style={[styles.reviewsCount, {color: theme.textSecondary}]}>
+                        ({providerProfile.totalConsultations} reviews)
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
             </View>
+
+            {/* Contact Information */}
+            <View style={styles.contactSection}>
+              {(providerProfile?.phoneNumber || providerProfile?.phone) && (
+                <TouchableOpacity
+                  style={styles.contactRow}
+                  onPress={handleCallProvider}
+                  activeOpacity={0.7}>
+                  <Icon name="phone" size={20} color={theme.primary} />
+                  <Text style={[styles.contactValue, {color: theme.primary}]}>
+                    {providerProfile.phoneNumber || providerProfile.phone}
+                  </Text>
+                  <Icon name="chevron-right" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
+              {providerProfile?.email && (
+                <View style={styles.contactRow}>
+                  <Icon name="email" size={20} color={theme.textSecondary} />
+                  <Text style={[styles.contactValue, {color: theme.text}]}>
+                    {providerProfile.email}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Additional Provider Info */}
+            {(providerProfile?.experience || providerProfile?.address) && (
+              <View style={styles.additionalInfo}>
+                {providerProfile?.experience && (
+                  <View style={styles.infoRow}>
+                    <Icon name="work" size={18} color={theme.textSecondary} />
+                    <Text style={[styles.infoText, {color: theme.text}]}>
+                      {providerProfile.experience} years of experience
+                    </Text>
+                  </View>
+                )}
+                {providerProfile?.address && (
+                  <View style={styles.infoRow}>
+                    <Icon name="location-on" size={18} color={theme.textSecondary} />
+                    <Text style={[styles.infoText, {color: theme.text}]}>
+                      {typeof providerProfile.address === 'string' 
+                        ? providerProfile.address 
+                        : `${providerProfile.address.address || ''}${providerProfile.address.city ? `, ${providerProfile.address.city}` : ''}${providerProfile.address.pincode ? ` - ${providerProfile.address.pincode}` : ''}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Service Details */}
@@ -641,6 +738,48 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  reviewsCount: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  providerImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  contactSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  contactValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  additionalInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
   },
   detailRow: {
     flexDirection: 'row',
