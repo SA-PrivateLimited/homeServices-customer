@@ -417,7 +417,7 @@ export default function ActiveServiceScreen({
       </View>
 
       {/* Provider Details Card */}
-      {(provider || providerProfile) && (
+      {(providerProfile || provider || jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId) && (
         <ScrollView
           style={styles.detailsContainer}
           showsVerticalScrollIndicator={false}>
@@ -462,31 +462,31 @@ export default function ActiveServiceScreen({
             </View>
 
             {/* Contact Information */}
-            <View style={styles.contactSection}>
-              {(providerProfile?.phoneNumber || providerProfile?.phone) && (
+            {(providerProfile?.phoneNumber || providerProfile?.phone || jobCard?.providerPhone || serviceRequest?.providerPhone) && (
+              <View style={styles.contactSection}>
                 <TouchableOpacity
                   style={styles.contactRow}
                   onPress={handleCallProvider}
                   activeOpacity={0.7}>
                   <Icon name="phone" size={20} color={theme.primary} />
                   <Text style={[styles.contactValue, {color: theme.primary}]}>
-                    {providerProfile.phoneNumber || providerProfile.phone}
+                    {providerProfile?.phoneNumber || providerProfile?.phone || jobCard?.providerPhone || serviceRequest?.providerPhone || 'N/A'}
                   </Text>
                   <Icon name="chevron-right" size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
-              )}
-              {providerProfile?.email && (
-                <View style={styles.contactRow}>
-                  <Icon name="email" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.contactValue, {color: theme.text}]}>
-                    {providerProfile.email}
-                  </Text>
-                </View>
-              )}
-            </View>
+                {providerProfile?.email && (
+                  <View style={styles.contactRow}>
+                    <Icon name="email" size={20} color={theme.textSecondary} />
+                    <Text style={[styles.contactValue, {color: theme.text}]}>
+                      {providerProfile.email}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Additional Provider Info */}
-            {(providerProfile?.experience || providerProfile?.address) && (
+            {(providerProfile?.experience || providerProfile?.address || jobCard?.providerAddress) && (
               <View style={styles.additionalInfo}>
                 {providerProfile?.experience && (
                   <View style={styles.infoRow}>
@@ -496,13 +496,19 @@ export default function ActiveServiceScreen({
                     </Text>
                   </View>
                 )}
-                {providerProfile?.address && (
+                {(providerProfile?.address || jobCard?.providerAddress) && (
                   <View style={styles.infoRow}>
                     <Icon name="location-on" size={18} color={theme.textSecondary} />
                     <Text style={[styles.infoText, {color: theme.text}]}>
-                      {typeof providerProfile.address === 'string' 
-                        ? providerProfile.address 
-                        : `${providerProfile.address.address || ''}${providerProfile.address.city ? `, ${providerProfile.address.city}` : ''}${providerProfile.address.pincode ? ` - ${providerProfile.address.pincode}` : ''}`}
+                      {providerProfile?.address 
+                        ? (typeof providerProfile.address === 'string' 
+                            ? providerProfile.address 
+                            : `${providerProfile.address.address || ''}${providerProfile.address.city ? `, ${providerProfile.address.city}` : ''}${providerProfile.address.pincode ? ` - ${providerProfile.address.pincode}` : ''}`)
+                        : (jobCard?.providerAddress 
+                            ? (typeof jobCard.providerAddress === 'string' 
+                                ? jobCard.providerAddress 
+                                : `${jobCard.providerAddress.address || ''}${jobCard.providerAddress.city ? `, ${jobCard.providerAddress.city}` : ''}${jobCard.providerAddress.pincode ? ` - ${jobCard.providerAddress.pincode}` : ''}`)
+                            : 'Address not available')}
                     </Text>
                   </View>
                 )}
