@@ -783,6 +783,58 @@ export default function ServiceRequestScreen({
 
       await serviceRequestRef.set(serviceRequestData);
 
+      // Notify nearby online providers via WebSocket
+      try {
+        // Find online providers for this service type
+        const onlineProvidersSnapshot = await firestore()
+          .collection('providers')
+          .where('isOnline', '==', true)
+          .where('approvalStatus', '==', 'approved')
+          .where('specialization', '==', selectedServiceType)
+          .get();
+
+        // Also check the legacy 'specialty' field
+        const onlineProvidersBySpecialtySnapshot = await firestore()
+          .collection('providers')
+          .where('isOnline', '==', true)
+          .where('approvalStatus', '==', 'approved')
+          .where('specialty', '==', selectedServiceType)
+          .get();
+
+        // Combine results and remove duplicates
+        const allProviderIds = new Set<string>();
+        onlineProvidersSnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
+        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
+
+        // Emit WebSocket notification to each provider
+        const notificationPromises = Array.from(allProviderIds).map(providerId => {
+          return WebSocketService.emitNewBooking(providerId, {
+            consultationId: serviceRequestRef.id,
+            id: serviceRequestRef.id,
+            bookingId: serviceRequestRef.id,
+            customerName: serviceRequestData.customerName,
+            patientName: serviceRequestData.customerName, // For backward compatibility
+            customerPhone: serviceRequestData.customerPhone,
+            patientPhone: serviceRequestData.customerPhone, // For backward compatibility
+            customerAddress: serviceRequestData.customerAddress,
+            patientAddress: serviceRequestData.customerAddress, // For backward compatibility
+            serviceType: selectedServiceType,
+            problem: problem.trim(),
+            scheduledTime: urgency === 'scheduled' && scheduledDate ? scheduledDate : new Date(),
+            consultationFee: 0, // Service requests don't have fees upfront
+          }).catch(error => {
+            console.error(`Failed to notify provider ${providerId}:`, error);
+            // Don't fail the request if WebSocket notification fails
+          });
+        });
+
+        await Promise.all(notificationPromises);
+        console.log(`✅ Notified ${allProviderIds.size} online provider(s) about new service request`);
+      } catch (websocketError) {
+        console.error('Error notifying providers via WebSocket:', websocketError);
+        // Don't fail the request if WebSocket notification fails
+      }
+
       Alert.alert(
         'Service Requested!',
         'Your service request has been submitted. Nearby providers will be notified.',
