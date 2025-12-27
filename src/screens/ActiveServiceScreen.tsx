@@ -440,10 +440,10 @@ export default function ActiveServiceScreen({
               )}
               <View style={styles.providerDetails}>
                 <Text style={[styles.providerName, {color: theme.text}]}>
-                  {providerProfile?.name || provider?.providerName || 'Provider'}
+                  {providerProfile?.name || jobCard?.providerName || provider?.providerName || 'Provider'}
                 </Text>
                 <Text style={[styles.serviceType, {color: theme.textSecondary}]}>
-                  {providerProfile?.specialization || providerProfile?.specialty || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
+                  {providerProfile?.specialization || providerProfile?.specialty || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
                 </Text>
                 {(providerProfile?.rating || provider?.rating) && (
                   <View style={styles.ratingContainer}>
