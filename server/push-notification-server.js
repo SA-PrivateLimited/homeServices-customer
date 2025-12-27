@@ -26,10 +26,13 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
+    allowEIO3: true
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(cors());
@@ -253,9 +256,12 @@ app.post('/emit-booking', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+// Listen on all interfaces (0.0.0.0) to allow emulator access via 10.0.2.2
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Push Notification Server with WebSocket running on port ${PORT}`);
   console.log(`WebSocket endpoint: ws://localhost:${PORT}`);
+  console.log(`Accessible from Android emulator at: http://10.0.2.2:${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/`);
 });
 
 module.exports = { app, io, server };
