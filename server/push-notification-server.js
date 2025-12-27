@@ -197,14 +197,17 @@ io.on('connection', (socket) => {
 
   // Join provider-specific room
   socket.on('join-provider-room', (providerId) => {
-    console.log(`Provider ${providerId} joined room: provider-${providerId}`);
-    socket.join(`provider-${providerId}`);
+    const roomName = `provider-${providerId}`;
+    console.log(`✅ Provider ${providerId} joined room: ${roomName}`);
+    socket.join(roomName);
     
     // Send confirmation back to client
     socket.emit('room-joined', {
-      room: `provider-${providerId}`,
+      room: roomName,
       providerId: providerId,
     });
+    
+    console.log(`📋 Active rooms for socket ${socket.id}:`, Object.keys(socket.rooms || {}));
   });
 
   // Join customer room
@@ -239,14 +242,33 @@ app.post('/emit-booking', (req, res) => {
       });
     }
 
-    // Emit to specific provider's room
-    io.to(`provider-${targetProviderId}`).emit('new-booking', bookingData);
+    const roomName = `provider-${targetProviderId}`;
+    
+    // Check if room exists (has connected sockets)
+    const room = io.sockets.adapter.rooms.get(roomName);
+    const roomSize = room ? room.size : 0;
+    
+    console.log(`📤 Emitting booking to room: ${roomName}`);
+    console.log(`📊 Room size (connected providers): ${roomSize}`);
+    console.log(`📋 Booking data:`, {
+      consultationId: bookingData.consultationId || bookingData.id || bookingData.bookingId,
+      customerName: bookingData.customerName || bookingData.patientName,
+      serviceType: bookingData.serviceType,
+    });
 
-    console.log(`✅ Booking notification sent to provider ${targetProviderId}`);
+    // Emit to specific provider's room
+    io.to(roomName).emit('new-booking', bookingData);
+
+    if (roomSize === 0) {
+      console.warn(`⚠️ Warning: No providers connected to room ${roomName}. Notification may not be received.`);
+    } else {
+      console.log(`✅ Booking notification sent to ${roomSize} provider(s) in room ${roomName}`);
+    }
 
     res.json({
       success: true,
       message: 'Booking notification emitted',
+      roomSize: roomSize,
     });
   } catch (error) {
     console.error('Error emitting booking:', error);
