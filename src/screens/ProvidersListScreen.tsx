@@ -238,7 +238,7 @@ export default function ProvidersListScreen({navigation}: any) {
         <View style={styles.providerInfo}>
           <View style={styles.providerHeader}>
             <Text style={[styles.providerName, {color: theme.text}]} numberOfLines={1}>
-              {item.name}
+              {item.name || 'Provider'}
             </Text>
             {item.rating && (
               <View style={styles.ratingContainer}>
