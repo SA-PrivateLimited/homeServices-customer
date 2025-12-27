@@ -114,8 +114,9 @@ export default function ActiveServiceScreen({
         .doc(serviceRequestId)
         .get();
 
+      let requestData: any = null;
       if (requestDoc.exists) {
-        const requestData = requestDoc.data();
+        requestData = requestDoc.data();
         setServiceRequest({
           id: requestDoc.id,
           ...requestData,
