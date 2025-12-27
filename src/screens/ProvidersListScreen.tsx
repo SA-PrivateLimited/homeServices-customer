@@ -380,7 +380,7 @@ export default function ProvidersListScreen({navigation}: any) {
           ListHeaderComponent={
             <View style={styles.headerInfo}>
               <Text style={[styles.headerText, {color: theme.textSecondary}]}>
-                {filteredProviders.length} provider{filteredProviders.length !== 1 ? 's' : ''} online
+                {String(filteredProviders.length)} provider{filteredProviders.length !== 1 ? 's' : ''} online
               </Text>
             </View>
           }
