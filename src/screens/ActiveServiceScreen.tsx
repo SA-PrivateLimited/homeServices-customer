@@ -166,19 +166,21 @@ export default function ActiveServiceScreen({
             }
           }
         }
-      } else if (requestData?.providerId || requestData?.doctorId) {
+      } else {
         // If no job card yet but provider is assigned in consultation
-        const providerId = requestData.providerId || requestData.doctorId;
-        const providerDoc = await firestore()
-          .collection('providers')
-          .doc(providerId)
-          .get();
+        if (requestData && (requestData.providerId || requestData.doctorId)) {
+          const providerId = requestData.providerId || requestData.doctorId;
+          const providerDoc = await firestore()
+            .collection('providers')
+            .doc(providerId)
+            .get();
 
-        if (providerDoc.exists) {
-          setProviderProfile({
-            id: providerDoc.id,
-            ...providerDoc.data(),
-          });
+          if (providerDoc.exists) {
+            setProviderProfile({
+              id: providerDoc.id,
+              ...providerDoc.data(),
+            });
+          }
         }
       }
 
