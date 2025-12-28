@@ -92,7 +92,8 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
           createdAt: doc.data()?.createdAt?.toDate() || new Date(),
           updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
           scheduledTime: doc.data()?.scheduledTime?.toDate(),
-        })) as JobCard[];
+          urgency: doc.data()?.urgency, // Preserve urgency field
+        })) as any[];
         
         return cards.sort((a, b) => {
           const aTime = a.createdAt.getTime();
@@ -110,7 +111,8 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
       createdAt: doc.data()?.createdAt?.toDate() || new Date(),
       updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
       scheduledTime: doc.data()?.scheduledTime?.toDate(),
-    })) as JobCard[];
+      urgency: doc.data()?.urgency, // Preserve urgency field
+    })) as any[];
   } catch (error: any) {
     console.error('Error fetching customer job cards:', error);
     
@@ -180,6 +182,7 @@ export const getCustomerActiveConsultations = async (customerId: string): Promis
         createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
         updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
         scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
+        urgency: data?.urgency, // Preserve urgency field
       };
     });
   } catch (error: any) {

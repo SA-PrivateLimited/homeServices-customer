@@ -76,6 +76,24 @@ service cloud.firestore {
       
       // Only admins can delete
       allow delete: if isAdmin();
+      
+      // Saved Addresses Subcollection
+      match /savedAddresses/{addressId} {
+        // Allow users to read their own saved addresses
+        allow read: if isAuthenticated() && userId == request.auth.uid;
+        
+        // Allow users to create their own saved addresses
+        allow create: if isAuthenticated() && userId == request.auth.uid;
+        
+        // Allow users to update their own saved addresses
+        allow update: if isAuthenticated() && userId == request.auth.uid;
+        
+        // Allow users to delete their own saved addresses
+        allow delete: if isAuthenticated() && userId == request.auth.uid;
+        
+        // Allow admins to read/update/delete all saved addresses
+        allow read, update, delete: if isAdmin();
+      }
     }
     
     // Role Change Logs Collection (Admin only)
@@ -94,10 +112,10 @@ service cloud.firestore {
       
       // Allow providers to read consultations where they are assigned
       allow read: if isAuthenticated() && 
-                    ('providerId' in resource.data &&
-                     resource.data.providerId == request.auth.uid) ||
-                    ('doctorId' in resource.data &&
-                     isApprovedProviderForConsultation(resource.data.doctorId)); // Backward compatibility
+                    (('providerId' in resource.data &&
+                      resource.data.providerId == request.auth.uid) ||
+                     ('doctorId' in resource.data &&
+                      isApprovedProviderForConsultation(resource.data.doctorId))); // Backward compatibility
       
       // Allow admins to read all consultations
       allow read: if isAdmin();

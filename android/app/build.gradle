@@ -116,6 +116,8 @@ dependencies {
         implementation jscFlavor
     }
     
+    // Explicitly include react-native-maps (autolinking should handle this, but ensuring it's included)
+    implementation project(':react-native-maps')
 }
 
 // Ensure PackageList is generated before Kotlin compilation

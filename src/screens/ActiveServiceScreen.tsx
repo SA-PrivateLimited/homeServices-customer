@@ -4,7 +4,7 @@
  * Shows provider location, status updates, ETA
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -15,20 +15,65 @@ import {
   Linking,
   Alert,
   Image,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import GeolocationService from '../services/geolocationService';
 // MapView is optional - will show simplified view if maps not available
 let MapView: any = null;
 let Marker: any = null;
 let Polyline: any = null;
 
 try {
+  // Try direct import first (for older versions)
   const maps = require('react-native-maps');
-  MapView = maps.default || maps.MapView;
-  Marker = maps.Marker;
-  Polyline = maps.Polyline;
-} catch (e) {
-  console.log('react-native-maps not available, using simplified view');
+  
+  // Handle both default export and named exports
+  if (maps.default) {
+    MapView = maps.default;
+    Marker = maps.default.Marker || maps.Marker;
+    Polyline = maps.default.Polyline || maps.Polyline;
+  } else {
+    MapView = maps.MapView;
+    Marker = maps.Marker;
+    Polyline = maps.Polyline;
+  }
+  
+  // Verify components are functions/components
+  if (!MapView || typeof MapView !== 'function') {
+    throw new Error('MapView is not a valid component');
+  }
+  
+  console.log('✅ react-native-maps loaded successfully', {
+    MapView: typeof MapView,
+    Marker: typeof Marker,
+    Polyline: typeof Polyline,
+    MapViewExists: !!MapView,
+    MarkerExists: !!Marker,
+    PolylineExists: !!Polyline,
+  });
+} catch (e: any) {
+  console.error('❌ react-native-maps not available:', e?.message || e);
+  console.log('Using simplified view');
+  MapView = null;
+  Marker = null;
+  Polyline = null;
+}
+
+// Debug: Log map components (only log once on module load)
+if (typeof MapView === 'function') {
+  console.log('MAP DEBUG - Components loaded:', {
+    MapView: 'function',
+    Marker: typeof Marker,
+    Polyline: typeof Polyline,
+  });
+} else {
+  console.log('MAP DEBUG - Components NOT loaded:', {
+    MapView: MapView,
+    Marker: Marker,
+    Polyline: Polyline,
+  });
 }
 import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
@@ -65,44 +110,226 @@ export default function ActiveServiceScreen({
   const [providerProfile, setProviderProfile] = useState<any>(null);
   const [status, setStatus] = useState<string>('pending');
   const [loading, setLoading] = useState(true);
+  const [isImmediateService, setIsImmediateService] = useState<boolean>(false);
+  const mapRef = useRef<any>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [distance, setDistance] = useState<string>('');
   const [eta, setEta] = useState<number>(0);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean>(false);
+  const [customerLocation, setCustomerLocation] = useState<any>(null);
+
+  // Request location permission and get customer location
+  const requestLocationAndGetCurrentLocation = async () => {
+    try {
+      const permission = await GeolocationService.requestLocationPermission();
+      if (permission === 'granted') {
+        setLocationPermissionGranted(true);
+        try {
+          const location = await GeolocationService.getCurrentLocation();
+          if (location) {
+            const loc = {
+              latitude: location.latitude,
+              longitude: location.longitude,
+            };
+            setCustomerLocation(loc);
+            console.log('✅ Customer live location obtained:', loc);
+            
+            // Update map region to show live location
+            if (mapRef.current) {
+              try {
+                const coordinates = [
+                  {latitude: loc.latitude, longitude: loc.longitude},
+                ];
+                
+                // Add service address if different
+                if (customerAddress?.latitude && customerAddress?.longitude) {
+                  const isDifferent = 
+                    Math.abs(loc.latitude - customerAddress.latitude) > 0.0001 ||
+                    Math.abs(loc.longitude - customerAddress.longitude) > 0.0001;
+                  if (isDifferent) {
+                    coordinates.push({
+                      latitude: customerAddress.latitude,
+                      longitude: customerAddress.longitude,
+                    });
+                  }
+                }
+                
+                // Add provider location if available
+                if (providerLocation?.latitude && providerLocation?.longitude) {
+                  coordinates.push({
+                    latitude: providerLocation.latitude,
+                    longitude: providerLocation.longitude,
+                  });
+                }
+                
+                if (coordinates.length > 1) {
+                  mapRef.current.fitToCoordinates(coordinates, {
+                    edgePadding: {top: 100, right: 50, bottom: 100, left: 50},
+                    animated: true,
+                  });
+                } else {
+                  // Fallback to animateToRegion
+                  mapRef.current.animateToRegion({
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }, 1000);
+                }
+              } catch (e) {
+                console.error('Error updating map region:', e);
+                // Fallback to animateToRegion
+                try {
+                  mapRef.current.animateToRegion({
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }, 1000);
+                } catch (e2) {
+                  console.error('Error animating map:', e2);
+                }
+              }
+            }
+            
+            return location;
+          }
+        } catch (error) {
+          console.error('Error getting current location:', error);
+        }
+      } else {
+        setLocationPermissionGranted(false);
+        if (permission === 'never_ask_again') {
+          Alert.alert(
+            'Location Permission Required',
+            'Location permission is required to show your live location on the map. Please enable it in device settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+    }
+    return null;
+  };
 
   useEffect(() => {
     loadServiceData();
+  }, []);
+  
+  // Update customer location periodically for immediate services
+  useEffect(() => {
+    if (!isImmediateService) return;
     
-    // Subscribe to job card status updates
-    if (jobCardId) {
-      const unsubscribe = subscribeToJobCardStatus(
-        jobCardId,
-        (newStatus, updatedAt) => {
-          setStatus(newStatus);
-          if (newStatus === 'completed') {
-            // Check if customer can review
-            checkReviewStatus();
+    // Request location permission and start tracking
+    requestLocationAndGetCurrentLocation();
+    
+    // Update location every 30 seconds for immediate services
+    const locationInterval = setInterval(() => {
+      requestLocationAndGetCurrentLocation();
+    }, 30000);
+    
+    return () => clearInterval(locationInterval);
+  }, [isImmediateService]);
+
+  // Subscribe to consultation/service request updates to detect when provider accepts
+  useEffect(() => {
+    if (!serviceRequestId || !currentUser) return;
+
+    // Set up real-time listener for consultation updates
+    const unsubscribe = firestore()
+      .collection('consultations')
+      .doc(serviceRequestId)
+      .onSnapshot(
+        snapshot => {
+          if (snapshot.exists) {
+            const data = snapshot.data();
+            const newStatus = data?.status || 'pending';
+            const newProviderId = data?.providerId || data?.doctorId;
+
+            // If status changed to accepted and we have a provider, reload data
+            if (newStatus === 'accepted' && newProviderId && status !== 'accepted') {
+              console.log('✅ Provider accepted, reloading service data...', newProviderId);
+              loadServiceData();
+            }
+
+            setStatus(newStatus);
+            
+            if (newStatus === 'completed') {
+              setTimeout(() => {
+                checkReviewStatus();
+              }, 1000);
+            }
           }
         },
+        error => {
+          console.error('Error listening to consultation updates:', error);
+          // Handle permission errors gracefully - don't show alert, just log
+          const errorCode = (error as any)?.code;
+          if (errorCode === 'permission-denied' || errorCode === 'permissions-denied') {
+            console.warn('Permission denied for consultation updates. User may not have access.');
+            // Don't show alert here as loadServiceData will handle it
+          }
+        }
       );
 
-      return () => unsubscribe();
-    }
+    return () => unsubscribe();
+  }, [serviceRequestId]);
 
-    // Subscribe to provider location updates
-    const providerId = jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId;
-    if (providerId) {
-      const locationRef = database().ref(`providers/${providerId}/location`);
-      const unsubscribe = locationRef.on('value', snapshot => {
-        if (snapshot.exists()) {
-          const location = snapshot.val();
-          setProviderLocation(location);
-          calculateDistanceAndETA(location);
+  // Subscribe to job card status updates
+  useEffect(() => {
+    if (!jobCardId) return;
+
+    const unsubscribe = subscribeToJobCardStatus(
+      jobCardId,
+      (newStatus, updatedAt) => {
+        setStatus(newStatus);
+        if (newStatus === 'completed') {
+          checkReviewStatus();
         }
-      });
+        // Reload data when status changes to get updated provider info
+        if (newStatus === 'accepted') {
+          loadServiceData();
+        }
+      },
+    );
 
-      return () => locationRef.off('value', unsubscribe);
+    return () => unsubscribe();
+  }, [jobCardId]);
+
+  // Subscribe to provider location updates when provider is assigned
+  useEffect(() => {
+    const providerId = jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId;
+    
+    if (!providerId) {
+      // Clear location if no provider
+      setProviderLocation(null);
+      return;
     }
-  }, [jobCardId, jobCard?.providerId, serviceRequest?.providerId, serviceRequest?.doctorId]);
+
+    console.log('Subscribing to provider location:', providerId);
+    const locationRef = database().ref(`providers/${providerId}/location`);
+    
+    const unsubscribe = locationRef.on('value', snapshot => {
+      if (snapshot.exists()) {
+        const location = snapshot.val();
+        console.log('Provider location updated:', location);
+        setProviderLocation(location);
+        calculateDistanceAndETA(location);
+      } else {
+        console.log('Provider location not available yet');
+        setProviderLocation(null);
+      }
+    });
+
+    return () => {
+      console.log('Unsubscribing from provider location');
+      locationRef.off('value', unsubscribe);
+    };
+  }, [jobCard?.providerId, serviceRequest?.providerId, serviceRequest?.doctorId]);
 
   const loadServiceData = async () => {
     try {
@@ -143,6 +370,19 @@ export default function ActiveServiceScreen({
           ...requestData,
         });
         setStatus(requestData?.status || 'pending');
+        
+        // Check if this is an immediate service
+        const urgency = requestData?.urgency;
+        const hasScheduledTime = requestData?.scheduledTime;
+        const isImmediate = urgency === 'immediate' || !hasScheduledTime;
+        setIsImmediateService(isImmediate);
+        
+        // Request location permission only for immediate services
+        if (isImmediate) {
+          requestLocationAndGetCurrentLocation().catch(err => {
+            console.error('Error requesting location:', err);
+          });
+        }
 
         // If provider details are stored in the consultation document, use them
         if (requestData.providerId || requestData.doctorId) {
@@ -180,6 +420,19 @@ export default function ActiveServiceScreen({
             ...jobCardData,
           });
           setStatus(jobCardData?.status || 'pending');
+          
+          // Check if this is an immediate service (from job card or consultation)
+          const jobCardUrgency = jobCardData?.urgency;
+          const hasScheduledTime = jobCardData?.scheduledTime;
+          const isImmediate = jobCardUrgency === 'immediate' || !hasScheduledTime;
+          setIsImmediateService(isImmediate);
+          
+          // Request location permission only for immediate services
+          if (isImmediate) {
+            requestLocationAndGetCurrentLocation().catch(err => {
+              console.error('Error requesting location:', err);
+            });
+          }
 
           // Load provider profile and location
           if (jobCardData?.providerId) {
@@ -347,6 +600,11 @@ export default function ActiveServiceScreen({
       }
       
       setLoading(false);
+    } finally {
+      // Ensure loading is set to false even if there's an error (fallback timeout)
+      setTimeout(() => {
+        setLoading(false);
+      }, 10000); // 10 second fallback timeout
     }
   };
 
@@ -402,6 +660,20 @@ export default function ActiveServiceScreen({
           style: 'destructive',
           onPress: async () => {
             try {
+              setLoading(true);
+              
+              // Cancel the consultation/service request
+              if (serviceRequestId) {
+                await firestore()
+                  .collection('consultations')
+                  .doc(serviceRequestId)
+                  .update({
+                    status: 'cancelled',
+                    updatedAt: firestore.FieldValue.serverTimestamp(),
+                  });
+              }
+              
+              // Also cancel job card if it exists
               if (jobCardId) {
                 await firestore()
                   .collection('jobCards')
@@ -411,9 +683,15 @@ export default function ActiveServiceScreen({
                     updatedAt: firestore.FieldValue.serverTimestamp(),
                   });
               }
-              navigation.goBack();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to cancel service');
+              
+              Alert.alert('Success', 'Service request cancelled successfully', [
+                {text: 'OK', onPress: () => navigation.goBack()},
+              ]);
+            } catch (error: any) {
+              console.error('Error cancelling service:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel service. Please try again.');
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -494,8 +772,19 @@ export default function ActiveServiceScreen({
 
   if (loading) {
     return (
-      <View style={[styles.container, {backgroundColor: theme.background}]}>
+      <View style={[styles.container, {backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center'}]}>
         <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={[styles.loadingText, {color: theme.textSecondary, marginTop: 16}]}>
+          Loading service details...
+        </Text>
+        {isImmediateService && !locationPermissionGranted && (
+          <TouchableOpacity
+            style={[styles.requestLocationButton, {backgroundColor: theme.primary, marginTop: 20}]}
+            onPress={requestLocationAndGetCurrentLocation}>
+            <Icon name="location-on" size={20} color="#fff" />
+            <Text style={styles.requestLocationText}>Request Location Access</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -503,47 +792,181 @@ export default function ActiveServiceScreen({
   const customerAddress = serviceRequest?.customerAddress || jobCard?.customerAddress;
   const provider = jobCard || serviceRequest;
 
+  // Debug logging
+  console.log('🗺️ Map rendering check:', {
+    hasMapView: !!MapView,
+    hasMarker: !!Marker,
+    hasPolyline: !!Polyline,
+    customerAddress: customerAddress ? {
+      lat: customerAddress.latitude,
+      lng: customerAddress.longitude,
+    } : null,
+    providerLocation: providerLocation ? {
+      lat: providerLocation.latitude,
+      lng: providerLocation.longitude,
+    } : null,
+    status,
+    isImmediateService,
+  });
+
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      {/* Map View */}
-      {MapView ? (
+      {/* Map View - Always show map for instant services */}
+      {MapView && Marker && Polyline ? (
         <View style={styles.mapContainer}>
           <MapView
+            ref={mapRef}
             style={styles.map}
-            initialRegion={{
-              latitude: customerAddress?.latitude || 28.6139,
-              longitude: customerAddress?.longitude || 77.209,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
+            provider="google"
+            initialRegion={
+              customerLocation?.latitude && customerLocation?.longitude
+                ? {
+                    latitude: customerLocation.latitude,
+                    longitude: customerLocation.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }
+                : customerAddress?.latitude && customerAddress?.longitude
+                ? {
+                    latitude: customerAddress.latitude,
+                    longitude: customerAddress.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }
+                : providerLocation?.latitude && providerLocation?.longitude
+                ? {
+                    latitude: providerLocation.latitude,
+                    longitude: providerLocation.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }
+                : {
+                    latitude: 28.6139,
+                    longitude: 77.209,
+                    latitudeDelta: 0.1,
+                    longitudeDelta: 0.1,
+                  }
+            }
+            showsUserLocation={locationPermissionGranted && isImmediateService}
+            showsMyLocationButton={locationPermissionGranted && isImmediateService}
+            mapType="standard"
+            loadingEnabled={false}
+            loadingIndicatorColor={theme.primary}
+            loadingBackgroundColor={theme.background}
+            onMapReady={() => {
+              console.log('✅ Map is ready');
+              console.log('📍 Map data:', {
+                customerAddress: customerAddress ? {lat: customerAddress.latitude, lng: customerAddress.longitude} : null,
+                customerLocation: customerLocation ? {lat: customerLocation.latitude, lng: customerLocation.longitude} : null,
+                providerLocation: providerLocation ? {lat: providerLocation.latitude, lng: providerLocation.longitude} : null,
+              });
+              
+              // Fit map to show both customer and provider locations if available
+              if (mapRef.current) {
+                const locations: Array<{latitude: number; longitude: number}> = [];
+                
+                // Add customer address (service location)
+                if (customerAddress?.latitude && customerAddress?.longitude) {
+                  locations.push({
+                    latitude: customerAddress.latitude,
+                    longitude: customerAddress.longitude,
+                  });
+                  console.log('📍 Added customer address to map:', customerAddress.latitude, customerAddress.longitude);
+                }
+                
+                // Add live customer location if available
+                if (customerLocation?.latitude && customerLocation?.longitude) {
+                  locations.push({
+                    latitude: customerLocation.latitude,
+                    longitude: customerLocation.longitude,
+                  });
+                  console.log('📍 Added customer live location to map:', customerLocation.latitude, customerLocation.longitude);
+                }
+                
+                // Add provider location if available
+                if (providerLocation?.latitude && providerLocation?.longitude) {
+                  locations.push({
+                    latitude: providerLocation.latitude,
+                    longitude: providerLocation.longitude,
+                  });
+                  console.log('📍 Added provider location to map:', providerLocation.latitude, providerLocation.longitude);
+                }
+                
+                if (locations.length > 0) {
+                  console.log('🗺️ Fitting map to', locations.length, 'locations');
+                  try {
+                    mapRef.current.fitToCoordinates(locations, {
+                      edgePadding: {top: 100, right: 50, bottom: 100, left: 50},
+                      animated: true,
+                    });
+                    console.log('✅ Map fitted to coordinates');
+                  } catch (e) {
+                    console.error('❌ Error fitting map to coordinates:', e);
+                    // Fallback to customer address or first location
+                    const fallbackLoc = locations[0];
+                    if (fallbackLoc) {
+                      console.log('📍 Falling back to animateToRegion:', fallbackLoc);
+                      mapRef.current.animateToRegion({
+                        latitude: fallbackLoc.latitude,
+                        longitude: fallbackLoc.longitude,
+                        latitudeDelta: 0.05,
+                        longitudeDelta: 0.05,
+                      }, 1000);
+                    }
+                  }
+                } else {
+                  console.warn('⚠️ No locations available to show on map');
+                }
+              }
             }}
-            showsUserLocation={true}
-            showsMyLocationButton={true}>
-            {/* Customer Location Marker */}
-            {customerAddress?.latitude && customerAddress?.longitude && Marker && (
+            onError={(error: any) => {
+              console.error('❌ Map error:', error);
+            }}>
+            {/* Service Address Marker - Show service location */}
+            {customerAddress?.latitude && customerAddress?.longitude && (
               <Marker
                 coordinate={{
                   latitude: customerAddress.latitude,
                   longitude: customerAddress.longitude,
                 }}
-                title="Your Location"
+                title="Service Location"
+                description="Service address"
                 pinColor="#007AFF">
                 <View style={styles.customerMarker}>
                   <Icon name="home" size={24} color="#007AFF" />
                 </View>
               </Marker>
             )}
+            
+            {/* Live Customer Location Marker - Show if available for immediate services */}
+            {isImmediateService && customerLocation?.latitude && customerLocation?.longitude && (
+              <Marker
+                coordinate={{
+                  latitude: customerLocation.latitude,
+                  longitude: customerLocation.longitude,
+                }}
+                title="Your Current Location"
+                description="Live location"
+                pinColor="#FF9500">
+                <View style={styles.liveLocationMarker}>
+                  <Icon name="my-location" size={20} color="#FF9500" />
+                </View>
+              </Marker>
+            )}
 
-            {/* Provider Location Marker */}
+            {/* Provider Location Marker - Show when provider is assigned (especially for immediate services) */}
             {providerLocation?.latitude &&
               providerLocation?.longitude &&
               status !== 'completed' &&
-              Marker && (
+              status !== 'cancelled' &&
+              (status === 'accepted' || status === 'in-progress' || isImmediateService) && (
                 <Marker
                   coordinate={{
                     latitude: providerLocation.latitude,
                     longitude: providerLocation.longitude,
                   }}
                   title="Provider Location"
+                  description={`Provider is ${distance || 'on the way'}`}
                   pinColor="#34C759">
                   <View style={styles.providerMarker}>
                     <Icon name="person" size={24} color="#34C759" />
@@ -551,12 +974,13 @@ export default function ActiveServiceScreen({
                 </Marker>
               )}
 
-            {/* Route Line */}
+            {/* Route Line - Show route when provider location is available (especially for immediate services) */}
             {providerLocation &&
               customerAddress?.latitude &&
               customerAddress?.longitude &&
               status !== 'completed' &&
-              Polyline && (
+              status !== 'cancelled' &&
+              (status === 'accepted' || status === 'in-progress' || isImmediateService) && (
                 <Polyline
                   coordinates={[
                     {
@@ -604,12 +1028,49 @@ export default function ActiveServiceScreen({
             ]}
           />
           <View style={styles.statusTextContainer}>
-            <Text style={[styles.statusText, {color: theme.text}]}>
-              {getStatusText(status)}
-            </Text>
-            {distance && status !== 'completed' && (
+            <View style={styles.statusRow}>
+              <Text style={[styles.statusText, {color: theme.text}]}>
+                {getStatusText(status)}
+              </Text>
+              {/* Service Type Chip */}
+              <View
+                style={[
+                  styles.serviceTypeChip,
+                  {
+                    backgroundColor: isImmediateService
+                      ? '#FF9500' + '20'
+                      : '#007AFF' + '20',
+                  },
+                ]}>
+                <Text
+                  style={[
+                    styles.serviceTypeChipText,
+                    {
+                      color: isImmediateService ? '#FF9500' : '#007AFF',
+                    },
+                  ]}>
+                  {isImmediateService ? 'Immediate' : 'Scheduled'}
+                </Text>
+              </View>
+            </View>
+            {status === 'accepted' && providerLocation && distance && (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                {distance} away • ETA: ~{eta} min
+                Provider is {distance} away • ETA: ~{eta} min
+              </Text>
+            )}
+            {status === 'accepted' && !providerLocation && (
+              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
+                Provider location will appear here
+              </Text>
+            )}
+            {status === 'in-progress' && (
+              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
+                Service in progress
+              </Text>
+            )}
+            {status === 'pending' && (
+              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
+                Waiting for provider to accept
               </Text>
             )}
           </View>
@@ -774,7 +1235,20 @@ export default function ActiveServiceScreen({
               </>
             )}
 
-            {status !== 'completed' && status !== 'cancelled' && status !== 'in-progress' && (
+            {status === 'pending' && (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {backgroundColor: theme.error},
+                ]}
+                onPress={handleCancelService}
+                disabled={loading}>
+                <Icon name="cancel" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Cancel Service</Text>
+              </TouchableOpacity>
+            )}
+
+            {status === 'accepted' && (
               <>
                 <TouchableOpacity
                   style={[styles.actionButton, {backgroundColor: theme.primary}]}
@@ -786,13 +1260,12 @@ export default function ActiveServiceScreen({
                 <TouchableOpacity
                   style={[
                     styles.actionButton,
-                    {backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border},
+                    {backgroundColor: theme.error},
                   ]}
-                  onPress={handleCancelService}>
-                  <Icon name="cancel" size={20} color="#FF3B30" />
-                  <Text style={[styles.actionButtonText, {color: '#FF3B30'}]}>
-                    Cancel Service
-                  </Text>
+                  onPress={handleCancelService}
+                  disabled={loading}>
+                  <Icon name="cancel" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>Cancel Service</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -844,12 +1317,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  loadingText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  requestLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginHorizontal: 20,
+    gap: 8,
+  },
+  requestLocationText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   mapContainer: {
     height: '40%',
     width: '100%',
+    backgroundColor: '#E5E5E5',
   },
   map: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   simplifiedMap: {
     backgroundColor: '#F5F5F5',
@@ -876,6 +1371,13 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 2,
     borderColor: '#007AFF',
+  },
+  liveLocationMarker: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: '#FF9500',
   },
   providerMarker: {
     backgroundColor: '#fff',
@@ -908,8 +1410,23 @@ const styles = StyleSheet.create({
   statusTextContainer: {
     flex: 1,
   },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   statusText: {
     fontSize: 18,
+    fontWeight: '600',
+  },
+  serviceTypeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  serviceTypeChipText: {
+    fontSize: 12,
     fontWeight: '600',
   },
   distanceText: {

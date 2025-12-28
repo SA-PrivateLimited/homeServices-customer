@@ -152,28 +152,39 @@ export default function ProvidersListScreen({navigation}: any) {
     }
   };
 
-  const getCustomerLocation = async (): Promise<{latitude: number; longitude: number} | null> => {
+  const getCustomerLocation = async (): Promise<{
+    latitude: number;
+    longitude: number;
+  } | null> => {
     try {
-      if (currentUser?.id) {
-        const userDoc = await firestore()
-          .collection('users')
-          .doc(currentUser.id)
-          .get();
-        
-        const userData = userDoc.data();
-        if (userData?.location?.latitude && userData?.location?.longitude) {
-          return {
-            latitude: userData.location.latitude,
-            longitude: userData.location.longitude,
-          };
-        }
+      if (!currentUser?.id) {
+        return null;
       }
+  
+      const userDoc = await firestore()
+        .collection('users')
+        .doc(currentUser.id)
+        .get();
+  
+      const userData = userDoc.data();
+  
+      if (
+        userData?.location?.latitude != null &&
+        userData?.location?.longitude != null
+      ) {
+        return {
+          latitude: Number(userData.location.latitude),
+          longitude: Number(userData.location.longitude),
+        };
+      }
+  
       return null;
     } catch (error) {
       console.error('Error getting customer location:', error);
       return null;
     }
   };
+  
 
   const filterProviders = () => {
     let filtered = providers;

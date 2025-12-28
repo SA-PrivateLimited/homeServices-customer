@@ -101,7 +101,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
         createdAt: consultation.createdAt || new Date(),
         updatedAt: consultation.updatedAt || new Date(),
         scheduledTime: consultation.scheduledTime,
-      }));
+        urgency: consultation.urgency, // Preserve urgency field
+      } as any));
       
       // Combine all cards
       const allCards = [...cards, ...consultationCards];
@@ -180,6 +181,11 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
   const formatDate = (date: Date | any) => {
     try {
+      // Return early if date is null, undefined, or empty
+      if (!date) {
+        return 'Date not available';
+      }
+      
       let dateObj: Date;
       if (date instanceof Date) {
         dateObj = date;
@@ -192,17 +198,18 @@ export default function ServiceHistoryScreen({navigation}: any) {
         return 'Date not available';
       }
       
+      // Check if date is valid
       if (isNaN(dateObj.getTime())) {
         return 'Date not available';
       }
       
       return dateObj.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
     } catch (error) {
-      console.warn('Error formatting date:', error);
+      console.warn('Error formatting date:', error, date);
       return 'Date not available';
     }
   };
@@ -456,18 +463,86 @@ export default function ServiceHistoryScreen({navigation}: any) {
                           </Text>
                         </View>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          {backgroundColor: getStatusColor(jobCard.status) + '20'},
-                        ]}>
-                        <Text
+                      <View style={styles.statusChipsContainer}>
+                        <View
                           style={[
-                            styles.statusText,
-                            {color: getStatusColor(jobCard.status)},
+                            styles.statusBadge,
+                            {backgroundColor: getStatusColor(jobCard.status) + '20'},
                           ]}>
-                          {getStatusText(jobCard.status)}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.statusText,
+                              {color: getStatusColor(jobCard.status)},
+                            ]}>
+                            {getStatusText(jobCard.status)}
+                          </Text>
+                        </View>
+                        {/* Service Type Chip */}
+                        {(() => {
+                          // Check urgency field first - this is the source of truth
+                          const urgency = (jobCard as any).urgency;
+                          // If urgency is explicitly set, use it
+                          if (urgency === 'immediate') {
+                            return (
+                              <View
+                                style={[
+                                  styles.serviceTypeChip,
+                                  {backgroundColor: '#FF9500' + '20'},
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.serviceTypeChipText,
+                                    {color: '#FF9500'},
+                                  ]}>
+                                  Immediate
+                                </Text>
+                              </View>
+                            );
+                          }
+                          if (urgency === 'scheduled') {
+                            return (
+                              <View
+                                style={[
+                                  styles.serviceTypeChip,
+                                  {backgroundColor: '#007AFF' + '20'},
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.serviceTypeChipText,
+                                    {color: '#007AFF'},
+                                  ]}>
+                                  Scheduled
+                                </Text>
+                              </View>
+                            );
+                          }
+                          // Fallback: if no urgency field, check scheduledTime
+                          const hasScheduledTime = jobCard.scheduledTime && 
+                            jobCard.scheduledTime instanceof Date && 
+                            !isNaN(jobCard.scheduledTime.getTime());
+                          const isImmediate = !hasScheduledTime;
+                          return (
+                            <View
+                              style={[
+                                styles.serviceTypeChip,
+                                {
+                                  backgroundColor: isImmediate
+                                    ? '#FF9500' + '20'
+                                    : '#007AFF' + '20',
+                                },
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.serviceTypeChipText,
+                                  {
+                                    color: isImmediate ? '#FF9500' : '#007AFF',
+                                  },
+                                ]}>
+                                {isImmediate ? 'Immediate' : 'Scheduled'}
+                              </Text>
+                            </View>
+                          );
+                        })()}
                       </View>
                     </View>
 
@@ -495,7 +570,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                     <View style={styles.dateRow}>
                       <Icon name="calendar-today" size={16} color={theme.textSecondary} />
                       <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-                        {formatDate(jobCard.createdAt)}
+                        {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
                       </Text>
                     </View>
 
@@ -553,6 +628,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                     </Text>
                   </View>
                 </View>
+                <View style={styles.statusChipsContainer}>
                 <View
                   style={[
                     styles.statusBadge,
@@ -565,6 +641,32 @@ export default function ServiceHistoryScreen({navigation}: any) {
                     ]}>
                     {getStatusText(jobCard.status)}
                   </Text>
+                  </View>
+                  {/* Service Type Chip */}
+                  {(() => {
+                    const isImmediate = !jobCard.scheduledTime || (jobCard as any).urgency === 'immediate';
+                    return (
+                      <View
+                        style={[
+                          styles.serviceTypeChip,
+                          {
+                            backgroundColor: isImmediate
+                              ? '#FF9500' + '20'
+                              : '#007AFF' + '20',
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            styles.serviceTypeChipText,
+                            {
+                              color: isImmediate ? '#FF9500' : '#007AFF',
+                            },
+                          ]}>
+                          {isImmediate ? 'Immediate' : 'Scheduled'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
 
@@ -592,7 +694,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
               <View style={styles.dateRow}>
                 <Icon name="calendar-today" size={16} color={theme.textSecondary} />
                 <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-                  {formatDate(jobCard.createdAt)}
+                  {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
                 </Text>
               </View>
 
@@ -637,33 +739,60 @@ export default function ServiceHistoryScreen({navigation}: any) {
                       jobCardId: jobCard.id,
                     });
                   }}>
-                  {/* Header */}
-                  <View style={styles.jobCardHeader}>
-                    <View style={styles.serviceTypeContainer}>
-                      <Icon name="build" size={24} color={theme.primary} />
-                      <View style={styles.serviceTypeText}>
-                        <Text style={[styles.serviceType, {color: theme.text}]}>
-                          {jobCard.serviceType}
-                        </Text>
-                        <Text style={[styles.providerName, {color: theme.textSecondary}]}>
-                          {jobCard.providerName || 'Waiting for provider...'}
+              {/* Header */}
+              <View style={styles.jobCardHeader}>
+                <View style={styles.serviceTypeContainer}>
+                  <Icon name="build" size={24} color={theme.primary} />
+                  <View style={styles.serviceTypeText}>
+                    <Text style={[styles.serviceType, {color: theme.text}]}>
+                      {jobCard.serviceType}
+                    </Text>
+                    <Text style={[styles.providerName, {color: theme.textSecondary}]}>
+                      {jobCard.providerName || 'Waiting for provider...'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.statusChipsContainer}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {backgroundColor: getStatusColor(jobCard.status) + '20'},
+                    ]}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        {color: getStatusColor(jobCard.status)},
+                      ]}>
+                      {getStatusText(jobCard.status)}
+                    </Text>
+                  </View>
+                  {/* Service Type Chip */}
+                  {(() => {
+                    const isImmediate = !jobCard.scheduledTime || (jobCard as any).urgency === 'immediate';
+                    return (
+                      <View
+                        style={[
+                          styles.serviceTypeChip,
+                          {
+                            backgroundColor: isImmediate
+                              ? '#FF9500' + '20'
+                              : '#007AFF' + '20',
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            styles.serviceTypeChipText,
+                            {
+                              color: isImmediate ? '#FF9500' : '#007AFF',
+                            },
+                          ]}>
+                          {isImmediate ? 'Immediate' : 'Scheduled'}
                         </Text>
                       </View>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {backgroundColor: getStatusColor(jobCard.status) + '20'},
-                      ]}>
-                      <Text
-                        style={[
-                          styles.statusText,
-                          {color: getStatusColor(jobCard.status)},
-                        ]}>
-                        {getStatusText(jobCard.status)}
-                      </Text>
-                    </View>
-                  </View>
+                    );
+                  })()}
+                </View>
+              </View>
 
                   {/* Problem */}
                   {jobCard.problem && (
@@ -689,36 +818,36 @@ export default function ServiceHistoryScreen({navigation}: any) {
                   <View style={styles.dateRow}>
                     <Icon name="calendar-today" size={16} color={theme.textSecondary} />
                     <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-                      {formatDate(jobCard.createdAt)}
-                    </Text>
-                  </View>
+                      {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+                </Text>
+              </View>
 
-                  {/* Actions */}
-                  <View style={styles.actionsRow}>
-                    {jobCard.status === 'completed' && (
-                      <TouchableOpacity
-                        style={styles.reviewButton}
-                        onPress={() => handleReview(jobCard)}>
-                        <Icon name="star" size={16} color="#FFD700" />
-                        <Text style={styles.reviewButtonText}>Review</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.viewButton}
-                      onPress={() => {
-                        navigation.navigate('ActiveService', {
-                          serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-                          jobCardId: jobCard.id,
-                        });
-                      }}>
-                      <Text style={[styles.viewButtonText, {color: theme.primary}]}>
-                        View Details
-                      </Text>
-                      <Icon name="chevron-right" size={20} color={theme.primary} />
-                    </TouchableOpacity>
-                  </View>
+              {/* Actions */}
+              <View style={styles.actionsRow}>
+                {jobCard.status === 'completed' && (
+                  <TouchableOpacity
+                    style={styles.reviewButton}
+                    onPress={() => handleReview(jobCard)}>
+                    <Icon name="star" size={16} color="#FFD700" />
+                    <Text style={styles.reviewButtonText}>Review</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => {
+                    navigation.navigate('ActiveService', {
+                      serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                      jobCardId: jobCard.id,
+                    });
+                  }}>
+                  <Text style={[styles.viewButtonText, {color: theme.primary}]}>
+                    View Details
+                  </Text>
+                  <Icon name="chevron-right" size={20} color={theme.primary} />
                 </TouchableOpacity>
-              ))
+              </View>
+            </TouchableOpacity>
+          ))
             )}
           </>
         )}
@@ -920,6 +1049,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
+  statusChipsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -927,6 +1062,15 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
+    fontWeight: '600',
+  },
+  serviceTypeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  serviceTypeChipText: {
+    fontSize: 11,
     fontWeight: '600',
   },
   problemText: {
