@@ -37,6 +37,7 @@ import {
 } from '../services/addressService';
 import type {UserLocation} from '../types/consultation';
 import WebSocketService from '../services/websocketService';
+import SuccessModal from '../components/SuccessModal';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -83,6 +84,8 @@ export default function ServiceRequestScreen({
   const [editCustomLabel, setEditCustomLabel] = useState('');
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isFetchingAddress, setIsFetchingAddress] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedServiceRequestId, setSubmittedServiceRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     loadServiceCategories();
@@ -844,20 +847,9 @@ export default function ServiceRequestScreen({
         // Don't fail the request if WebSocket notification fails
       }
 
-      Alert.alert(
-        'Service Requested!',
-        'Your service request has been submitted. Nearby providers will be notified.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.navigate('ActiveService', {
-                serviceRequestId: serviceRequestRef.id,
-              });
-            },
-          },
-        ],
-      );
+      // Show success modal instead of Alert
+      setSubmittedServiceRequestId(serviceRequestRef.id);
+      setShowSuccessModal(true);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to submit service request');
     } finally {
@@ -1651,6 +1643,25 @@ export default function ServiceRequestScreen({
           </View>
         </View>
       </Modal>
+
+      {/* Success Modal */}
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Service Requested!"
+        message="Your service request has been submitted. Nearby providers will be notified."
+        icon="checkmark-circle"
+        iconColor="#34C759"
+        buttonText="OK"
+        onClose={() => {
+          setShowSuccessModal(false);
+          if (submittedServiceRequestId) {
+            navigation.navigate('ActiveService', {
+              serviceRequestId: submittedServiceRequestId,
+            });
+            setSubmittedServiceRequestId(null);
+          }
+        }}
+      />
     </ScrollView>
   );
 }

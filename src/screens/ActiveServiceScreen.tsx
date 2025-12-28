@@ -24,7 +24,7 @@ let Polyline: any = null;
 
 try {
   const maps = require('react-native-maps');
-  MapView = maps.default;
+  MapView = maps.default || maps.MapView;
   Marker = maps.Marker;
   Polyline = maps.Polyline;
 } catch (e) {
@@ -117,11 +117,53 @@ export default function ActiveServiceScreen({
       let requestData: any = null;
       if (requestDoc.exists) {
         requestData = requestDoc.data();
+        
+        // Verify user has permission to view this consultation
+        const userId = currentUser?.uid;
+        const customerId = requestData?.customerId || requestData?.patientId;
+        
+        if (userId && customerId !== userId) {
+          // Check if user is the provider
+          const providerId = requestData?.providerId || requestData?.doctorId;
+          if (providerId !== userId) {
+            // User is neither customer nor provider - permission denied
+            console.warn('Permission denied: User does not have access to this consultation');
+            Alert.alert(
+              'Access Denied',
+              'You do not have permission to view this service request.',
+              [{text: 'OK', onPress: () => navigation.goBack()}]
+            );
+            setLoading(false);
+            return;
+          }
+        }
+        
         setServiceRequest({
           id: requestDoc.id,
           ...requestData,
         });
         setStatus(requestData?.status || 'pending');
+
+        // If provider details are stored in the consultation document, use them
+        if (requestData.providerId || requestData.doctorId) {
+          const providerId = requestData.providerId || requestData.doctorId;
+          
+          // Check if provider details are already in the document
+          if (requestData.providerName || requestData.providerPhone) {
+            setProviderProfile({
+              id: providerId,
+              name: requestData.providerName,
+              phoneNumber: requestData.providerPhone,
+              phone: requestData.providerPhone,
+              email: requestData.providerEmail,
+              specialization: requestData.providerSpecialization,
+              specialty: requestData.providerSpecialization,
+              rating: requestData.providerRating || 0,
+              profileImage: requestData.providerImage,
+              address: requestData.providerAddress,
+            });
+          }
+        }
       }
 
       // Load job card if ID provided
@@ -141,17 +183,54 @@ export default function ActiveServiceScreen({
 
           // Load provider profile and location
           if (jobCardData?.providerId) {
-            // Fetch full provider profile
-            const providerDoc = await firestore()
-              .collection('providers')
-              .doc(jobCardData.providerId)
-              .get();
+            // Try to fetch full provider profile from providers collection
+            // Fallback to doctors collection for backward compatibility
+            try {
+              const providerDoc = await firestore()
+                .collection('providers')
+                .doc(jobCardData.providerId)
+                .get();
 
-            if (providerDoc.exists) {
-              setProviderProfile({
-                id: providerDoc.id,
-                ...providerDoc.data(),
-              });
+              if (providerDoc.exists) {
+                setProviderProfile({
+                  id: providerDoc.id,
+                  ...providerDoc.data(),
+                });
+              } else {
+                // Try doctors collection as fallback
+                const doctorDoc = await firestore()
+                  .collection('doctors')
+                  .doc(jobCardData.providerId)
+                  .get();
+
+                if (doctorDoc.exists) {
+                  setProviderProfile({
+                    id: doctorDoc.id,
+                    ...doctorDoc.data(),
+                  });
+                }
+              }
+            } catch (providerError: any) {
+              // If permission denied for providers collection, try doctors collection
+              if (providerError.code === 'permission-denied') {
+                try {
+                  const doctorDoc = await firestore()
+                    .collection('doctors')
+                    .doc(jobCardData.providerId)
+                    .get();
+
+                  if (doctorDoc.exists) {
+                    setProviderProfile({
+                      id: doctorDoc.id,
+                      ...doctorDoc.data(),
+                    });
+                  }
+                } catch (doctorError) {
+                  console.warn('Could not fetch provider profile:', doctorError);
+                }
+              } else {
+                console.warn('Error fetching provider profile:', providerError);
+              }
             }
 
             // Load provider location
@@ -170,23 +249,103 @@ export default function ActiveServiceScreen({
         // If no job card yet but provider is assigned in consultation
         if (requestData && (requestData.providerId || requestData.doctorId)) {
           const providerId = requestData.providerId || requestData.doctorId;
-          const providerDoc = await firestore()
-            .collection('providers')
-            .doc(providerId)
-            .get();
+          
+          // If provider details are already in the consultation document, use them
+          // Otherwise, fetch from providers collection
+          if (requestData.providerName || requestData.providerPhone) {
+            // Provider details already stored in consultation document
+            if (!providerProfile) {
+              setProviderProfile({
+                id: providerId,
+                name: requestData.providerName,
+                phoneNumber: requestData.providerPhone,
+                phone: requestData.providerPhone,
+                email: requestData.providerEmail,
+                specialization: requestData.providerSpecialization,
+                specialty: requestData.providerSpecialization,
+                rating: requestData.providerRating || 0,
+                profileImage: requestData.providerImage,
+                address: requestData.providerAddress,
+              });
+            }
+          } else {
+            // Try to fetch full provider profile from providers collection
+            // Fallback to doctors collection for backward compatibility
+            try {
+              const providerDoc = await firestore()
+                .collection('providers')
+                .doc(providerId)
+                .get();
 
-          if (providerDoc.exists) {
-            setProviderProfile({
-              id: providerDoc.id,
-              ...providerDoc.data(),
-            });
+              if (providerDoc.exists) {
+                setProviderProfile({
+                  id: providerDoc.id,
+                  ...providerDoc.data(),
+                });
+              } else {
+                // Try doctors collection as fallback
+                const doctorDoc = await firestore()
+                  .collection('doctors')
+                  .doc(providerId)
+                  .get();
+
+                if (doctorDoc.exists) {
+                  setProviderProfile({
+                    id: doctorDoc.id,
+                    ...doctorDoc.data(),
+                  });
+                }
+              }
+            } catch (providerError: any) {
+              // If permission denied for providers collection, try doctors collection
+              if (providerError.code === 'permission-denied') {
+                try {
+                  const doctorDoc = await firestore()
+                    .collection('doctors')
+                    .doc(providerId)
+                    .get();
+
+                  if (doctorDoc.exists) {
+                    setProviderProfile({
+                      id: doctorDoc.id,
+                      ...doctorDoc.data(),
+                    });
+                  }
+                } catch (doctorError) {
+                  console.warn('Could not fetch provider profile:', doctorError);
+                }
+              } else {
+                console.warn('Error fetching provider profile:', providerError);
+              }
+            }
           }
         }
       }
 
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading service data:', error);
+      
+      // Handle permission denied errors gracefully
+      if (error.code === 'permission-denied' || error.code === 'permissions-denied') {
+        Alert.alert(
+          'Access Denied',
+          'You do not have permission to view this service request. Please ensure you are logged in with the correct account.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          error.message || 'Failed to load service data. Please try again.',
+          [{text: 'OK'}],
+        );
+      }
+      
       setLoading(false);
     }
   };
@@ -360,7 +519,7 @@ export default function ActiveServiceScreen({
             showsUserLocation={true}
             showsMyLocationButton={true}>
             {/* Customer Location Marker */}
-            {customerAddress?.latitude && customerAddress?.longitude && (
+            {customerAddress?.latitude && customerAddress?.longitude && Marker && (
               <Marker
                 coordinate={{
                   latitude: customerAddress.latitude,
@@ -377,7 +536,8 @@ export default function ActiveServiceScreen({
             {/* Provider Location Marker */}
             {providerLocation?.latitude &&
               providerLocation?.longitude &&
-              status !== 'completed' && (
+              status !== 'completed' &&
+              Marker && (
                 <Marker
                   coordinate={{
                     latitude: providerLocation.latitude,
@@ -395,7 +555,8 @@ export default function ActiveServiceScreen({
             {providerLocation &&
               customerAddress?.latitude &&
               customerAddress?.longitude &&
-              status !== 'completed' && (
+              status !== 'completed' &&
+              Polyline && (
                 <Polyline
                   coordinates={[
                     {
@@ -465,30 +626,30 @@ export default function ActiveServiceScreen({
               Provider Details
             </Text>
             <View style={styles.providerInfo}>
-              {providerProfile?.profileImage ? (
+              {(providerProfile?.profileImage || serviceRequest?.providerImage) ? (
                 <Image 
-                  source={{uri: providerProfile.profileImage}} 
+                  source={{uri: providerProfile?.profileImage || serviceRequest?.providerImage}} 
                   style={styles.providerImage}
                 />
               ) : (
                 <View style={styles.providerAvatar}>
                   <Text style={styles.providerInitial}>
-                    {(providerProfile?.name || provider?.providerName || 'P').charAt(0).toUpperCase()}
+                    {(providerProfile?.name || serviceRequest?.providerName || provider?.providerName || 'P').charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
               <View style={styles.providerDetails}>
                 <Text style={[styles.providerName, {color: theme.text}]}>
-                  {providerProfile?.name || jobCard?.providerName || provider?.providerName || 'Provider'}
+                  {providerProfile?.name || serviceRequest?.providerName || jobCard?.providerName || provider?.providerName || 'Provider'}
                 </Text>
                 <Text style={[styles.serviceType, {color: theme.textSecondary}]}>
-                  {providerProfile?.specialization || providerProfile?.specialty || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
+                  {providerProfile?.specialization || providerProfile?.specialty || serviceRequest?.providerSpecialization || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
                 </Text>
-                {(providerProfile?.rating || provider?.rating) && (
+                {(providerProfile?.rating || serviceRequest?.providerRating || provider?.rating) && (
                   <View style={styles.ratingContainer}>
                     <Icon name="star" size={16} color="#FFD700" />
                     <Text style={[styles.rating, {color: theme.text}]}>
-                      {(providerProfile?.rating || provider?.rating || 0).toFixed(1)}
+                      {(providerProfile?.rating || serviceRequest?.providerRating || provider?.rating || 0).toFixed(1)}
                     </Text>
                     {providerProfile?.totalConsultations && (
                       <Text style={[styles.reviewsCount, {color: theme.textSecondary}]}>
@@ -501,7 +662,7 @@ export default function ActiveServiceScreen({
             </View>
 
             {/* Contact Information */}
-            {(providerProfile?.phoneNumber || providerProfile?.phone || jobCard?.providerPhone || serviceRequest?.providerPhone) && (
+            {(providerProfile?.phoneNumber || providerProfile?.phone || serviceRequest?.providerPhone || jobCard?.providerPhone) && (
               <View style={styles.contactSection}>
                 <TouchableOpacity
                   style={styles.contactRow}
@@ -509,11 +670,11 @@ export default function ActiveServiceScreen({
                   activeOpacity={0.7}>
                   <Icon name="phone" size={20} color={theme.primary} />
                   <Text style={[styles.contactValue, {color: theme.primary}]}>
-                    {providerProfile?.phoneNumber || providerProfile?.phone || jobCard?.providerPhone || serviceRequest?.providerPhone || 'N/A'}
+                    {providerProfile?.phoneNumber || providerProfile?.phone || serviceRequest?.providerPhone || jobCard?.providerPhone || 'N/A'}
                   </Text>
                   <Icon name="chevron-right" size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
-                {providerProfile?.email && (
+                {(providerProfile?.email || serviceRequest?.providerEmail) && (
                   <View style={styles.contactRow}>
                     <Icon name="email" size={20} color={theme.textSecondary} />
                     <Text style={[styles.contactValue, {color: theme.text}]}>

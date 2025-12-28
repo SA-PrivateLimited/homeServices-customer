@@ -11,6 +11,30 @@ react {
 def enableProguardInReleaseBuilds = true
 def jscFlavor = 'org.webkit:android-jsc:+'
 
+// Read Google Maps API key from .env file
+def getGoogleMapsApiKey = { ->
+    def envFile = file("../../.env")
+    if (envFile.exists()) {
+        try {
+            def lines = envFile.readLines()
+            for (line in lines) {
+                // Skip comments and empty lines
+                if (line.trim().startsWith("#") || line.trim().isEmpty()) {
+                    continue
+                }
+                // Parse key=value format
+                def parts = line.split("=", 2)
+                if (parts.length == 2 && parts[0].trim() == "GOOGLE_MAPS_API_KEY") {
+                    return parts[1].trim()
+                }
+            }
+        } catch (Exception e) {
+            println "Error reading .env file: ${e.message}"
+        }
+    }
+    return ""
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -23,6 +47,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
         versionName "1.0.1"
+        
+        // Google Maps API Key from .env
+        manifestPlaceholders = [
+            GOOGLE_MAPS_API_KEY: getGoogleMapsApiKey()
+        ]
     }
 
     signingConfigs {

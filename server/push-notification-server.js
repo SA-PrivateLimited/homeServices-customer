@@ -198,16 +198,27 @@ io.on('connection', (socket) => {
   // Join provider-specific room
   socket.on('join-provider-room', (providerId) => {
     const roomName = `provider-${providerId}`;
-    console.log(`✅ Provider ${providerId} joined room: ${roomName}`);
+    console.log(`✅ Provider ${providerId} joining room: ${roomName}`);
+    
+    // Join the room
     socket.join(roomName);
     
-    // Send confirmation back to client
-    socket.emit('room-joined', {
-      room: roomName,
-      providerId: providerId,
-    });
-    
-    console.log(`📋 Active rooms for socket ${socket.id}:`, Object.keys(socket.rooms || {}));
+    // Check room status immediately and after a short delay
+    setTimeout(() => {
+      const room = io.sockets.adapter.rooms.get(roomName);
+      const roomSize = room ? room.size : 0;
+      
+      console.log(`✅ Provider ${providerId} joined room: ${roomName}`);
+      console.log(`📊 Room size after join: ${roomSize}`);
+      console.log(`📋 Socket ${socket.id} is in rooms:`, Array.from(socket.rooms || []));
+      
+      // Send confirmation back to client
+      socket.emit('room-joined', {
+        room: roomName,
+        providerId: providerId,
+        roomSize: roomSize,
+      });
+    }, 100); // Small delay to ensure room join is processed
   });
 
   // Join customer room

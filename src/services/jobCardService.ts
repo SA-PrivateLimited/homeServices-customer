@@ -68,11 +68,41 @@ export const getJobCardById = async (jobCardId: string): Promise<JobCard | null>
  */
 export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]> => {
   try {
-    const snapshot = await firestore()
-      .collection('jobCards')
-      .where('customerId', '==', customerId)
-      .orderBy('createdAt', 'desc')
-      .get();
+    // Try with orderBy first
+    let snapshot;
+    try {
+      snapshot = await firestore()
+        .collection('jobCards')
+        .where('customerId', '==', customerId)
+        .orderBy('createdAt', 'desc')
+        .get();
+    } catch (error: any) {
+      // If orderBy fails (missing index), try without orderBy
+      if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+        console.warn('OrderBy index missing, fetching without orderBy');
+        snapshot = await firestore()
+          .collection('jobCards')
+          .where('customerId', '==', customerId)
+          .get();
+        
+        // Sort manually
+        const cards = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data()?.createdAt?.toDate() || new Date(),
+          updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
+          scheduledTime: doc.data()?.scheduledTime?.toDate(),
+        })) as JobCard[];
+        
+        return cards.sort((a, b) => {
+          const aTime = a.createdAt.getTime();
+          const bTime = b.createdAt.getTime();
+          return bTime - aTime; // Descending order
+        });
+      } else {
+        throw error;
+      }
+    }
 
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -87,7 +117,8 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
     // Check for missing index error
     if (error.code === 'failed-precondition' || error.message?.includes('index')) {
       console.error('Missing Firestore index. Please create index for jobCards: customerId + createdAt');
-      throw new Error('Missing database index. Please contact support or wait a few minutes for the index to be created.');
+      // Don't throw, return empty array so UI can still render
+      return [];
     }
     
     // Check for permission error
@@ -97,6 +128,63 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
     }
     
     throw new Error(error.message || 'Failed to fetch job cards');
+  }
+};
+
+/**
+ * Get all active service requests (consultations) for a customer that don't have job cards yet
+ */
+export const getCustomerActiveConsultations = async (customerId: string): Promise<any[]> => {
+  try {
+    // Try with status filter first
+    let snapshot;
+    try {
+      snapshot = await firestore()
+        .collection('consultations')
+        .where('customerId', '==', customerId)
+        .where('status', 'in', ['pending', 'accepted', 'in-progress'])
+        .get();
+    } catch (error: any) {
+      // If 'in' query fails (might need index), fetch all and filter manually
+      if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+        console.warn('Status filter index missing, fetching all consultations and filtering manually');
+        const allSnapshot = await firestore()
+          .collection('consultations')
+          .where('customerId', '==', customerId)
+          .get();
+        
+        return allSnapshot.docs
+          .map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              consultationId: doc.id,
+              ...data,
+              createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
+              updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
+              scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
+            };
+          })
+          .filter(c => ['pending', 'accepted', 'in-progress'].includes(c.status));
+      } else {
+        throw error;
+      }
+    }
+
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        consultationId: doc.id,
+        ...data,
+        createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
+        updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
+        scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
+      };
+    });
+  } catch (error: any) {
+    console.error('Error fetching customer consultations:', error);
+    return [];
   }
 };
 
