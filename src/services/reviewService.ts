@@ -86,24 +86,35 @@ export const createReview = async (
 
     // Create review
     const reviewRef = firestore().collection(COLLECTIONS.REVIEWS).doc();
-    const review: Omit<Review, 'id'> = {
+    
+    // Build review data, filtering out undefined values (Firestore doesn't allow undefined)
+    const reviewData: any = {
       jobCardId,
-      serviceRequestId: jobCard?.consultationId || jobCard?.bookingId,
       customerId: currentUser.uid,
       customerName: jobCard?.customerName || 'Customer',
       providerId: jobCard?.providerId || '',
       providerName: jobCard?.providerName || 'Provider',
       serviceType: jobCard?.serviceType || 'Service',
       rating,
-      comment: comment?.trim() || undefined,
-      photos: photos && photos.length > 0 ? photos : undefined,
-      createdAt: new Date(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
     };
 
-    await reviewRef.set({
-      ...review,
-      createdAt: firestore.FieldValue.serverTimestamp(),
-    });
+    // Only add optional fields if they have values
+    const consultationId = jobCard?.consultationId || jobCard?.bookingId;
+    if (consultationId) {
+      reviewData.serviceRequestId = consultationId;
+    }
+
+    const trimmedComment = comment?.trim();
+    if (trimmedComment && trimmedComment.length > 0) {
+      reviewData.comment = trimmedComment;
+    }
+
+    if (photos && photos.length > 0) {
+      reviewData.photos = photos;
+    }
+
+    await reviewRef.set(reviewData);
 
     // Update provider's average rating
     await updateProviderRating(jobCard.providerId);
@@ -122,21 +133,43 @@ export const getProviderReviews = async (
   providerId: string,
 ): Promise<Review[]> => {
   try {
+    // Query without orderBy to avoid requiring a composite index
+    // We'll sort client-side instead
     const snapshot = await firestore()
       .collection(COLLECTIONS.REVIEWS)
       .where('providerId', '==', providerId)
-      .orderBy('createdAt', 'desc')
       .get();
 
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-      updatedAt: doc.data()?.updatedAt?.toDate(),
-    })) as Review[];
-  } catch (error) {
+    const reviews = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        jobCardId: data?.jobCardId || '',
+        serviceRequestId: data?.serviceRequestId,
+        customerId: data?.customerId || '',
+        customerName: data?.customerName || 'Customer',
+        providerId: data?.providerId || '',
+        providerName: data?.providerName || 'Provider',
+        serviceType: data?.serviceType || 'Service',
+        rating: data?.rating || 0,
+        comment: data?.comment,
+        photos: Array.isArray(data?.photos) ? data.photos : undefined,
+        createdAt: data?.createdAt?.toDate() || new Date(),
+        updatedAt: data?.updatedAt?.toDate(),
+      } as Review;
+    });
+
+    // Sort by createdAt descending (newest first)
+    reviews.sort((a, b) => {
+      const aTime = a.createdAt?.getTime() || 0;
+      const bTime = b.createdAt?.getTime() || 0;
+      return bTime - aTime;
+    });
+
+    return reviews;
+  } catch (error: any) {
     console.error('Error fetching provider reviews:', error);
-    throw new Error('Failed to fetch reviews');
+    throw new Error(`Failed to fetch reviews: ${error.message || 'Unknown error'}`);
   }
 };
 
@@ -147,21 +180,43 @@ export const getCustomerReviews = async (
   customerId: string,
 ): Promise<Review[]> => {
   try {
+    // Query without orderBy to avoid requiring a composite index
+    // We'll sort client-side instead
     const snapshot = await firestore()
       .collection(COLLECTIONS.REVIEWS)
       .where('customerId', '==', customerId)
-      .orderBy('createdAt', 'desc')
       .get();
 
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-      updatedAt: doc.data()?.updatedAt?.toDate(),
-    })) as Review[];
-  } catch (error) {
+    const reviews = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        jobCardId: data?.jobCardId || '',
+        serviceRequestId: data?.serviceRequestId,
+        customerId: data?.customerId || '',
+        customerName: data?.customerName || 'Customer',
+        providerId: data?.providerId || '',
+        providerName: data?.providerName || 'Provider',
+        serviceType: data?.serviceType || 'Service',
+        rating: data?.rating || 0,
+        comment: data?.comment,
+        photos: Array.isArray(data?.photos) ? data.photos : undefined,
+        createdAt: data?.createdAt?.toDate() || new Date(),
+        updatedAt: data?.updatedAt?.toDate(),
+      } as Review;
+    });
+
+    // Sort by createdAt descending (newest first)
+    reviews.sort((a, b) => {
+      const aTime = a.createdAt?.getTime() || 0;
+      const bTime = b.createdAt?.getTime() || 0;
+      return bTime - aTime;
+    });
+
+    return reviews;
+  } catch (error: any) {
     console.error('Error fetching customer reviews:', error);
-    throw new Error('Failed to fetch reviews');
+    throw new Error(`Failed to fetch reviews: ${error.message || 'Unknown error'}`);
   }
 };
 

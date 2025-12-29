@@ -49,23 +49,53 @@ export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
 
     console.log('📋 [ADDRESS] Fetching saved addresses for user:', user.uid);
 
-    // Try with orderBy first, fallback to simple query if it fails
+    // Ensure user document exists before querying subcollection
+    // This helps avoid permission issues when the parent document doesn't exist
+    try {
+      const userDocRef = firestore().collection(COLLECTIONS.USERS).doc(user.uid);
+      const userDoc = await userDocRef.get();
+      
+      if (!userDoc.exists) {
+        console.log('📝 [ADDRESS] User document does not exist, creating it...');
+        // Create minimal user document if it doesn't exist
+        await userDocRef.set({
+          uid: user.uid,
+          email: user.email || null,
+          phoneNumber: user.phoneNumber || null,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        console.log('✅ [ADDRESS] User document created');
+      }
+    } catch (userDocError: any) {
+      console.warn('⚠️ [ADDRESS] Could not check/create user document:', userDocError.message);
+      // Continue anyway - the query might still work
+    }
+
+    // Query saved addresses - try simple query first to avoid index issues
     let snapshot;
     try {
-      snapshot = await firestore()
-        .collection(COLLECTIONS.USERS)
-        .doc(user.uid)
-        .collection(COLLECTIONS.SAVED_ADDRESSES)
-        .orderBy('createdAt', 'desc')
-        .get();
-    } catch (orderByError: any) {
-      // If orderBy fails (e.g., missing index or permission), try without orderBy
-      console.warn('⚠️ [ADDRESS] orderBy query failed, trying without orderBy:', orderByError.message);
+      // Try simple query first (no orderBy) to avoid permission/index issues
       snapshot = await firestore()
         .collection(COLLECTIONS.USERS)
         .doc(user.uid)
         .collection(COLLECTIONS.SAVED_ADDRESSES)
         .get();
+      
+      console.log(`✅ [ADDRESS] Fetched ${snapshot.docs.length} addresses without orderBy`);
+    } catch (queryError: any) {
+      console.error('❌ [ADDRESS] Query failed:', {
+        code: queryError.code,
+        message: queryError.message,
+      });
+      
+      // If query fails completely, return empty array
+      if (queryError.code === 'permission-denied') {
+        console.error('❌ [ADDRESS] Permission denied - check Firestore rules');
+        console.error('💡 [ADDRESS] Ensure user is authenticated and rules allow reading savedAddresses');
+        console.error('💡 [ADDRESS] User UID:', user.uid);
+      }
+      
+      return [];
     }
 
     const addresses = snapshot.docs.map(doc => {

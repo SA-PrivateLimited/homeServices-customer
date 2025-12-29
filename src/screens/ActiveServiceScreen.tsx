@@ -31,13 +31,13 @@ try {
   
   // Handle both default export and named exports
   if (maps.default) {
-    MapView = maps.default;
+  MapView = maps.default;
     Marker = maps.default.Marker || maps.Marker;
     Polyline = maps.default.Polyline || maps.Polyline;
   } else {
     MapView = maps.MapView;
-    Marker = maps.Marker;
-    Polyline = maps.Polyline;
+  Marker = maps.Marker;
+  Polyline = maps.Polyline;
   }
   
   // Verify components are functions/components
@@ -84,6 +84,7 @@ import {subscribeToJobCardStatus, verifyTaskCompletion} from '../services/jobCar
 import {getDistanceToCustomer, formatDistance} from '../services/providerLocationService';
 import ReviewModal from '../components/ReviewModal';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
+import WebSocketService from '../services/websocketService';
 
 interface ActiveServiceScreenProps {
   navigation: any;
@@ -113,6 +114,7 @@ export default function ActiveServiceScreen({
   const [isImmediateService, setIsImmediateService] = useState<boolean>(false);
   const mapRef = useRef<any>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewDismissed, setReviewDismissed] = useState(false);
   const [distance, setDistance] = useState<string>('');
   const [eta, setEta] = useState<number>(0);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean>(false);
@@ -218,7 +220,128 @@ export default function ActiveServiceScreen({
 
   useEffect(() => {
     loadServiceData();
-  }, []);
+    
+    // Connect to WebSocket and join customer room
+    if (currentUser?.uid) {
+      console.log('🔌 [CUSTOMER] Initializing WebSocket connection for customer:', {
+        userId: currentUser.uid,
+        serviceRequestId,
+        jobCardId,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Connect first
+      WebSocketService.connect();
+      console.log('🔌 [CUSTOMER] WebSocket connect() called');
+      
+      // Function to join room (will retry if not connected)
+      let retryCount = 0;
+      const maxRetries = 5;
+      // Ensure WebSocket is connected first
+      console.log('🔌 [CUSTOMER] Initializing WebSocket connection...');
+      WebSocketService.connect();
+      
+      const joinRoom = () => {
+        retryCount++;
+        const isConnected = WebSocketService.getConnectionStatus();
+        const socket = WebSocketService.getSocket();
+        console.log(`🔌 [CUSTOMER] Attempt ${retryCount}/${maxRetries} to join room. Connected:`, isConnected, 'Socket exists:', !!socket);
+        
+        if (isConnected && socket?.connected) {
+          console.log('✅ [CUSTOMER] WebSocket connected, joining customer room');
+          WebSocketService.joinCustomerRoom(currentUser.uid);
+        } else if (retryCount < maxRetries) {
+          console.log(`⏳ [CUSTOMER] WebSocket not connected yet, retrying in 1 second... (${retryCount}/${maxRetries})`);
+          // Ensure connection is attempted
+          if (!socket) {
+            console.log('🔌 [CUSTOMER] Socket is null, calling connect()...');
+            WebSocketService.connect();
+          }
+          setTimeout(joinRoom, 1000);
+        } else {
+          console.warn('⚠️ [CUSTOMER] Failed to connect WebSocket after', maxRetries, 'attempts. This is non-critical - Firestore will handle updates.');
+          // Don't show error - WebSocket is optional, Firestore triggers will handle notifications
+        }
+      };
+      
+      // Wait a bit for connection, then join room
+      const connectTimeout = setTimeout(joinRoom, 1000);
+      
+      // Also try joining when socket connects
+      const socket = WebSocketService.getSocket();
+      if (socket) {
+        socket.once('connect', () => {
+          console.log('✅ [CUSTOMER] WebSocket connected event received, joining customer room');
+          WebSocketService.joinCustomerRoom(currentUser.uid);
+        });
+      } else {
+        // Socket doesn't exist yet - connect() will create it
+        console.log('🔌 [CUSTOMER] Socket is null, connect() will create it');
+        // The connect() call above will create the socket
+      }
+      
+      // Listen for service completion events
+      console.log('👂 [CUSTOMER] Registering service-completed callback');
+      const unsubscribe = WebSocketService.onServiceCompleted((data) => {
+        console.log('📬 [CUSTOMER] Service completed callback triggered:', {
+          ...data,
+          timestamp: new Date().toISOString(),
+        });
+        console.log('📬 [CUSTOMER] Current screen state:', {
+          serviceRequestId,
+          jobCardId,
+          jobCardIdFromState: jobCard?.id,
+          status,
+        });
+        console.log('📬 [CUSTOMER] Received data:', {
+          consultationId: data.consultationId,
+          jobCardId: data.jobCardId,
+        });
+        
+        // Check if this is the current service
+        const matchesConsultation = data.consultationId === serviceRequestId;
+        const matchesJobCard = data.jobCardId === jobCardId || (jobCardId && data.jobCardId === jobCard?.id);
+        
+        console.log('📬 [CUSTOMER] Matching results:', {
+          matchesConsultation,
+          matchesJobCard,
+          willShowModal: matchesConsultation || matchesJobCard,
+        });
+        
+        if (matchesConsultation || matchesJobCard) {
+          console.log('✅ [CUSTOMER] Service completion matches current service, showing review modal');
+          
+          // Update jobCardId if we got it from WebSocket
+          if (data.jobCardId && !jobCardId) {
+            console.log('📝 [CUSTOMER] Setting jobCardId from WebSocket:', data.jobCardId);
+            setJobCard({id: data.jobCardId});
+          }
+          
+          // Reset dismissed state
+          setReviewDismissed(false);
+          
+          // Show review modal after a short delay
+          setTimeout(() => {
+            console.log('📱 [CUSTOMER] Showing review modal NOW');
+            setShowReviewModal(true);
+          }, 1500);
+        } else {
+          console.log('⚠️ [CUSTOMER] Service completion does not match current service, ignoring');
+          console.log('⚠️ [CUSTOMER] Expected consultationId:', serviceRequestId, 'Got:', data.consultationId);
+          console.log('⚠️ [CUSTOMER] Expected jobCardId:', jobCardId, 'Got:', data.jobCardId);
+        }
+      });
+      console.log('✅ [CUSTOMER] Service-completed callback registered');
+      
+      return () => {
+        console.log('🧹 [CUSTOMER] Cleaning up WebSocket listeners');
+        clearTimeout(connectTimeout);
+        unsubscribe();
+      };
+    } else {
+      console.warn('⚠️ [CUSTOMER] Cannot initialize WebSocket - no currentUser.uid');
+    }
+  }, [serviceRequestId, jobCardId, currentUser?.uid]);
   
   // Update customer location periodically for immediate services
   useEffect(() => {
@@ -259,6 +382,8 @@ export default function ActiveServiceScreen({
             setStatus(newStatus);
             
             if (newStatus === 'completed') {
+              // Reset dismissed state when status changes to completed
+              setReviewDismissed(false);
               setTimeout(() => {
                 checkReviewStatus();
               }, 1000);
@@ -278,26 +403,31 @@ export default function ActiveServiceScreen({
 
     return () => unsubscribe();
   }, [serviceRequestId]);
-
-  // Subscribe to job card status updates
+    
+    // Subscribe to job card status updates
   useEffect(() => {
     if (!jobCardId) return;
 
-    const unsubscribe = subscribeToJobCardStatus(
-      jobCardId,
-      (newStatus, updatedAt) => {
-        setStatus(newStatus);
-        if (newStatus === 'completed') {
-          checkReviewStatus();
-        }
+      const unsubscribe = subscribeToJobCardStatus(
+        jobCardId,
+        (newStatus, updatedAt) => {
+          setStatus(newStatus);
+          if (newStatus === 'completed') {
+          console.log('✅ Job card status changed to completed via Realtime DB');
+          // Reset dismissed state when status changes to completed
+          setReviewDismissed(false);
+          // Check review status immediately (fallback if WebSocket didn't work)
+          console.log('🔍 Checking review status (Realtime DB fallback)');
+            checkReviewStatus();
+          }
         // Reload data when status changes to get updated provider info
         if (newStatus === 'accepted') {
           loadServiceData();
         }
-      },
-    );
+        },
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
   }, [jobCardId]);
 
   // Subscribe to provider location updates when provider is assigned
@@ -311,19 +441,19 @@ export default function ActiveServiceScreen({
     }
 
     console.log('Subscribing to provider location:', providerId);
-    const locationRef = database().ref(`providers/${providerId}/location`);
+      const locationRef = database().ref(`providers/${providerId}/location`);
     
-    const unsubscribe = locationRef.on('value', snapshot => {
-      if (snapshot.exists()) {
-        const location = snapshot.val();
+      const unsubscribe = locationRef.on('value', snapshot => {
+        if (snapshot.exists()) {
+          const location = snapshot.val();
         console.log('Provider location updated:', location);
-        setProviderLocation(location);
-        calculateDistanceAndETA(location);
+          setProviderLocation(location);
+          calculateDistanceAndETA(location);
       } else {
         console.log('Provider location not available yet');
         setProviderLocation(null);
-      }
-    });
+        }
+      });
 
     return () => {
       console.log('Unsubscribing from provider location');
@@ -439,16 +569,16 @@ export default function ActiveServiceScreen({
             // Try to fetch full provider profile from providers collection
             // Fallback to doctors collection for backward compatibility
             try {
-              const providerDoc = await firestore()
-                .collection('providers')
-                .doc(jobCardData.providerId)
-                .get();
+            const providerDoc = await firestore()
+              .collection('providers')
+              .doc(jobCardData.providerId)
+              .get();
 
-              if (providerDoc.exists) {
-                setProviderProfile({
-                  id: providerDoc.id,
-                  ...providerDoc.data(),
-                });
+            if (providerDoc.exists) {
+              setProviderProfile({
+                id: providerDoc.id,
+                ...providerDoc.data(),
+              });
               } else {
                 // Try doctors collection as fallback
                 const doctorDoc = await firestore()
@@ -525,16 +655,16 @@ export default function ActiveServiceScreen({
             // Try to fetch full provider profile from providers collection
             // Fallback to doctors collection for backward compatibility
             try {
-              const providerDoc = await firestore()
-                .collection('providers')
-                .doc(providerId)
-                .get();
+          const providerDoc = await firestore()
+            .collection('providers')
+            .doc(providerId)
+            .get();
 
-              if (providerDoc.exists) {
-                setProviderProfile({
-                  id: providerDoc.id,
-                  ...providerDoc.data(),
-                });
+          if (providerDoc.exists) {
+            setProviderProfile({
+              id: providerDoc.id,
+              ...providerDoc.data(),
+            });
               } else {
                 // Try doctors collection as fallback
                 const doctorDoc = await firestore()
@@ -623,13 +753,87 @@ export default function ActiveServiceScreen({
   };
 
   const checkReviewStatus = async () => {
-    if (jobCardId) {
-      const canReview = await canCustomerReview(jobCardId);
-      if (canReview) {
-        setTimeout(() => {
-          setShowReviewModal(true);
-        }, 2000); // Show after 2 seconds
+    try {
+      console.log('🔍 checkReviewStatus called:', {
+        reviewDismissed,
+        jobCardId,
+        jobCardIdFromState: jobCard?.id,
+        serviceRequestId,
+        status,
+        currentUserId: currentUser?.uid,
+      });
+
+      // If review was dismissed and user hasn't submitted, don't show again automatically
+      // User can still access it from service history
+      if (reviewDismissed) {
+        console.log('⚠️ Review was dismissed, not showing again automatically');
+        return;
       }
+
+      // Try to get jobCardId from current jobCard or find it from consultation
+      let currentJobCardId = jobCardId || jobCard?.id;
+      
+      if (!currentJobCardId && serviceRequestId) {
+        console.log('🔍 No jobCardId, searching by consultationId:', serviceRequestId);
+        // Try to find jobCard by consultationId
+        try {
+          const jobCardsSnapshot = await firestore()
+            .collection('jobCards')
+            .where('consultationId', '==', serviceRequestId)
+            .where('customerId', '==', currentUser?.uid)
+            .limit(1)
+            .get();
+          
+          if (!jobCardsSnapshot.empty) {
+            currentJobCardId = jobCardsSnapshot.docs[0].id;
+            const jobCardData = jobCardsSnapshot.docs[0].data();
+            console.log('✅ Found jobCard:', currentJobCardId, 'Status:', jobCardData?.status);
+            setJobCard({
+              id: currentJobCardId,
+              ...jobCardData,
+            });
+          } else {
+            console.log('⚠️ No jobCard found for consultationId:', serviceRequestId);
+          }
+        } catch (error) {
+          console.error('❌ Error finding job card:', error);
+        }
+      }
+
+      if (currentJobCardId) {
+        console.log('🔍 Checking if customer can review jobCard:', currentJobCardId);
+        const canReview = await canCustomerReview(currentJobCardId);
+        console.log('📋 Can review:', canReview);
+        
+      if (canReview) {
+          console.log('✅ Customer can review, showing modal in 2 seconds');
+          // Show modal after a short delay
+        setTimeout(() => {
+            console.log('📱 Showing review modal from checkReviewStatus');
+          setShowReviewModal(true);
+          }, 2000);
+        } else {
+          // Check if review already exists
+          const existingReview = await getJobCardReview(currentJobCardId);
+          if (existingReview) {
+            console.log('ℹ️ Review already exists for this job');
+          } else {
+            console.log('⚠️ Cannot review - job may not be completed or customer mismatch');
+          }
+        }
+      } else if (status === 'completed' && serviceRequestId) {
+        // If no jobCardId but service is completed, still try to show review
+        // This handles cases where jobCard might be created later
+        console.log('⚠️ Service completed but no jobCardId found yet. Will retry in 3 seconds...');
+        // Retry after a delay
+        setTimeout(() => {
+          checkReviewStatus();
+        }, 3000);
+      } else {
+        console.log('⚠️ Cannot check review status - missing jobCardId and serviceRequestId');
+      }
+    } catch (error) {
+      console.error('❌ Error checking review status:', error);
     }
   };
 
@@ -937,7 +1141,7 @@ export default function ActiveServiceScreen({
                 </View>
               </Marker>
             )}
-            
+
             {/* Live Customer Location Marker - Show if available for immediate services */}
             {isImmediateService && customerLocation?.latitude && customerLocation?.longitude && (
               <Marker
@@ -1029,9 +1233,9 @@ export default function ActiveServiceScreen({
           />
           <View style={styles.statusTextContainer}>
             <View style={styles.statusRow}>
-              <Text style={[styles.statusText, {color: theme.text}]}>
-                {getStatusText(status)}
-              </Text>
+            <Text style={[styles.statusText, {color: theme.text}]}>
+              {getStatusText(status)}
+            </Text>
               {/* Service Type Chip */}
               <View
                 style={[
@@ -1283,29 +1487,34 @@ export default function ActiveServiceScreen({
       )}
 
       {/* Review Modal */}
-      {jobCardId && (
+      {(jobCardId || jobCard?.id) && (
         <ReviewModal
-          visible={showReviewModal}
-          jobCardId={jobCardId}
-          providerName={providerProfile?.name || jobCard?.providerName || provider?.providerName || 'Provider'}
-          serviceType={providerProfile?.specialization || providerProfile?.specialty || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
+          visible={showReviewModal && status === 'completed'}
+          jobCardId={jobCardId || jobCard?.id}
+          providerName={providerProfile?.name || jobCard?.providerName || serviceRequest?.providerName || 'Provider'}
+          serviceType={providerProfile?.specialization || providerProfile?.specialty || jobCard?.serviceType || serviceRequest?.serviceType || 'Service'}
           onReviewSubmitted={() => {
             setShowReviewModal(false);
+            setReviewDismissed(false); // Reset dismissed state
             // Reload data to show updated status
             loadServiceData();
             Alert.alert(
               'Thank You!',
-              'Your review with rating has been submitted successfully.',
+              'Your review has been submitted successfully.',
               [
                 {
                   text: 'OK',
-                  onPress: () => navigation.navigate('ServiceHistory'),
+                  onPress: () => {
+                    // Optionally navigate to service history
+                    // navigation.navigate('ServiceHistory');
+                  },
                 },
               ],
             );
           }}
           onSkip={() => {
             setShowReviewModal(false);
+            setReviewDismissed(true); // Mark as dismissed so it won't show again automatically
           }}
         />
       )}

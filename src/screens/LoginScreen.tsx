@@ -28,6 +28,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [confirmResult, setConfirmResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>(DEFAULT_COUNTRY_CODE);
+  
+  // Email OTP state
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
+  const [email, setEmail] = useState('');
+  const [emailOTPCode, setEmailOTPCode] = useState('');
+  const [emailOTPSent, setEmailOTPSent] = useState(false);
+  const [emailOTPExpiresAt, setEmailOTPExpiresAt] = useState<number | null>(null);
 
   const {isDarkMode, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -105,6 +112,83 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     }
   };
 
+  const handleSendEmailOTP = async () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await authService.sendEmailOTP(email.trim());
+      setEmailOTPSent(true);
+      setEmailOTPExpiresAt(result.expiresAt);
+      Alert.alert('Success', 'Verification code sent to your email');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to send email verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmailOTP = async () => {
+    if (!emailOTPCode.trim()) {
+      Alert.alert('Error', 'Please enter the verification code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const user = await authService.verifyEmailOTP(
+        email.trim(),
+        emailOTPCode.trim(),
+        'Customer',
+      );
+
+      // Set role as 'customer' for HomeServices app
+      const userWithRole = {
+        ...user,
+        role: 'customer' as const,
+      };
+
+      // Update user role in Firestore if needed
+      if (user.role !== 'customer') {
+        try {
+          await authService.updateUserRole(user.id, 'customer');
+          userWithRole.role = 'customer';
+        } catch (error) {
+          console.warn('Failed to update user role:', error);
+        }
+      }
+
+      setCurrentUser(userWithRole);
+      
+      // Check if phone is verified
+      if (userWithRole.phoneVerified !== true) {
+        navigation.reset({
+          index: 0,
+          routes: [{name: 'PhoneVerification'}],
+        });
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [{name: 'Main'}],
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to verify code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
@@ -168,7 +252,60 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           </Text>
         </View>
 
+        {/* Login Method Toggle */}
+        <View style={styles.methodToggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.methodToggle,
+              loginMethod === 'phone' && {backgroundColor: theme.primary},
+              loginMethod === 'email' && {backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border},
+            ]}
+            onPress={() => {
+              setLoginMethod('phone');
+              setEmailOTPSent(false);
+              setConfirmResult(null);
+            }}>
+            <Icon 
+              name="call-outline" 
+              size={18} 
+              color={loginMethod === 'phone' ? '#fff' : theme.textSecondary} 
+            />
+            <Text
+              style={[
+                styles.methodToggleText,
+                {color: loginMethod === 'phone' ? '#fff' : theme.textSecondary},
+              ]}>
+              Phone
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.methodToggle,
+              loginMethod === 'email' && {backgroundColor: theme.primary},
+              loginMethod === 'phone' && {backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border},
+            ]}
+            onPress={() => {
+              setLoginMethod('email');
+              setEmailOTPSent(false);
+              setConfirmResult(null);
+            }}>
+            <Icon 
+              name="mail-outline" 
+              size={18} 
+              color={loginMethod === 'email' ? '#fff' : theme.textSecondary} 
+            />
+            <Text
+              style={[
+                styles.methodToggleText,
+                {color: loginMethod === 'email' ? '#fff' : theme.textSecondary},
+              ]}>
+              Email
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Phone Login Form */}
+        {loginMethod === 'phone' && (
           <View style={styles.form}>
             {!confirmResult ? (
               <>
@@ -269,6 +406,106 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
               </>
             )}
           </View>
+        )}
+
+        {/* Email Login Form */}
+        {loginMethod === 'email' && (
+          <View style={styles.form}>
+            {!emailOTPSent ? (
+              <>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.border,
+                    },
+                  ]}>
+                  <Icon
+                    name="mail-outline"
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                  <TextInput
+                    style={[styles.input, {color: theme.text}]}
+                    placeholder="your@email.com"
+                    placeholderTextColor={theme.textSecondary}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!loading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    {backgroundColor: theme.primary},
+                    loading && styles.buttonDisabled,
+                  ]}
+                  onPress={handleSendEmailOTP}
+                  disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Send Code</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.border,
+                    },
+                  ]}>
+                  <Icon
+                    name="keypad-outline"
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                  <TextInput
+                    style={[styles.input, {color: theme.text}]}
+                    placeholder="Verification Code"
+                    placeholderTextColor={theme.textSecondary}
+                    value={emailOTPCode}
+                    onChangeText={setEmailOTPCode}
+                    keyboardType="number-pad"
+                    editable={!loading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    {backgroundColor: theme.primary},
+                    loading && styles.buttonDisabled,
+                  ]}
+                  onPress={handleVerifyEmailOTP}
+                  disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Verify Code</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.resendButton}
+                  onPress={handleSendEmailOTP}
+                  disabled={loading}>
+                  <Text style={[styles.resendText, {color: theme.primary}]}>
+                    Resend Code
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Divider */}
           <View style={styles.dividerContainer}>
@@ -389,6 +626,24 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  methodToggleContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 12,
+  },
+  methodToggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  methodToggleText: {
     fontSize: 16,
     fontWeight: '500',
   },

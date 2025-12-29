@@ -134,7 +134,14 @@ export default function SettingsScreen({navigation}: any) {
         <MenuItem
           icon="person"
           title="Profile"
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => {
+            // Profile screen not available in admin navigator
+            Alert.alert(
+              'Profile',
+              'Profile management is not available in the admin panel. Please use the customer app to manage your profile.',
+              [{text: 'OK'}]
+            );
+          }}
         />
         <MenuItem
           icon="compare-arrows"

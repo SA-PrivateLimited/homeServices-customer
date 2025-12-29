@@ -1,10 +1,9 @@
 /**
  * Providers List Screen
  * Customer app - Browse individual online service providers
- * Shows only providers who are currently online
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
@@ -16,20 +15,39 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import type {Doctor} from '../types/consultation';
 import EmptyState from '../components/EmptyState';
 import {getDistanceToCustomer} from '../services/providerLocationService';
 
-interface ProviderWithStatus extends Doctor {
+interface ProviderWithStatus {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  phoneNumber?: string;
+  specialization?: string;
+  specialty?: string;
+  experience?: number;
+  rating?: number;
+  totalConsultations?: number;
+  profileImage?: string;
   isOnline?: boolean;
   distance?: string;
   eta?: number;
+  address?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
 }
 
 export default function ProvidersListScreen({navigation}: any) {
@@ -45,15 +63,32 @@ export default function ProvidersListScreen({navigation}: any) {
 
   useEffect(() => {
     loadOnlineProviders();
+
+    // Listen to real-time online status updates via Realtime Database
+    // This updates online status instantly when provider goes online/offline
+    const providersRef = database().ref('providers');
     
-    // Subscribe to real-time online status updates
-    const onlineStatusRef = database().ref('providers');
-    const unsubscribe = onlineStatusRef.on('value', () => {
-      loadOnlineProviders();
+    // Listen to status changes for any provider
+    const unsubscribeStatus = providersRef.on('child_changed', (snapshot) => {
+      const providerId = snapshot.key;
+      if (!providerId) return;
+      
+      // Check if status node changed
+      const statusSnapshot = snapshot.child('status');
+      if (statusSnapshot.exists()) {
+        const isOnline = statusSnapshot.val()?.isOnline === true;
+        
+        // Update online status for this specific provider
+        setProviders(prevProviders => 
+          prevProviders.map(p => 
+            p.id === providerId ? {...p, isOnline} : p
+          )
+        );
+      }
     });
 
     return () => {
-      onlineStatusRef.off('value', unsubscribe);
+      providersRef.off('child_changed', unsubscribeStatus);
     };
   }, []);
 
@@ -61,155 +96,153 @@ export default function ProvidersListScreen({navigation}: any) {
     filterProviders();
   }, [providers, searchQuery, selectedServiceType]);
 
+  // -----------------------------
+  // Load Providers
+  // -----------------------------
   const loadOnlineProviders = async () => {
     try {
       setLoading(true);
-      
-      // Fetch providers from Firestore where isOnline is true
-      const providersSnapshot = await firestore()
+
+      const snapshot = await firestore()
         .collection('providers')
-        .where('isOnline', '==', true)
         .where('approvalStatus', '==', 'approved')
         .get();
 
-      const providersList: ProviderWithStatus[] = [];
+      const list: ProviderWithStatus[] = [];
 
-      for (const doc of providersSnapshot.docs) {
-        const providerData = doc.data() as Doctor;
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
         const providerId = doc.id;
 
-        // Get real-time status from Realtime Database
-        const statusSnapshot = await database()
-          .ref(`providers/${providerId}/status`)
-          .once('value');
-        
-        const realtimeStatus = statusSnapshot.val();
-        
-        // Only include if truly online
-        if (realtimeStatus?.isOnline === true) {
-          // Ensure all required fields are present and valid
-          const provider: ProviderWithStatus = {
-            ...providerData,
-            id: providerId || '',
-            name: providerData.name || 'Provider',
-            isOnline: true,
-          };
-
-          // Calculate distance if customer location is available
-          if (
-            currentPincode &&
-            providerData.address?.latitude &&
-            providerData.address?.longitude
-          ) {
-            try {
-              const customerLocation = await getCustomerLocation();
-              if (customerLocation && providerData.address) {
-                const distanceInfo = getDistanceToCustomer(
-                  {
-                    latitude: providerData.address.latitude,
-                    longitude: providerData.address.longitude,
-                    address: providerData.address.address || '',
-                    city: providerData.address.city,
-                    state: providerData.address.state,
-                    pincode: providerData.address.pincode || '',
-                    updatedAt: Date.now(),
-                  },
-                  customerLocation,
-                );
-                provider.distance = distanceInfo.distanceFormatted;
-                provider.eta = distanceInfo.etaMinutes;
-              }
-            } catch (error) {
-              console.log('Could not calculate distance:', error);
-            }
-          }
-
-          providersList.push(provider);
+        let isOnline = false;
+        try {
+          const statusSnap = await database()
+            .ref(`providers/${providerId}/status`)
+            .once('value');
+          isOnline = statusSnap.val()?.isOnline === true;
+        } catch {
+          isOnline = data.isOnline === true;
         }
+
+        const provider: ProviderWithStatus = {
+          id: providerId,
+          name: data.name || 'Provider',
+          email: data.email,
+          phone: data.phone,
+          phoneNumber: data.phoneNumber,
+          specialization: data.specialization || data.specialty,
+          experience: data.experience,
+          rating: data.rating,
+          totalConsultations: data.totalConsultations,
+          profileImage: data.profileImage,
+          isOnline,
+          address: data.address,
+        };
+
+        // Distance calculation
+        if (
+          currentPincode &&
+          provider.address?.latitude &&
+          provider.address?.longitude
+        ) {
+          const customerLocation = await getCustomerLocation();
+          if (customerLocation) {
+            const distanceInfo = getDistanceToCustomer(
+              {
+                latitude: provider.address.latitude,
+                longitude: provider.address.longitude,
+                address: provider.address.address || '',
+                city: provider.address.city,
+                state: provider.address.state,
+                pincode: provider.address.pincode || '',
+                updatedAt: Date.now(),
+              },
+              customerLocation,
+            );
+            provider.distance = distanceInfo.distanceFormatted;
+            provider.eta = distanceInfo.etaMinutes;
+          }
+        }
+
+        list.push(provider);
       }
 
-      // Sort by rating (highest first), then by distance if available
-      providersList.sort((a, b) => {
-        if (a.eta && b.eta) {
-          return a.eta - b.eta; // Sort by ETA if both have it
-        }
-        if (a.rating && b.rating) {
-          return b.rating - a.rating; // Sort by rating
-        }
+      list.sort((a, b) => {
+        if (a.isOnline && !b.isOnline) return -1;
+        if (!a.isOnline && b.isOnline) return 1;
+        if (a.eta && b.eta) return a.eta - b.eta;
+        if (a.rating && b.rating) return b.rating - a.rating;
         return 0;
       });
 
-      setProviders(providersList);
+      setProviders(list);
     } catch (error: any) {
-      console.error('Error loading online providers:', error);
-      // Reset providers to empty array on error to prevent rendering invalid data
+      console.error('Error loading providers:', error);
       setProviders([]);
-      const errorMessage = error?.message || 'Failed to load providers. Please try again.';
-      Alert.alert('Error', String(errorMessage));
+      Alert.alert(
+        'Error',
+        String(error?.message || 'Failed to load providers'),
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // -----------------------------
+  // Customer Location
+  // -----------------------------
   const getCustomerLocation = async (): Promise<{
     latitude: number;
     longitude: number;
   } | null> => {
     try {
-      if (!currentUser?.id) {
-        return null;
-      }
-  
-      const userDoc = await firestore()
+      if (!currentUser?.id) return null;
+
+      const doc = await firestore()
         .collection('users')
         .doc(currentUser.id)
         .get();
-  
-      const userData = userDoc.data();
-  
-      if (
-        userData?.location?.latitude != null &&
-        userData?.location?.longitude != null
-      ) {
+
+      const data = doc.data();
+      if (data?.location?.latitude && data?.location?.longitude) {
         return {
-          latitude: Number(userData.location.latitude),
-          longitude: Number(userData.location.longitude),
+          latitude: Number(data.location.latitude),
+          longitude: Number(data.location.longitude),
         };
       }
-  
       return null;
-    } catch (error) {
-      console.error('Error getting customer location:', error);
+    } catch (e) {
+      console.error('Location error:', e);
       return null;
     }
   };
-  
 
+  // -----------------------------
+  // Filters
+  // -----------------------------
   const filterProviders = () => {
-    let filtered = providers;
+    let list = providers;
 
-    // Filter by service type
     if (selectedServiceType !== 'All') {
-      filtered = filtered.filter(
-        provider =>
-          provider.specialization === selectedServiceType ||
-          provider.specialty === selectedServiceType,
+      list = list.filter(
+        p =>
+          p.specialization === selectedServiceType ||
+          p.specialty === selectedServiceType,
       );
     }
 
-    // Filter by search query
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        provider =>
-          provider.name?.toLowerCase().includes(query) ||
-          provider.specialization?.toLowerCase().includes(query) ||
-          provider.specialty?.toLowerCase().includes(query),
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        p =>
+          p.name.toLowerCase().includes(q) ||
+          p.specialization?.toLowerCase().includes(q) ||
+          p.specialty?.toLowerCase().includes(q),
       );
     }
 
-    setFilteredProviders(filtered);
+    setFilteredProviders(list);
   };
 
   const handleRefresh = async () => {
@@ -217,10 +250,119 @@ export default function ProvidersListScreen({navigation}: any) {
     await loadOnlineProviders();
   };
 
-  const handleProviderPress = (provider: ProviderWithStatus) => {
-    navigation.navigate('ProviderDetails', {provider, doctor: provider}); // Support both for backward compatibility
+  const handleCallProvider = (provider: ProviderWithStatus) => {
+    const phone = provider.phoneNumber || provider.phone;
+    if (!phone) {
+      Alert.alert('No Phone Number');
+      return;
+    }
+    Linking.openURL(`tel:${phone}`);
   };
 
+  // -----------------------------
+  // Render Card
+  // -----------------------------
+  const renderProvider = ({item}: {item: ProviderWithStatus}) => (
+    <TouchableOpacity
+      style={[styles.card, {backgroundColor: theme.card, borderColor: theme.border}]}
+      onPress={() => navigation.navigate('ProviderDetails', {provider: item})}
+      activeOpacity={0.7}>
+      <View style={styles.imageWrap}>
+        {item.profileImage ? (
+          <Image source={{uri: item.profileImage}} style={styles.image} />
+        ) : (
+          <View style={[styles.placeholder, {backgroundColor: theme.border}]}>
+            <Icon name="person" size={36} color={theme.textSecondary} />
+          </View>
+        )}
+        {item.isOnline && <View style={styles.onlineDot} />}
+      </View>
+
+      <View style={styles.info}>
+        {/* Name and Online Status */}
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, {color: theme.text}]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.isOnline && (
+            <View style={styles.onlineBadge}>
+              <Text style={styles.onlineBadgeText}>Online</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Specialization */}
+        <Text style={[styles.specialization, {color: theme.textSecondary}]} numberOfLines={1}>
+          {item.specialization || item.specialty || 'Service Provider'}
+        </Text>
+
+        {/* Rating and Reviews */}
+        {item.rating !== undefined && item.rating > 0 && (
+          <View style={styles.ratingRow}>
+            <Icon name="star" size={14} color="#FFD700" />
+            <Text style={[styles.ratingText, {color: theme.text}]}>
+              {item.rating.toFixed(1)}
+            </Text>
+            {item.totalConsultations !== undefined && item.totalConsultations > 0 && (
+              <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
+                ({item.totalConsultations} {item.totalConsultations === 1 ? 'review' : 'reviews'})
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Experience */}
+        {item.experience !== undefined && item.experience > 0 && (
+          <Text style={[styles.experience, {color: theme.textSecondary}]}>
+            {item.experience} {item.experience === 1 ? 'year' : 'years'} experience
+          </Text>
+        )}
+
+        {/* Distance and ETA */}
+        {(item.distance || item.eta) && (
+          <View style={styles.locationRow}>
+            {item.distance && (
+              <View style={styles.locationItem}>
+                <Icon name="location-on" size={14} color={theme.primary} />
+                <Text style={[styles.locationText, {color: theme.textSecondary}]}>
+                  {item.distance}
+                </Text>
+              </View>
+            )}
+            {item.eta && (
+              <View style={styles.locationItem}>
+                <Icon name="access-time" size={14} color={theme.primary} />
+                <Text style={[styles.locationText, {color: theme.textSecondary}]}>
+                  ~{item.eta} min
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={[styles.callBtn, {backgroundColor: theme.primary}]}
+        onPress={() => handleCallProvider(item)}
+        activeOpacity={0.7}>
+        <Icon name="phone" size={20} color="#fff" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  // -----------------------------
+  // UI
+  // -----------------------------
+  if (loading && providers.length === 0) {
+    return (
+      <View style={[styles.center, {backgroundColor: theme.background}]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{marginTop: 10}}>Loading providers…</Text>
+      </View>
+    );
+  }
+
+  // Get unique service types from providers
   const serviceTypes = [
     'All',
     ...new Set(
@@ -230,174 +372,68 @@ export default function ProvidersListScreen({navigation}: any) {
     ),
   ];
 
-  const renderProviderCard = ({item}: {item: ProviderWithStatus}) => {
-    return (
-      <TouchableOpacity
-        style={[styles.providerCard, {backgroundColor: theme.card, borderColor: theme.border}]}
-        onPress={() => handleProviderPress(item)}
-        activeOpacity={0.7}>
-        {/* Provider Image */}
-        <View style={styles.providerImageContainer}>
-          {item.profileImage ? (
-            <Image source={{uri: item.profileImage}} style={styles.providerImage} />
-          ) : (
-            <View style={[styles.providerImagePlaceholder, {backgroundColor: theme.border}]}>
-              <Icon name="person" size={40} color={theme.textSecondary} />
-            </View>
-          )}
-          {/* Online Indicator */}
-          <View style={styles.onlineIndicator} />
-        </View>
-
-        {/* Provider Info */}
-        <View style={styles.providerInfo}>
-          <View style={styles.providerHeader}>
-            <Text style={[styles.providerName, {color: theme.text}]} numberOfLines={1}>
-              {item.name || 'Provider'}
-            </Text>
-            {item.rating && (
-              <View style={styles.ratingContainer}>
-                <Icon name="star" size={16} color="#FFD700" />
-                <Text style={[styles.ratingText, {color: theme.text}]}>
-                  {item.rating ? item.rating.toFixed(1) : '0.0'}
-                </Text>
-                {item.totalConsultations && (
-                  <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                    ({String(item.totalConsultations)})
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-
-          <Text style={[styles.serviceType, {color: theme.textSecondary}]} numberOfLines={1}>
-            {item.specialization || item.specialty || 'Service Provider'}
-          </Text>
-
-          {item.experience && (
-            <Text style={[styles.experience, {color: theme.textSecondary}]}>
-              {String(item.experience)} years experience
-            </Text>
-          )}
-
-          {/* Distance and ETA */}
-          {(item.distance || item.eta) && (
-            <View style={styles.distanceContainer}>
-              {item.distance && (
-                <View style={styles.distanceItem}>
-                  <Icon name="location-on" size={14} color={theme.primary} />
-                  <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                    {String(item.distance)}
-                  </Text>
-                </View>
-              )}
-              {item.eta && (
-                <View style={styles.distanceItem}>
-                  <Icon name="access-time" size={14} color={theme.primary} />
-                  <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                    ~{String(item.eta)} min
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* Arrow */}
-        <Icon name="chevron-right" size={24} color={theme.textSecondary} />
-      </TouchableOpacity>
-    );
-  };
-
-  if (loading && providers.length === 0) {
-    return (
-      <View style={[styles.container, styles.centerContent, {backgroundColor: theme.background}]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={[styles.loadingText, {color: theme.textSecondary}]}>
-          Loading online providers...
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      {/* Search Bar */}
-      <View style={[styles.searchContainer, {backgroundColor: theme.card}]}>
-        <Icon name="search" size={24} color={theme.textSecondary} style={styles.searchIcon} />
-        <TextInput
-          style={[styles.searchInput, {color: theme.text}]}
-          placeholder="Search providers..."
-          placeholderTextColor={theme.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="close" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <TextInput
+        placeholder="Search providers"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={[styles.search, {backgroundColor: theme.card, borderColor: theme.border, color: theme.text}]}
+        placeholderTextColor={theme.textSecondary}
+      />
 
       {/* Service Type Filter */}
-      <View style={styles.filterContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={serviceTypes}
-          keyExtractor={item => item}
-          renderItem={({item}) => (
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor:
-                    selectedServiceType === item ? theme.primary : theme.card,
-                  borderColor: theme.border,
-                },
-              ]}
-              onPress={() => setSelectedServiceType(item)}>
-              <Text
+      {serviceTypes.length > 1 && (
+        <View style={styles.filterContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={serviceTypes}
+            keyExtractor={item => item}
+            renderItem={({item}) => (
+              <TouchableOpacity
                 style={[
-                  styles.filterChipText,
+                  styles.filterChip,
                   {
-                    color: selectedServiceType === item ? '#FFF' : theme.text,
+                    backgroundColor:
+                      selectedServiceType === item ? theme.primary : theme.card,
+                    borderColor: theme.border,
                   },
-                ]}>
-                {item}
-              </Text>
-            </TouchableOpacity>
-          )}
-          contentContainerStyle={styles.filterList}
-        />
-      </View>
+                ]}
+                onPress={() => setSelectedServiceType(item)}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color: selectedServiceType === item ? '#FFF' : theme.text,
+                    },
+                  ]}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={styles.filterList}
+          />
+        </View>
+      )}
 
-      {/* Providers List */}
       {filteredProviders.length === 0 ? (
         <EmptyState
           icon="person-remove-outline"
-          title="No Online Providers"
+          title="No Providers Found"
           message={
             searchQuery || selectedServiceType !== 'All'
               ? 'Try adjusting your filters'
-              : 'No providers are currently online. Check back later!'
+              : 'No providers found. Check back later!'
           }
         />
       ) : (
         <FlatList
           data={filteredProviders}
-          renderItem={renderProviderCard}
-          keyExtractor={item => item.id || ''}
-          contentContainerStyle={styles.listContent}
+          renderItem={renderProvider}
+          keyExtractor={item => item.id}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
-          }
-          ListHeaderComponent={
-            <View style={styles.headerInfo}>
-              <Text style={[styles.headerText, {color: theme.textSecondary}]}>
-                {String(filteredProviders.length)} provider{filteredProviders.length !== 1 ? 's' : ''} online
-              </Text>
-            </View>
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
         />
       )}
@@ -405,39 +441,21 @@ export default function ProvidersListScreen({navigation}: any) {
   );
 }
 
+// -----------------------------
+// Styles
+// -----------------------------
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
+  container: {flex: 1},
+  center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
+  search: {
+    margin: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 4,
   },
   filterContainer: {
-    marginVertical: 12,
+    marginBottom: 8,
   },
   filterList: {
     paddingHorizontal: 16,
@@ -453,21 +471,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  listContent: {
-    padding: 16,
-  },
-  headerInfo: {
-    marginBottom: 12,
-  },
-  headerText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  providerCard: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
+    margin: 12,
+    marginHorizontal: 16,
     padding: 16,
-    marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
     shadowColor: '#000',
@@ -476,26 +485,22 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  providerImageContainer: {
-    position: 'relative',
+  imageWrap: {
     marginRight: 12,
+    position: 'relative',
   },
-  providerImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  providerImagePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  image: {width: 64, height: 64, borderRadius: 32},
+  placeholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  onlineIndicator: {
+  onlineDot: {
     position: 'absolute',
-    bottom: 2,
     right: 2,
+    bottom: 2,
     width: 14,
     height: 14,
     borderRadius: 7,
@@ -503,24 +508,41 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFF',
   },
-  providerInfo: {
+  info: {
     flex: 1,
+    marginRight: 8,
   },
-  providerHeader: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  providerName: {
+  name: {
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
   },
-  ratingContainer: {
+  onlineBadge: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  onlineBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  specialization: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginBottom: 4,
   },
   ratingText: {
     fontSize: 14,
@@ -531,27 +553,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
-  serviceType: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
   experience: {
     fontSize: 12,
     marginBottom: 4,
   },
-  distanceContainer: {
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
   },
-  distanceItem: {
+  locationItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 12,
   },
-  distanceText: {
+  locationText: {
     fontSize: 12,
     marginLeft: 4,
   },
+  callBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
 });
-

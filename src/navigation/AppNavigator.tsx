@@ -6,6 +6,7 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import NotificationService from '../services/notificationService';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -46,6 +47,15 @@ export default function AppNavigator() {
     const unsubscribe = auth().onAuthStateChanged(async (authUser) => {
       if (authUser) {
         try {
+          // Initialize FCM and save token for push notifications
+          try {
+            await NotificationService.initializeAndSaveToken();
+            console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
+          } catch (fcmError: any) {
+            console.warn('⚠️ Failed to initialize FCM token (non-critical):', fcmError.message);
+            // Don't block app initialization if FCM fails
+          }
+
           const userDoc = await firestore()
             .collection('users')
             .doc(authUser.uid)

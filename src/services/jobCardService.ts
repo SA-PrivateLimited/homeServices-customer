@@ -72,10 +72,10 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
     let snapshot;
     try {
       snapshot = await firestore()
-        .collection('jobCards')
-        .where('customerId', '==', customerId)
-        .orderBy('createdAt', 'desc')
-        .get();
+      .collection('jobCards')
+      .where('customerId', '==', customerId)
+      .orderBy('createdAt', 'desc')
+      .get();
     } catch (error: any) {
       // If orderBy fails (missing index), try without orderBy
       if (error.code === 'failed-precondition' || error.message?.includes('index')) {

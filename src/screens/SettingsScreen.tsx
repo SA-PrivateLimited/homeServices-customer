@@ -10,7 +10,6 @@ import {
   Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {CommonActions} from '@react-navigation/native';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
@@ -172,11 +171,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           style={[styles.profileHeader, {backgroundColor: theme.card}]}
           onPress={() => {
             // Navigate to Profile screen
-            navigation.dispatch(
-              CommonActions.navigate({
-                name: 'Profile',
-              }),
-            );
+            navigation.navigate('Profile');
           }}
           activeOpacity={0.7}>
           {(() => {
@@ -228,11 +223,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
             subtitle={currentUser.name}
             onPress={() => {
               // Navigate to Profile screen
-              navigation.dispatch(
-                CommonActions.navigate({
-                  name: 'Profile',
-                }),
-              );
+              navigation.navigate('Profile');
             }}
           />
         )}

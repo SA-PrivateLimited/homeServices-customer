@@ -138,7 +138,18 @@ const BookingScreen: React.FC<BookingScreenProps> = ({navigation, route}) => {
             onPress: () => {
               const serializableDoctor = serializeDoctorForNavigation(doctor);
               setRedirectAfterLogin({route: 'Booking', params: {doctor: serializableDoctor}});
-              navigation.navigate('Profile');
+              // Try to navigate to Profile, fallback to Settings if Profile doesn't exist
+              try {
+                if (navigation.canGoBack()) {
+                  navigation.navigate('Profile');
+                } else {
+                  // If Profile screen doesn't exist, navigate to Settings where Profile can be accessed
+                  navigation.navigate('Settings');
+                }
+              } catch (error) {
+                // Fallback: navigate to Settings
+                navigation.navigate('Settings');
+              }
             },
           },
         ]

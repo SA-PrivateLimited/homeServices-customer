@@ -72,6 +72,24 @@ class NotificationService {
         () => {},
       );
 
+      // Service Requests Channel (with hooter sound for Uber/Ola-style alerts)
+      PushNotification.createChannel(
+        {
+          channelId: 'service_requests',
+          channelName: 'Service Requests',
+          channelDescription: 'Service request updates and alerts',
+          importance: Importance.HIGH, // High importance for service alerts
+          vibrate: true,
+          playSound: true,
+          soundName: 'hooter.wav', // Hooter sound for service notifications
+        },
+        (created) => {
+          if (created) {
+            console.log('✅ Service requests notification channel created with hooter sound');
+          }
+        },
+      );
+
     }
 
     // Initialize FCM
@@ -99,12 +117,16 @@ class NotificationService {
 
         // Handle foreground messages
         messaging().onMessage(async remoteMessage => {
+          console.log('📱 FCM: Foreground message received:', {
+            title: remoteMessage.notification?.title,
+            body: remoteMessage.notification?.body,
+            data: remoteMessage.data,
+          });
           this.handleFCMMessage(remoteMessage);
         });
 
-        // Handle background messages
-        messaging().setBackgroundMessageHandler(async remoteMessage => {
-        });
+        // Handle background messages (must be registered in index.js)
+        // This is handled separately in index.js for proper registration
       }
     } catch (error) {
     }
@@ -113,6 +135,12 @@ class NotificationService {
   handleFCMMessage(remoteMessage: any) {
     const {notification, data} = remoteMessage;
 
+    console.log('📱 FCM: Handling foreground message:', {
+      hasNotification: !!notification,
+      hasData: !!data,
+      type: data?.type,
+    });
+
     if (notification) {
       // Determine channel based on notification type
       let channelId = 'consultation-updates';
@@ -120,7 +148,15 @@ class NotificationService {
         channelId = 'chat-messages';
       } else if (data?.type === 'reminder') {
         channelId = 'consultation-reminders';
+      } else if (data?.type === 'service') {
+        channelId = 'consultation-updates';
       }
+
+      console.log('📱 FCM: Showing local notification:', {
+        channelId,
+        title: notification.title,
+        body: notification.body,
+      });
 
       PushNotification.localNotification({
         channelId,
@@ -128,8 +164,10 @@ class NotificationService {
         message: notification.body || '',
         playSound: true,
         soundName: 'default',
-        userInfo: data,
+        userInfo: data || {},
       });
+    } else {
+      console.warn('⚠️ FCM: Message received but no notification payload');
     }
   }
 

@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+*.md
+README.md
+.git
+.gitignore
+DEPLOY.md
+QUICK_DEPLOY.md
+railway.json
+render.yaml
+fly.toml
+# Keep serviceAccountKey.json - needed for Firebase Admin
+# serviceAccountKey.json

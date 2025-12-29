@@ -26,11 +26,20 @@ import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
 import GeolocationService from './src/services/geolocationService';
+import oneSignalService from './src/services/oneSignalService';
+
+const ONESIGNAL_APP_ID = 'b0020b77-3e0c-43c5-b92e-912b1cec1623';
 
 const App = () => {
   const {isDarkMode, hydrate, currentUser} = useStore();
+  const oneSignalInitialized = React.useRef(false);
 
+  // Initialize OneSignal once on app start
   useEffect(() => {
+    if (oneSignalInitialized.current) {
+      return; // Already initialized
+    }
+
     // Handle unhandled promise rejections for geolocation errors
     const rejectionHandler = (event: any) => {
       const error = event?.reason || event;
@@ -50,7 +59,97 @@ const App = () => {
       global.addEventListener('unhandledrejection', rejectionHandler);
     }
 
-    // OneSignal removed - using in-app notifications only
+    // Initialize OneSignal with error handling (only once)
+    const initializeOneSignal = async () => {
+      if (oneSignalInitialized.current) {
+        return; // Already initialized
+      }
+
+      try {
+        // Import OneSignal dynamically
+        const OneSignalModule = require('react-native-onesignal');
+        // For v5.x, OneSignal is nested inside the module
+        const OneSignal = OneSignalModule.OneSignal || OneSignalModule.default || OneSignalModule;
+        
+        if (!OneSignal) {
+          return;
+        }
+
+        // For react-native-onesignal v5.x, use setAppId on the OneSignal object
+        if (OneSignal.setAppId && typeof OneSignal.setAppId === 'function') {
+          OneSignal.setAppId(ONESIGNAL_APP_ID);
+        } else if (OneSignal.initialize && typeof OneSignal.initialize === 'function') {
+          OneSignal.initialize(ONESIGNAL_APP_ID);
+        } else {
+          return;
+        }
+        
+        // Request notification permission (OneSignal v5.x) - only check once
+        if (OneSignal.Notifications && OneSignal.Notifications.getPermissionAsync) {
+          const hasPermission = await OneSignal.Notifications.getPermissionAsync();
+
+          if (!hasPermission) {
+            // Request permission using v5.x API
+            if (OneSignal.Notifications.requestPermission) {
+              const granted = await OneSignal.Notifications.requestPermission(true);
+
+              if (granted) {
+                console.log('OneSignal notification permission granted');
+              } else {
+                console.log('OneSignal notification permission denied');
+              }
+            }
+          } else {
+            console.log('OneSignal notification permission already granted');
+          }
+        } else if (OneSignal.promptForPushNotificationsWithUserResponse && typeof OneSignal.promptForPushNotificationsWithUserResponse === 'function') {
+          // Fallback for older versions
+          OneSignal.promptForPushNotificationsWithUserResponse(response => {
+            console.log('OneSignal permission response:', response);
+          });
+        }
+
+        // For Android, also check system notification settings - only once
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            // Android 13+ requires POST_NOTIFICATIONS permission
+            const permissionStatus = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+
+            if (permissionStatus === PermissionsAndroid.RESULTS.GRANTED) {
+              console.log('Android POST_NOTIFICATIONS permission granted');
+            } else {
+              console.log('Android POST_NOTIFICATIONS permission denied');
+            }
+          }
+        }
+
+        // Set up notification handlers (only once)
+        if (OneSignal.setNotificationWillShowInForegroundHandler && typeof OneSignal.setNotificationWillShowInForegroundHandler === 'function') {
+          OneSignal.setNotificationWillShowInForegroundHandler(notifReceivedEvent => {
+            const notification = notifReceivedEvent.getNotification();
+            console.log('OneSignal notification received in foreground:', notification);
+            notifReceivedEvent.complete(notification);
+          });
+        }
+
+        if (OneSignal.setNotificationOpenedHandler && typeof OneSignal.setNotificationOpenedHandler === 'function') {
+          OneSignal.setNotificationOpenedHandler(notification => {
+            console.log('OneSignal notification opened:', notification);
+            // Handle navigation if needed
+          });
+        }
+
+        oneSignalInitialized.current = true;
+        console.log('✅ OneSignal initialized successfully');
+      } catch (error) {
+        console.error('Error initializing OneSignal:', error);
+      }
+    };
+
+    // Initialize OneSignal (only once)
+    initializeOneSignal();
 
     // Request location permission (similar to notification permission)
     const requestLocationPermission = async () => {
@@ -94,9 +193,16 @@ const App = () => {
         global.removeEventListener('unhandledrejection', rejectionHandler);
       }
     };
-  }, [hydrate]);
+  }, [hydrate]); // Removed currentUser from dependencies
 
-  // OneSignal removed - using in-app notifications only
+  // Set OneSignal external user ID when user changes (separate effect)
+  useEffect(() => {
+    if (currentUser?.id && oneSignalInitialized.current) {
+      oneSignalService.setUserExternalId(currentUser.id).catch(error => {
+        console.error('Error setting OneSignal external user ID:', error);
+      });
+    }
+  }, [currentUser?.id]); // Only runs when user ID changes
 
   return (
     <SafeAreaProvider>

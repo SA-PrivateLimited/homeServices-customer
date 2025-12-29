@@ -46,12 +46,63 @@ export default function ReviewModal({
 
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Rating suggestions based on rating
+  const getSuggestions = (): string[] => {
+    if (rating >= 4) {
+      // Positive suggestions for good ratings
+      return [
+        'Professional',
+        'On Time',
+        'Clean & Tidy',
+        'Good Communication',
+        'Quality Work',
+        'Friendly',
+        'Well Equipped',
+        'Solved Problem',
+      ];
+    } else if (rating === 3) {
+      // Neutral suggestions
+      return [
+        'Average Service',
+        'Could Be Better',
+        'Room for Improvement',
+        'Satisfactory',
+      ];
+    } else if (rating >= 1 && rating <= 2) {
+      // Negative suggestions for poor ratings
+      return [
+        'Late Arrival',
+        'Poor Quality',
+        'Unprofessional',
+        'Not Clean',
+        'Poor Communication',
+        'Did Not Complete',
+        'Overcharged',
+        'Rude Behavior',
+      ];
+    }
+    return [];
+  };
+
   const handleStarPress = (star: number) => {
     setRating(star);
+    // Clear suggestions when rating changes
+    setSelectedSuggestions([]);
+  };
+
+  const handleSuggestionPress = (suggestion: string) => {
+    if (selectedSuggestions.includes(suggestion)) {
+      // Remove if already selected
+      setSelectedSuggestions(selectedSuggestions.filter(s => s !== suggestion));
+    } else {
+      // Add if not selected
+      setSelectedSuggestions([...selectedSuggestions, suggestion]);
+    }
   };
 
   const handleAddPhoto = async () => {
@@ -99,12 +150,30 @@ export default function ReviewModal({
 
     try {
       setSubmitting(true);
-      await createReview(jobCardId, rating, comment.trim() || undefined, photos.length > 0 ? photos : undefined);
+      
+      // Combine suggestions and comment
+      let finalComment = comment.trim();
+      if (selectedSuggestions.length > 0) {
+        const suggestionsText = selectedSuggestions.join(', ');
+        if (finalComment) {
+          finalComment = `${suggestionsText}. ${finalComment}`;
+        } else {
+          finalComment = suggestionsText;
+        }
+      }
+      
+      await createReview(
+        jobCardId, 
+        rating, 
+        finalComment || undefined, 
+        photos.length > 0 ? photos : undefined
+      );
       Alert.alert('Thank You!', 'Your review has been submitted.');
       onReviewSubmitted();
       // Reset form
       setRating(0);
       setComment('');
+      setSelectedSuggestions([]);
       setPhotos([]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to submit review. Please try again.');
@@ -122,9 +191,10 @@ export default function ReviewModal({
         {
           text: 'Skip',
           style: 'destructive',
-          onPress: () => {
+            onPress: () => {
             setRating(0);
             setComment('');
+            setSelectedSuggestions([]);
             setPhotos([]);
             onSkip();
           },
@@ -185,6 +255,45 @@ export default function ReviewModal({
                 </Text>
               )}
             </View>
+
+            {/* Rating Suggestions */}
+            {rating > 0 && getSuggestions().length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <Text style={[styles.suggestionsLabel, {color: theme.text}]}>
+                  What made it {rating >= 4 ? 'great' : rating === 3 ? 'average' : 'poor'}?
+                </Text>
+                <View style={styles.suggestionsGrid}>
+                  {getSuggestions().map((suggestion, index) => {
+                    const isSelected = selectedSuggestions.includes(suggestion);
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.suggestionChip,
+                          {
+                            backgroundColor: isSelected ? theme.primary : theme.background,
+                            borderColor: isSelected ? theme.primary : theme.border,
+                          },
+                        ]}
+                        onPress={() => handleSuggestionPress(suggestion)}>
+                        <Text
+                          style={[
+                            styles.suggestionText,
+                            {
+                              color: isSelected ? '#fff' : theme.text,
+                            },
+                          ]}>
+                          {suggestion}
+                        </Text>
+                        {isSelected && (
+                          <Icon name="check" size={16} color="#fff" style={styles.checkIcon} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Comment Input */}
             <View style={styles.commentContainer}>
@@ -326,6 +435,35 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 16,
     fontWeight: '500',
+  },
+  suggestionsContainer: {
+    marginBottom: 24,
+  },
+  suggestionsLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  suggestionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+  },
+  suggestionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  checkIcon: {
+    marginLeft: 2,
   },
   commentContainer: {
     marginBottom: 20,

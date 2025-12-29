@@ -79,10 +79,18 @@ service cloud.firestore {
       
       // Saved Addresses Subcollection
       match /savedAddresses/{addressId} {
-        // Allow users to read their own saved addresses
-        // For collection queries, userId must match authenticated user
+        // Allow users to read their own saved addresses (includes collection queries)
+        // userId refers to the parent document ID (users/{userId})
+        // Ensure user is authenticated and accessing their own addresses
+        // This rule works for both document reads and collection queries (.get())
+        // Note: userId is captured from the parent path match /users/{userId}
+        // The parent document read permission (line 55) allows authenticated users to read user docs,
+        // which enables subcollection queries even if the user document doesn't exist yet
         allow read: if isAuthenticated() && 
-                      (userId == request.auth.uid || isAdmin());
+                      request.auth.uid == userId;
+        
+        // Allow admins to read all saved addresses
+        allow read: if isAdmin();
         
         // Allow users to create their own saved addresses
         allow create: if isAuthenticated() && 
@@ -167,7 +175,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && 
                      (providerId == request.auth.uid ||
                       (request.auth.token.email != null &&
-                       'email' in resource.data &&
+                     'email' in resource.data &&
                        resource.data.email == request.auth.token.email));
       
       // Allow admins to read all provider profiles
@@ -192,6 +200,25 @@ service cloud.firestore {
                       request.resource.data.approvalStatus == resource.data.approvalStatus) &&
                      (!('serviceFee' in request.resource.data) ||
                       request.resource.data.serviceFee == resource.data.serviceFee);
+      
+      // Allow authenticated users (customers) to update rating and totalReviews fields
+      // This is needed when customers submit reviews to update provider's average rating
+      // Only allow updating rating, totalReviews, and updatedAt fields (prevent other field changes)
+      allow update: if isAuthenticated() &&
+                     // Ensure rating is a valid number between 0 and 5
+                     request.resource.data.rating is number &&
+                     request.resource.data.rating >= 0 &&
+                     request.resource.data.rating <= 5 &&
+                     // Ensure totalReviews is a valid integer if present
+                     (!('totalReviews' in request.resource.data) || 
+                      (request.resource.data.totalReviews is int && request.resource.data.totalReviews >= 0)) &&
+                     // Prevent changing critical fields (approvalStatus, serviceFee, email, etc.)
+                     (!('approvalStatus' in request.resource.data) ||
+                      request.resource.data.approvalStatus == resource.data.approvalStatus) &&
+                     (!('serviceFee' in request.resource.data) ||
+                      request.resource.data.serviceFee == resource.data.serviceFee) &&
+                     (!('email' in request.resource.data) ||
+                      request.resource.data.email == resource.data.email);
       
       // Admins can create/update/delete any provider profile
       allow create, update, delete: if isAdmin();

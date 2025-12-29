@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import database from '@react-native-firebase/database';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import type {Doctor} from '../types/consultation';
@@ -33,6 +34,29 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [imageError, setImageError] = React.useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(provider.isOnline || false);
+  const [isAvailable, setIsAvailable] = useState<boolean>(true);
+
+  // Fetch real-time online status from Realtime Database
+  useEffect(() => {
+    const providerId = (provider as any).id || (provider as any).uid;
+    if (!providerId) return;
+
+    // Listen to real-time online status
+    const statusRef = database().ref(`providers/${providerId}/status`);
+    
+    const unsubscribe = statusRef.on('value', (snapshot) => {
+      if (snapshot.exists()) {
+        const status = snapshot.val();
+        setIsOnline(status.isOnline === true);
+        setIsAvailable(status.isAvailable !== false); // Default to true if not set
+      }
+    });
+
+    return () => {
+      statusRef.off('value', unsubscribe);
+    };
+  }, [provider]);
 
   // Helper function to get initials from name
   const getInitials = (name: string): string => {
@@ -59,6 +83,16 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       Alert.alert(
         'Provider Not Available',
         'This provider is not currently available for service requests. Please select another provider.',
+        [{text: 'OK', onPress: () => navigation.goBack()}],
+      );
+      return;
+    }
+
+    // Check if provider is online and available
+    if (!isOnline || !isAvailable) {
+      Alert.alert(
+        'Provider Not Available',
+        'This provider is not currently online or available for service requests. Please select another provider.',
         [{text: 'OK', onPress: () => navigation.goBack()}],
       );
       return;
@@ -139,6 +173,22 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             <Text style={[styles.specialization, {color: theme.textSecondary}]}>
               {provider.specialization || provider.specialty || 'Service Provider'}
             </Text>
+
+            {/* Online Status Indicator */}
+            <View style={styles.statusRow}>
+              <View style={[
+                styles.statusIndicator,
+                {backgroundColor: isOnline && isAvailable ? '#4CAF50' : '#9E9E9E'}
+              ]}>
+                <View style={[
+                  styles.statusDot,
+                  {backgroundColor: isOnline && isAvailable ? '#fff' : '#fff'}
+                ]} />
+              </View>
+              <Text style={[styles.statusText, {color: theme.textSecondary}]}>
+                {isOnline && isAvailable ? 'Online - Available' : 'Offline - Not Available'}
+              </Text>
+            </View>
 
             <View style={styles.ratingRow}>
               <StarRating rating={provider.rating || 0} size={18} />
@@ -359,6 +409,28 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 14,
     marginLeft: 8,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   contactRow: {
     flexDirection: 'row',
