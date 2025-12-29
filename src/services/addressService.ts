@@ -42,16 +42,33 @@ const cleanAddressData = (data: any): any => {
 export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
   try {
     const user = auth().currentUser;
-    if (!user) return [];
+    if (!user) {
+      console.warn('⚠️ [ADDRESS] No authenticated user');
+      return [];
+    }
 
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.USERS)
-      .doc(user.uid)
-      .collection(COLLECTIONS.SAVED_ADDRESSES)
-      .orderBy('createdAt', 'desc')
-      .get();
+    console.log('📋 [ADDRESS] Fetching saved addresses for user:', user.uid);
 
-    return snapshot.docs.map(doc => {
+    // Try with orderBy first, fallback to simple query if it fails
+    let snapshot;
+    try {
+      snapshot = await firestore()
+        .collection(COLLECTIONS.USERS)
+        .doc(user.uid)
+        .collection(COLLECTIONS.SAVED_ADDRESSES)
+        .orderBy('createdAt', 'desc')
+        .get();
+    } catch (orderByError: any) {
+      // If orderBy fails (e.g., missing index or permission), try without orderBy
+      console.warn('⚠️ [ADDRESS] orderBy query failed, trying without orderBy:', orderByError.message);
+      snapshot = await firestore()
+        .collection(COLLECTIONS.USERS)
+        .doc(user.uid)
+        .collection(COLLECTIONS.SAVED_ADDRESSES)
+        .get();
+    }
+
+    const addresses = snapshot.docs.map(doc => {
       const data = doc.data();
       const cleanedData = cleanAddressData({
         id: doc.id,
@@ -61,8 +78,26 @@ export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
       });
       return cleanedData as SavedAddress;
     });
-  } catch (error) {
-    console.error('Error fetching saved addresses:', error);
+
+    // Sort manually if we couldn't use orderBy
+    if (addresses.length > 0 && addresses[0].createdAt) {
+      addresses.sort((a, b) => {
+        const aTime = a.createdAt?.getTime() || 0;
+        const bTime = b.createdAt?.getTime() || 0;
+        return bTime - aTime; // Descending order
+      });
+    }
+
+    console.log(`✅ [ADDRESS] Fetched ${addresses.length} saved addresses`);
+    return addresses;
+  } catch (error: any) {
+    console.error('❌ [ADDRESS] Error fetching saved addresses:', {
+      code: error.code,
+      message: error.message,
+      error,
+    });
+    
+    // Return empty array instead of throwing to prevent UI crashes
     return [];
   }
 };
