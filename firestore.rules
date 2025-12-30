@@ -46,12 +46,14 @@ service cloud.firestore {
     // Users Collection
     match /users/{userId} {
       // Allow users to read their own document
+      // This is REQUIRED for subcollection queries (savedAddresses) to work
       allow read: if isOwner(userId);
       
       // Allow admins to read all user documents
       allow read: if isAdmin();
       
       // Allow authenticated users to read FCM tokens for sending notifications
+      // This also enables subcollection queries for authenticated users
       allow read: if isAuthenticated();
       
       // Allow users to create their own document
@@ -84,8 +86,8 @@ service cloud.firestore {
         // Ensure user is authenticated and accessing their own addresses
         // This rule works for both document reads and collection queries (.get())
         // Note: userId is captured from the parent path match /users/{userId}
-        // The parent document read permission (line 55) allows authenticated users to read user docs,
-        // which enables subcollection queries even if the user document doesn't exist yet
+        // IMPORTANT: For subcollection queries to work, the parent document must be readable
+        // The parent document read permission (line 55) allows authenticated users to read user docs
         allow read: if isAuthenticated() && 
                       request.auth.uid == userId;
         
