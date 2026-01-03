@@ -114,9 +114,9 @@ const result = await response.json();
 ✅ **Easy to scale** if needed  
 ✅ **Can add more features** (analytics, logging, etc.)
 
-## Alternative: OneSignal (Even Easier)
+## Alternative: Firebase Cloud Functions
 
-If you want to avoid hosting a server entirely, consider OneSignal:
+For production use, consider Firebase Cloud Functions with FCM:
 - Free tier: 10,000 subscribers
 - No server needed
 - Easy React Native integration

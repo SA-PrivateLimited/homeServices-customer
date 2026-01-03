@@ -43,6 +43,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [showCompletedServiceModal, setShowCompletedServiceModal] = useState(false);
+  const [selectedCompletedService, setSelectedCompletedService] = useState<JobCard | null>(null);
 
   useEffect(() => {
     loadJobCards();
@@ -610,10 +612,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
               key={jobCard.id}
               style={[styles.jobCard, {backgroundColor: theme.card}]}
               onPress={() => {
-                navigation.navigate('ActiveService', {
-                  serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-                  jobCardId: jobCard.id,
-                });
+                setSelectedCompletedService(jobCard);
+                setShowCompletedServiceModal(true);
               }}>
               {/* Header */}
               <View style={styles.jobCardHeader}>
@@ -711,10 +711,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 <TouchableOpacity
                   style={styles.viewButton}
                   onPress={() => {
-                    navigation.navigate('ActiveService', {
-                      serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-                      jobCardId: jobCard.id,
-                    });
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
                   }}>
                   <Text style={[styles.viewButtonText, {color: theme.primary}]}>
                     View Details
@@ -734,10 +739,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
                   key={jobCard.id}
                   style={[styles.jobCard, {backgroundColor: theme.card}]}
                   onPress={() => {
-                    navigation.navigate('ActiveService', {
-                      serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-                      jobCardId: jobCard.id,
-                    });
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
                   }}>
               {/* Header */}
               <View style={styles.jobCardHeader}>
@@ -835,10 +845,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 <TouchableOpacity
                   style={styles.viewButton}
                   onPress={() => {
-                    navigation.navigate('ActiveService', {
-                      serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-                      jobCardId: jobCard.id,
-                    });
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
                   }}>
                   <Text style={[styles.viewButtonText, {color: theme.primary}]}>
                     View Details
@@ -986,6 +1001,169 @@ export default function ServiceHistoryScreen({navigation}: any) {
           }}
         />
       )}
+
+      {/* Completed Service Details Modal */}
+      <Modal
+        visible={showCompletedServiceModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCompletedServiceModal(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCompletedServiceModal(false)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.completedServiceModal, {backgroundColor: theme.card}]}>
+              {/* Drag Indicator */}
+              <View style={styles.dragIndicator} />
+
+              {/* Header with gradient background */}
+              <View style={[styles.completedModalHeader, {backgroundColor: theme.primary}]}>
+                <View style={styles.completedHeaderContent}>
+                  <View style={styles.completedHeaderIcon}>
+                    <Icon name="check-circle" size={32} color="#fff" />
+                  </View>
+                  <View style={styles.completedHeaderText}>
+                    <Text style={styles.completedModalTitle}>
+                      Service Completed
+                    </Text>
+                    <Text style={styles.completedModalSubtitle}>
+                      View service details below
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeIconButton}
+                  onPress={() => setShowCompletedServiceModal(false)}>
+                  <Icon name="close" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {selectedCompletedService && (
+                <ScrollView
+                  style={styles.completedServiceContent}
+                  showsVerticalScrollIndicator={false}>
+
+                  {/* Service Type Card */}
+                  <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                    <View style={styles.detailCardHeader}>
+                      <Icon name="build" size={24} color={theme.primary} />
+                      <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                        Service Information
+                      </Text>
+                    </View>
+                    <Text style={[styles.detailCardValue, {color: theme.text}]}>
+                      {selectedCompletedService.serviceType}
+                    </Text>
+                  </View>
+
+                  {/* Provider Card */}
+                  <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                    <View style={styles.detailCardHeader}>
+                      <Icon name="person" size={24} color={theme.primary} />
+                      <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                        Service Provider
+                      </Text>
+                    </View>
+                    <Text style={[styles.detailCardValue, {color: theme.text}]}>
+                      {selectedCompletedService.providerName}
+                    </Text>
+                  </View>
+
+                  {/* Date Card */}
+                  {selectedCompletedService.createdAt && (
+                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                      <View style={styles.detailCardHeader}>
+                        <Icon name="calendar-today" size={24} color={theme.primary} />
+                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                          Service Date
+                        </Text>
+                      </View>
+                      <Text style={[styles.detailCardValue, {color: theme.text}]}>
+                        {new Date(selectedCompletedService.createdAt).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Problem/Description Card */}
+                  {selectedCompletedService.problem && (
+                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                      <View style={styles.detailCardHeader}>
+                        <Icon name="description" size={24} color={theme.primary} />
+                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                          Service Details
+                        </Text>
+                      </View>
+                      <Text style={[styles.detailCardValue, {color: theme.textSecondary}]}>
+                        {selectedCompletedService.problem}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Address Card */}
+                  {selectedCompletedService.customerAddress && (
+                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                      <View style={styles.detailCardHeader}>
+                        <Icon name="location-on" size={24} color={theme.primary} />
+                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                          Service Location
+                        </Text>
+                      </View>
+                      <Text style={[styles.detailCardValue, {color: theme.textSecondary}]}>
+                        {typeof selectedCompletedService.customerAddress === 'string'
+                          ? selectedCompletedService.customerAddress
+                          : selectedCompletedService.customerAddress.address || 'N/A'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Amount Card */}
+                  {selectedCompletedService.totalAmount && (
+                    <View style={[styles.detailCard, styles.amountCard, {backgroundColor: theme.primary + '15'}]}>
+                      <View style={styles.detailCardHeader}>
+                        <Icon name="payment" size={24} color={theme.primary} />
+                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                          Total Amount
+                        </Text>
+                      </View>
+                      <Text style={[styles.amountValue, {color: theme.primary}]}>
+                        ₹{selectedCompletedService.totalAmount}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Status Badge */}
+                  <View style={styles.statusBadgeContainer}>
+                    <View style={styles.completedBadge}>
+                      <Icon name="verified" size={20} color="#4CAF50" />
+                      <Text style={styles.completedBadgeText}>
+                        Service Successfully Completed
+                      </Text>
+                    </View>
+                  </View>
+                </ScrollView>
+              )}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.dismissButton, {borderColor: theme.border}]}
+                  onPress={() => setShowCompletedServiceModal(false)}>
+                  <Text style={[styles.dismissButtonText, {color: theme.textSecondary}]}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1240,6 +1418,157 @@ const styles = StyleSheet.create({
   modalOptionText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  completedServiceModal: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -4},
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#DDD',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  completedModalHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  completedHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  completedHeaderIcon: {
+    marginRight: 16,
+  },
+  completedHeaderText: {
+    flex: 1,
+  },
+  completedModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  completedModalSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '400',
+  },
+  closeIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  completedServiceContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  detailCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  detailCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailCardValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 24,
+  },
+  amountCard: {
+    borderWidth: 2,
+    borderColor: 'rgba(74, 144, 226, 0.3)',
+  },
+  amountValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  statusBadgeContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  completedBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  modalActions: {
+    padding: 16,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  dismissButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  dismissButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    width: 80,
+  },
+  detailValue: {
+    fontSize: 14,
+    flex: 1,
   },
 });
 
