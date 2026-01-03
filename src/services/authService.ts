@@ -60,14 +60,7 @@ export const signUpWithEmail = async (
     // Initialize notification service to save token
     await NotificationService.initializeAndSaveToken();
 
-    // Set OneSignal external user ID for push notifications
-    try {
-      const oneSignalService = require('./oneSignalService').default;
-      await oneSignalService.setUserExternalId(userCredential.user.uid);
-      console.log('OneSignal external user ID set on email signup:', userCredential.user.uid);
-    } catch (error) {
-      console.error('Error setting OneSignal external user ID:', error);
-    }
+    // FCM token handled by notificationService
 
     await firestore()
       .collection(COLLECTIONS.USERS)
@@ -121,14 +114,10 @@ export const loginWithEmail = async (
     // Initialize notification service to save token
     await NotificationService.initializeAndSaveToken();
 
-    // Set OneSignal external user ID for push notifications
+    // FCM token handled by notificationService
     try {
-      const oneSignalService = require('./oneSignalService').default;
-      await oneSignalService.setUserExternalId(userCredential.user.uid);
-      console.log('OneSignal external user ID set on login:', userCredential.user.uid);
     } catch (error) {
-      console.error('Error setting OneSignal external user ID:', error);
-      // Don't throw - OneSignal setup failure shouldn't block login
+      // Don't throw - FCM setup failure shouldn't block login
     }
 
     const userData = {
@@ -271,13 +260,9 @@ export const verifyPhoneCode = async (
       // Initialize notification service to save token
       await NotificationService.initializeAndSaveToken();
 
-      // Set OneSignal external user ID for push notifications
+      // FCM token handled by notificationService
       try {
-        const oneSignalService = require('./oneSignalService').default;
-        await oneSignalService.setUserExternalId(userCredential.user.uid);
-        console.log('OneSignal external user ID set on phone login:', userCredential.user.uid);
       } catch (error) {
-        console.error('Error setting OneSignal external user ID:', error);
       }
     } else {
       // New user - create document with PRIMARY phone verified
@@ -309,13 +294,9 @@ export const verifyPhoneCode = async (
       // Initialize notification service to save token
       await NotificationService.initializeAndSaveToken();
 
-      // Set OneSignal external user ID for push notifications
+      // FCM token handled by notificationService
       try {
-        const oneSignalService = require('./oneSignalService').default;
-        await oneSignalService.setUserExternalId(userCredential.user.uid);
-        console.log('OneSignal external user ID set on phone signup:', userCredential.user.uid);
       } catch (error) {
-        console.error('Error setting OneSignal external user ID:', error);
       }
     }
 
@@ -708,13 +689,9 @@ export const signInWithGoogle = async (): Promise<User> => {
       // Initialize notification service to save token
       await NotificationService.initializeAndSaveToken();
 
-      // Set OneSignal external user ID for push notifications
+      // FCM token handled by notificationService
       try {
-        const oneSignalService = require('./oneSignalService').default;
-        await oneSignalService.setUserExternalId(userCredential.user.uid);
-        console.log('OneSignal external user ID set on Google login:', userCredential.user.uid);
       } catch (error) {
-        console.error('Error setting OneSignal external user ID:', error);
       }
     } else {
       // New user - create document
@@ -746,13 +723,9 @@ export const signInWithGoogle = async (): Promise<User> => {
       // Initialize notification service to save token
       await NotificationService.initializeAndSaveToken();
 
-      // Set OneSignal external user ID for push notifications
+      // FCM token handled by notificationService
       try {
-        const oneSignalService = require('./oneSignalService').default;
-        await oneSignalService.setUserExternalId(userCredential.user.uid);
-        console.log('OneSignal external user ID set on Google signup:', userCredential.user.uid);
       } catch (error) {
-        console.error('Error setting OneSignal external user ID:', error);
       }
     }
 
