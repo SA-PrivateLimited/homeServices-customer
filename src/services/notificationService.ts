@@ -5,18 +5,22 @@ import type {Consultation} from '../types/consultation';
 
 class NotificationService {
   constructor() {
-    PushNotification.configure({
-      onNotification: function (notification) {
-        notification.finish();
-      },
-      permissions: {
-        alert: true,
-        badge: true,
-        sound: true,
-      },
-      popInitialNotification: true,
-      requestPermissions: Platform.OS === 'ios',
-    });
+    try {
+      PushNotification.configure({
+        onNotification: function (notification) {
+          notification.finish();
+        },
+        permissions: {
+          alert: true,
+          badge: true,
+          sound: true,
+        },
+        popInitialNotification: false, // Disable to prevent null reference errors
+        requestPermissions: Platform.OS === 'ios',
+      });
+    } catch (error) {
+      console.warn('PushNotification configure error:', error);
+    }
 
     // Only create channels on Android
     if (Platform.OS === 'android') {
