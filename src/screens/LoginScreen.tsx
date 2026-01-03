@@ -75,11 +75,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       return;
     }
 
+    if (!confirmResult) {
+      Alert.alert('Error', 'Please request a verification code first');
+      return;
+    }
+
+    // Clean the code - remove spaces and dashes
+    const cleanCode = verificationCode.trim().replace(/[\s\-]/g, '');
+
     setLoading(true);
     try {
+      console.log('Verifying code:', cleanCode.length, 'digits');
       const user = await authService.verifyPhoneCode(
         confirmResult,
-        verificationCode,
+        cleanCode,
         'Customer', // Default name for phone login
       );
 
@@ -106,7 +115,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         routes: [{name: 'Main'}],
       });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to verify code');
+      console.error('Phone verification failed:', error);
+      const errorMessage = error.message || 'Failed to verify code. Please try again.';
+      Alert.alert('Error', errorMessage);
+      
+      // If session expired, reset confirmation
+      if (error.message?.includes('expired') || error.message?.includes('session')) {
+        setConfirmResult(null);
+        setVerificationCode('');
+      }
     } finally {
       setLoading(false);
     }

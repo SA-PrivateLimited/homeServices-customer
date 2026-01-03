@@ -50,7 +50,7 @@ export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
     console.log('📋 [ADDRESS] Fetching saved addresses for user:', user.uid);
 
     // Ensure user document exists before querying subcollection
-    // This helps avoid permission issues when the parent document doesn't exist
+    // This is REQUIRED - Firestore subcollection queries need the parent document to exist and be readable
     try {
       const userDocRef = firestore().collection(COLLECTIONS.USERS).doc(user.uid);
       const userDoc = await userDocRef.get();
@@ -58,17 +58,33 @@ export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
       if (!userDoc.exists) {
         console.log('📝 [ADDRESS] User document does not exist, creating it...');
         // Create minimal user document if it doesn't exist
+        // Use set() instead of merge to ensure document is created
         await userDocRef.set({
           uid: user.uid,
           email: user.email || null,
           phoneNumber: user.phoneNumber || null,
           createdAt: firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
         console.log('✅ [ADDRESS] User document created');
+        
+        // Wait a moment for the document to be fully committed
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } else {
+        console.log('✅ [ADDRESS] User document exists');
       }
     } catch (userDocError: any) {
-      console.warn('⚠️ [ADDRESS] Could not check/create user document:', userDocError.message);
-      // Continue anyway - the query might still work
+      console.error('❌ [ADDRESS] Error checking/creating user document:', {
+        code: userDocError.code,
+        message: userDocError.message,
+        error: userDocError,
+      });
+      
+      // If we can't create the user document, the subcollection query will fail
+      // Return empty array instead of continuing
+      if (userDocError.code === 'permission-denied') {
+        console.error('❌ [ADDRESS] Permission denied when creating user document');
+        return [];
+      }
     }
 
     // Query saved addresses - try simple query first to avoid index issues

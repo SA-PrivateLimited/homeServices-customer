@@ -96,6 +96,13 @@ android {
         jvmTarget = "17"
     }
 
+    packagingOptions {
+        // Enable 16 KB page size support for Android 15+
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     sourceSets {
         main {
             java {
