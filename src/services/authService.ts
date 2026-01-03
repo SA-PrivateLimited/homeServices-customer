@@ -321,10 +321,25 @@ export const verifyPhoneCode = async (
 
     return userData;
   } catch (error: any) {
+    console.error('Phone verification error:', error.code, error.message);
+    
     if (error.code === 'auth/invalid-verification-code') {
-      throw new Error('Invalid verification code. Please try again.');
+      throw new Error('Invalid verification code. Please check the code and try again.');
     } else if (error.code === 'auth/code-expired') {
       throw new Error('Verification code expired. Please request a new one.');
+    } else if (error.code === 'auth/session-expired') {
+      throw new Error('Verification session expired. Please request a new code.');
+    } else if (error.code === 'auth/invalid-verification-id') {
+      throw new Error('Invalid verification session. Please request a new code.');
+    } else if (error.code === 'auth/app-not-authorized') {
+      throw new Error('App not authorized. Please add SHA-256 fingerprint to Firebase Console for release builds.');
+    } else if (error.code === 'auth/missing-verification-code') {
+      throw new Error('Verification code is required.');
+    } else if (error.code === 'auth/missing-verification-id') {
+      throw new Error('Verification session expired. Please request a new code.');
+    } else if (error.message) {
+      // Include the actual error message for debugging
+      throw new Error(`Failed to verify code: ${error.message}`);
     }
     throw new Error('Failed to verify code. Please try again.');
   }
