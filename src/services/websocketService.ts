@@ -23,6 +23,7 @@ class WebSocketService {
     }
     
     console.log('🔧 [WEBSOCKET] Setting up service-completed listener');
+    console.log('📋 [WEBSOCKET] Current registered callbacks:', this.serviceCompletedCallbacks.length);
     
     // Remove existing listener to avoid duplicates
     this.socket.off('service-completed');
@@ -35,6 +36,13 @@ class WebSocketService {
         socketId: this.socket?.id,
       });
       console.log('📬 [WEBSOCKET] Number of registered callbacks:', this.serviceCompletedCallbacks.length);
+      
+      // Check if callbacks are registered
+      if (this.serviceCompletedCallbacks.length === 0) {
+        console.log('ℹ️ [WEBSOCKET] No callbacks registered yet. Event received but no handlers to call.');
+        console.log('ℹ️ [WEBSOCKET] This is normal if the callback hasn\'t been registered yet.');
+        return;
+      }
       
       // Notify all registered callbacks
       this.serviceCompletedCallbacks.forEach((callback, index) => {
@@ -73,14 +81,24 @@ class WebSocketService {
       });
 
       this.socket.on('connect', () => {
+        // Ensure socket is not null before proceeding
+        if (!this.socket) {
+          console.error('❌ [WEBSOCKET] Socket is null in connect handler');
+          return;
+        }
+
         console.log('✅ [WEBSOCKET] WebSocket connected:', {
           socketId: this.socket?.id,
           timestamp: new Date().toISOString(),
         });
         this.isConnected = true;
         
-        // Set up service completion listener
-        this.setupServiceCompletedListener();
+        // Set up service completion listener (socket is guaranteed to exist here)
+        if (this.socket) {
+          this.setupServiceCompletedListener();
+        } else {
+          console.error('❌ [WEBSOCKET] Socket became null during connect handler');
+        }
       });
 
       this.socket.on('disconnect', () => {
@@ -93,8 +111,8 @@ class WebSocketService {
         this.isConnected = false;
       });
       
-      // Set up listener immediately (will work once connected)
-      this.setupServiceCompletedListener();
+      // Don't setup listener here - wait for 'connect' event
+      // The listener will be set up in the 'connect' event handler above
     } catch (error) {
       console.error('Error initializing WebSocket:', error);
     }
@@ -155,12 +173,22 @@ class WebSocketService {
    * Register a callback for service completion events
    */
   onServiceCompleted(callback: (data: {jobCardId: string; consultationId: string; providerName: string; serviceType: string}) => void): () => void {
+    console.log('📝 [WEBSOCKET] Registering service-completed callback');
     this.serviceCompletedCallbacks.push(callback);
+    console.log('📝 [WEBSOCKET] Total callbacks registered:', this.serviceCompletedCallbacks.length);
+    
+    // Ensure listener is set up if socket is already connected
+    if (this.socket?.connected) {
+      console.log('📝 [WEBSOCKET] Socket already connected, ensuring listener is set up');
+      this.setupServiceCompletedListener();
+    }
+    
     // Return unsubscribe function
     return () => {
       const index = this.serviceCompletedCallbacks.indexOf(callback);
       if (index > -1) {
         this.serviceCompletedCallbacks.splice(index, 1);
+        console.log('🗑️ [WEBSOCKET] Callback unregistered. Remaining callbacks:', this.serviceCompletedCallbacks.length);
       }
     };
   }

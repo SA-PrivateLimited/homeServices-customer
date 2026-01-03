@@ -230,58 +230,9 @@ export default function ActiveServiceScreen({
         timestamp: new Date().toISOString(),
       });
       
-      // Connect first
-      WebSocketService.connect();
-      console.log('🔌 [CUSTOMER] WebSocket connect() called');
-      
-      // Function to join room (will retry if not connected)
-      let retryCount = 0;
-      const maxRetries = 5;
-      // Ensure WebSocket is connected first
-      console.log('🔌 [CUSTOMER] Initializing WebSocket connection...');
-      WebSocketService.connect();
-      
-      const joinRoom = () => {
-        retryCount++;
-        const isConnected = WebSocketService.getConnectionStatus();
-        const socket = WebSocketService.getSocket();
-        console.log(`🔌 [CUSTOMER] Attempt ${retryCount}/${maxRetries} to join room. Connected:`, isConnected, 'Socket exists:', !!socket);
-        
-        if (isConnected && socket?.connected) {
-          console.log('✅ [CUSTOMER] WebSocket connected, joining customer room');
-          WebSocketService.joinCustomerRoom(currentUser.uid);
-        } else if (retryCount < maxRetries) {
-          console.log(`⏳ [CUSTOMER] WebSocket not connected yet, retrying in 1 second... (${retryCount}/${maxRetries})`);
-          // Ensure connection is attempted
-          if (!socket) {
-            console.log('🔌 [CUSTOMER] Socket is null, calling connect()...');
-            WebSocketService.connect();
-          }
-          setTimeout(joinRoom, 1000);
-        } else {
-          console.warn('⚠️ [CUSTOMER] Failed to connect WebSocket after', maxRetries, 'attempts. This is non-critical - Firestore will handle updates.');
-          // Don't show error - WebSocket is optional, Firestore triggers will handle notifications
-        }
-      };
-      
-      // Wait a bit for connection, then join room
-      const connectTimeout = setTimeout(joinRoom, 1000);
-      
-      // Also try joining when socket connects
-      const socket = WebSocketService.getSocket();
-      if (socket) {
-        socket.once('connect', () => {
-          console.log('✅ [CUSTOMER] WebSocket connected event received, joining customer room');
-          WebSocketService.joinCustomerRoom(currentUser.uid);
-        });
-      } else {
-        // Socket doesn't exist yet - connect() will create it
-        console.log('🔌 [CUSTOMER] Socket is null, connect() will create it');
-        // The connect() call above will create the socket
-      }
-      
-      // Listen for service completion events
-      console.log('👂 [CUSTOMER] Registering service-completed callback');
+      // Register callback FIRST before connecting
+      // This ensures the listener is set up with the callback when connection is established
+      console.log('👂 [CUSTOMER] Registering service-completed callback BEFORE connecting');
       const unsubscribe = WebSocketService.onServiceCompleted((data) => {
         console.log('📬 [CUSTOMER] Service completed callback triggered:', {
           ...data,
@@ -332,6 +283,53 @@ export default function ActiveServiceScreen({
         }
       });
       console.log('✅ [CUSTOMER] Service-completed callback registered');
+      
+      // NOW connect after callback is registered
+      console.log('🔌 [CUSTOMER] WebSocket connect() called after callback registration');
+      WebSocketService.connect();
+      
+      // Function to join room (will retry if not connected)
+      let retryCount = 0;
+      const maxRetries = 5;
+      console.log('🔌 [CUSTOMER] Initializing WebSocket connection...');
+      
+      const joinRoom = () => {
+        retryCount++;
+        const isConnected = WebSocketService.getConnectionStatus();
+        const socket = WebSocketService.getSocket();
+        console.log(`🔌 [CUSTOMER] Attempt ${retryCount}/${maxRetries} to join room. Connected:`, isConnected, 'Socket exists:', !!socket);
+        
+        if (isConnected && socket?.connected) {
+          console.log('✅ [CUSTOMER] WebSocket connected, joining customer room');
+          WebSocketService.joinCustomerRoom(currentUser.uid);
+        } else if (retryCount < maxRetries) {
+          console.log(`⏳ [CUSTOMER] WebSocket not connected yet, retrying in 1 second... (${retryCount}/${maxRetries})`);
+          // Ensure connection is attempted
+          if (!socket) {
+            console.log('🔌 [CUSTOMER] Socket is null, calling connect()...');
+            WebSocketService.connect();
+          }
+          setTimeout(joinRoom, 1000);
+        } else {
+          console.warn('⚠️ [CUSTOMER] Failed to connect WebSocket after', maxRetries, 'attempts. This is non-critical - Firestore will handle updates.');
+          // Don't show error - WebSocket is optional, Firestore triggers will handle notifications
+        }
+      };
+      
+      // Wait a bit for connection, then join room
+      const connectTimeout = setTimeout(joinRoom, 1000);
+      
+      // Also try joining when socket connects
+      const socket = WebSocketService.getSocket();
+      if (socket) {
+        socket.once('connect', () => {
+          console.log('✅ [CUSTOMER] WebSocket connected event received, joining customer room');
+          WebSocketService.joinCustomerRoom(currentUser.uid);
+        });
+      } else {
+        // Socket doesn't exist yet - connect() will create it
+        console.log('🔌 [CUSTOMER] Socket is null, connect() will create it');
+      }
       
       return () => {
         console.log('🧹 [CUSTOMER] Cleaning up WebSocket listeners');
