@@ -6,6 +6,7 @@
 import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import pushNotificationService from './pushNotificationService';
 
 export interface JobCard {
   id?: string;
@@ -36,6 +37,8 @@ export interface JobCard {
   consultationId?: string;
   bookingId?: string;
   status: 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
+  taskPIN?: string;
+  pinGeneratedAt?: Date;
   scheduledTime?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -50,12 +53,15 @@ export const getJobCardById = async (jobCardId: string): Promise<JobCard | null>
     if (!doc.exists) {
       return null;
     }
+    const data = doc.data();
     return {
       id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-      updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
-      scheduledTime: doc.data()?.scheduledTime?.toDate(),
+      ...data,
+      createdAt: data?.createdAt?.toDate() || new Date(),
+      updatedAt: data?.updatedAt?.toDate() || new Date(),
+      scheduledTime: data?.scheduledTime?.toDate(),
+      pinGeneratedAt: data?.pinGeneratedAt?.toDate(),
+      taskPIN: data?.taskPIN,
     } as JobCard;
   } catch (error) {
     console.error('Error fetching job card:', error);
@@ -86,88 +92,17 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
           .get();
         
         // Sort manually
-        const cards = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-          updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
-          scheduledTime: doc.data()?.scheduledTime?.toDate(),
-          urgency: doc.data()?.urgency, // Preserve urgency field
-        })) as any[];
-        
-        return cards.sort((a, b) => {
-          const aTime = a.createdAt.getTime();
-          const bTime = b.createdAt.getTime();
-          return bTime - aTime; // Descending order
-        });
-      } else {
-        throw error;
-      }
-    }
-
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-      updatedAt: doc.data()?.updatedAt?.toDate() || new Date(),
-      scheduledTime: doc.data()?.scheduledTime?.toDate(),
-      urgency: doc.data()?.urgency, // Preserve urgency field
-    })) as any[];
-  } catch (error: any) {
-    console.error('Error fetching customer job cards:', error);
-    
-    // Check for missing index error
-    if (error.code === 'failed-precondition' || error.message?.includes('index')) {
-      console.error('Missing Firestore index. Please create index for jobCards: customerId + createdAt');
-      // Don't throw, return empty array so UI can still render
-      return [];
-    }
-    
-    // Check for permission error
-    if (error.code === 'permission-denied') {
-      console.error('Permission denied when fetching job cards');
-      throw new Error('Permission denied. Please ensure you are logged in.');
-    }
-    
-    throw new Error(error.message || 'Failed to fetch job cards');
-  }
-};
-
-/**
- * Get all active service requests (consultations) for a customer that don't have job cards yet
- */
-export const getCustomerActiveConsultations = async (customerId: string): Promise<any[]> => {
-  try {
-    // Try with status filter first
-    let snapshot;
-    try {
-      snapshot = await firestore()
-        .collection('consultations')
-        .where('customerId', '==', customerId)
-        .where('status', 'in', ['pending', 'accepted', 'in-progress'])
-        .get();
-    } catch (error: any) {
-      // If 'in' query fails (might need index), fetch all and filter manually
-      if (error.code === 'failed-precondition' || error.message?.includes('index')) {
-        console.warn('Status filter index missing, fetching all consultations and filtering manually');
-        const allSnapshot = await firestore()
-          .collection('consultations')
-          .where('customerId', '==', customerId)
-          .get();
-        
-        return allSnapshot.docs
-          .map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              consultationId: doc.id,
-              ...data,
-              createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
-              updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
-              scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
-            };
-          })
-          .filter(c => ['pending', 'accepted', 'in-progress'].includes(c.status));
+        const cards = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
+            updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
+            scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
+          };
+        })
+          .filter((c: any) => ['pending', 'accepted', 'in-progress'].includes(c.status));
       } else {
         throw error;
       }
@@ -177,17 +112,104 @@ export const getCustomerActiveConsultations = async (customerId: string): Promis
       const data = doc.data();
       return {
         id: doc.id,
-        consultationId: doc.id,
         ...data,
-        createdAt: data?.createdAt?.toDate ? data.createdAt.toDate() : (data?.createdAt instanceof Date ? data.createdAt : new Date(data?.createdAt || Date.now())),
-        updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : (data?.updatedAt instanceof Date ? data.updatedAt : new Date(data?.updatedAt || Date.now())),
-        scheduledTime: data?.scheduledTime?.toDate ? data.scheduledTime.toDate() : (data?.scheduledTime instanceof Date ? data.scheduledTime : (data?.scheduledTime ? new Date(data.scheduledTime) : undefined)),
-        urgency: data?.urgency, // Preserve urgency field
+        createdAt: data?.createdAt?.toDate() || new Date(),
+        updatedAt: data?.updatedAt?.toDate() || new Date(),
+        scheduledTime: data?.scheduledTime?.toDate(),
+        pinGeneratedAt: data?.pinGeneratedAt?.toDate(),
+        taskPIN: data?.taskPIN,
       };
-    });
+    }) as JobCard[];
   } catch (error: any) {
-    console.error('Error fetching customer consultations:', error);
-    return [];
+    console.error('Error fetching customer job cards:', error);
+    throw new Error(`Failed to fetch job cards: ${error.message || error.code || 'Unknown error'}`);
+  }
+};
+
+/**
+ * Cancel task with reason (Customer cancels)
+ */
+export const cancelTaskWithReason = async (
+  jobCardId: string,
+  cancellationReason: string,
+): Promise<void> => {
+  try {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+
+    // Get job card data
+    const jobCardDoc = await firestore()
+      .collection('jobCards')
+      .doc(jobCardId)
+      .get();
+    
+    if (!jobCardDoc.exists) {
+      throw new Error('Job card not found');
+    }
+    
+    const jobCardData = jobCardDoc.data();
+    const providerId = jobCardData?.providerId;
+    const consultationId = jobCardData?.consultationId || jobCardData?.bookingId;
+    const customerName = jobCardData?.customerName || 'Customer';
+    const serviceType = jobCardData?.serviceType || 'service';
+
+    // Update job card status to cancelled with reason
+    await firestore()
+      .collection('jobCards')
+      .doc(jobCardId)
+      .update({
+        status: 'cancelled',
+        cancellationReason: cancellationReason.trim(),
+        cancelledAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+    // Update consultation status if exists
+    if (consultationId) {
+      try {
+        await firestore()
+          .collection('consultations')
+          .doc(consultationId)
+          .update({
+            status: 'cancelled',
+            cancellationReason: cancellationReason.trim(),
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          });
+      } catch (consultationError) {
+        console.warn('Error updating consultation status:', consultationError);
+      }
+    }
+
+    // Update in Realtime Database
+    await database()
+      .ref(`jobCards/${jobCardId}`)
+      .update({
+        status: 'cancelled',
+        updatedAt: Date.now(),
+      });
+
+    // Send notification to provider
+    if (providerId && consultationId) {
+      try {
+        await pushNotificationService.sendToProvider(providerId, {
+          title: 'Service Cancelled',
+          body: `${customerName} has cancelled the ${serviceType} service. Reason: ${cancellationReason.trim()}`,
+          type: 'service',
+          consultationId,
+          status: 'cancelled',
+          cancellationReason: cancellationReason.trim(),
+        });
+        console.log('✅ Notification sent to provider:', providerId);
+      } catch (notificationError) {
+        console.error('Error sending cancellation notification to provider:', notificationError);
+        // Don't throw - notification failure shouldn't block cancellation
+      }
+    }
+  } catch (error: any) {
+    console.error('Error cancelling task:', error);
+    throw new Error(error.message || 'Failed to cancel task');
   }
 };
 
@@ -215,94 +237,19 @@ export const subscribeToJobCardStatus = (
 };
 
 /**
- * Subscribe to all job card status updates for a customer
- * Returns unsubscribe function
- */
-export const subscribeToCustomerJobCardStatuses = (
-  customerId: string,
-  callback: (jobCardId: string, status: JobCard['status'], updatedAt: number) => void,
-): (() => void) => {
-  const customerJobCardsRef = database().ref('jobCards');
-
-  const onStatusChange = customerJobCardsRef.on('child_changed', (snapshot) => {
-    const jobCardId = snapshot.key;
-    const statusData = snapshot.child('status').val();
-    
-    if (statusData && statusData.customerId === customerId) {
-      callback(jobCardId || '', statusData.status, statusData.updatedAt);
-    }
-  });
-
-  // Also listen for new job cards
-  const onJobCardAdded = customerJobCardsRef.on('child_added', (snapshot) => {
-    const jobCardId = snapshot.key;
-    const statusData = snapshot.child('status').val();
-    
-    if (statusData && statusData.customerId === customerId) {
-      callback(jobCardId || '', statusData.status, statusData.updatedAt);
-    }
-  });
-
-  // Return unsubscribe function
-  return () => {
-    customerJobCardsRef.off('child_changed', onStatusChange);
-    customerJobCardsRef.off('child_added', onJobCardAdded);
-  };
-};
-
-/**
- * Customer verifies task completion
- * Updates job card status to 'completed'
+ * Verify task completion (customer side)
  */
 export const verifyTaskCompletion = async (jobCardId: string): Promise<void> => {
   try {
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
-      throw new Error('User not authenticated');
-    }
-
-    // Verify the job card belongs to the customer
-    const jobCardDoc = await firestore()
-      .collection('jobCards')
-      .doc(jobCardId)
-      .get();
-
-    if (!jobCardDoc.exists) {
-      throw new Error('Job card not found');
-    }
-
-    const jobCardData = jobCardDoc.data();
-    if (jobCardData?.customerId !== currentUser.uid) {
-      throw new Error('You do not have permission to verify this job card');
-    }
-
-    // Update in Firestore
     await firestore()
       .collection('jobCards')
       .doc(jobCardId)
       .update({
-        status: 'completed',
+        customerVerified: true,
         updatedAt: firestore.FieldValue.serverTimestamp(),
       });
-
-    // Update in Realtime Database (for real-time synchronization)
-    await database()
-      .ref(`jobCards/${jobCardId}`)
-      .update({
-        status: 'completed',
-        updatedAt: Date.now(),
-      });
-
-    console.log('Task verified as completed by customer');
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error verifying task completion:', error);
-    
-    // Check for permission error
-    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
-      throw new Error('Permission denied. Please ensure you are logged in and this is your job card.');
-    }
-    
-    throw new Error(error.message || 'Failed to verify task completion');
+    throw new Error('Failed to verify task completion');
   }
 };
-

@@ -902,6 +902,7 @@ export default {
   resetPassword,
   changeUserRole,
   updateUserRole,
+  removeSecondaryPhone,
   isAuthenticated,
   onAuthStateChanged,
 };

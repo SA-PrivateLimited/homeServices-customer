@@ -73,48 +73,61 @@ class WebSocketService {
     }
 
     try {
-      this.socket = io(SOCKET_URL, {
+      // Create socket instance
+      const socket = io(SOCKET_URL, {
         transports: ['websocket', 'polling'], // Add polling as fallback
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionAttempts: 10,
       });
 
-      this.socket.on('connect', () => {
-        // Ensure socket is not null before proceeding
-        if (!this.socket) {
-          console.error('❌ [WEBSOCKET] Socket is null in connect handler');
+      // Store reference immediately to prevent race conditions
+      this.socket = socket;
+
+      // Use the local socket reference in event handlers to avoid null issues
+      socket.on('connect', () => {
+        // Use the local socket reference, not this.socket (which might be null)
+        if (!socket || !socket.connected) {
+          console.error('❌ [WEBSOCKET] Socket is null or not connected in connect handler');
           return;
         }
 
+        // Update this.socket to ensure it's in sync
+        this.socket = socket;
+
         console.log('✅ [WEBSOCKET] WebSocket connected:', {
-          socketId: this.socket?.id,
+          socketId: socket.id,
           timestamp: new Date().toISOString(),
         });
         this.isConnected = true;
         
-        // Set up service completion listener (socket is guaranteed to exist here)
-        if (this.socket) {
-          this.setupServiceCompletedListener();
-        } else {
-          console.error('❌ [WEBSOCKET] Socket became null during connect handler');
-        }
+        // Set up service completion listener
+        this.setupServiceCompletedListener();
       });
 
-      this.socket.on('disconnect', () => {
+      socket.on('disconnect', () => {
         console.log('❌ WebSocket disconnected');
         this.isConnected = false;
+        // Don't set socket to null here - let reconnection handle it
       });
 
-      this.socket.on('connect_error', (error) => {
+      socket.on('connect_error', (error) => {
         console.error('❌ WebSocket connection error:', error);
         this.isConnected = false;
+      });
+
+      socket.on('reconnect', () => {
+        console.log('✅ [WEBSOCKET] WebSocket reconnected');
+        this.isConnected = true;
+        this.setupServiceCompletedListener();
       });
       
       // Don't setup listener here - wait for 'connect' event
       // The listener will be set up in the 'connect' event handler above
     } catch (error) {
       console.error('Error initializing WebSocket:', error);
+      this.socket = null;
+      this.isConnected = false;
     }
   }
 

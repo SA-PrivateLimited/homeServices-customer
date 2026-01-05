@@ -112,12 +112,13 @@ const styles = StyleSheet.create({
   pickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    height: 56,
+    borderRadius: 12,
     borderWidth: 1,
-    marginRight: 8,
-    minWidth: 80,
+    minWidth: 120,
+    alignSelf: 'stretch',
   },
   flag: {
     fontSize: 20,

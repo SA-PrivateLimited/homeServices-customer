@@ -8,6 +8,7 @@ import {lightTheme, darkTheme} from '../utils/theme';
 
 // Screens - Settings (kept for profile management)
 import SettingsScreen from '../screens/SettingsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 // Screens - Services
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
@@ -102,6 +103,37 @@ const ServicesStack = () => {
   );
 };
 
+const SettingsStack = React.memo(() => {
+  const {isDarkMode} = useStore();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
+  return (
+    <Stack.Navigator
+      initialRouteName="SettingsMain"
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: theme.card,
+        },
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
+      }}>
+      <Stack.Screen
+        name="SettingsMain"
+        component={SettingsScreen}
+        options={{headerShown: false}}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{title: 'My Profile'}}
+      />
+    </Stack.Navigator>
+  );
+});
+
 const MainTabs = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -187,7 +219,7 @@ const MainTabs = () => {
       />
       <Tab.Screen 
         name="Settings" 
-        component={SettingsScreen}
+        component={SettingsStack}
         options={{title: 'Settings'}}
       />
     </Tab.Navigator>

@@ -42,6 +42,7 @@ export interface User {
   id: string; // Firebase Auth UID
   name: string;
   email: string;
+  emailVerified?: boolean; // Email verification status
   phone: string; // Primary phone number (REQUIRED)
   phoneVerified?: boolean; // Primary phone number verification status (REQUIRED)
   secondaryPhone?: string; // Secondary phone number (OPTIONAL)
@@ -54,6 +55,22 @@ export interface User {
   allergies?: string[];
   medicalHistory?: string[];
   location?: UserLocation; // User's location for medicine delivery
+  homeAddress?: {
+    address: string;
+    city?: string;
+    state?: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  officeAddress?: {
+    address: string;
+    city?: string;
+    state?: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+  };
   createdAt?: Date;
   fcmToken?: string; // For push notifications
 }

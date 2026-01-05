@@ -13,9 +13,9 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
@@ -23,6 +23,8 @@ import storage from '@react-native-firebase/storage';
 import {createReview} from '../services/reviewService';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {useStore} from '../store';
+import AlertModal from './AlertModal';
+import ConfirmationModal from './ConfirmationModal';
 
 interface ReviewModalProps {
   visible: boolean;
@@ -50,6 +52,18 @@ export default function ReviewModal({
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   // Rating suggestions based on rating
   const getSuggestions = (): string[] => {
@@ -134,7 +148,12 @@ export default function ReviewModal({
       setUploading(false);
     } catch (error: any) {
       setUploading(false);
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to upload photo. Please try again.',
+        type: 'error',
+      });
     }
   };
 
@@ -144,7 +163,12 @@ export default function ReviewModal({
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      Alert.alert('Rating Required', 'Please select a rating');
+      setAlertModal({
+        visible: true,
+        title: 'Rating Required',
+        message: 'Please select a rating',
+        type: 'warning',
+      });
       return;
     }
 
@@ -168,39 +192,34 @@ export default function ReviewModal({
         finalComment || undefined, 
         photos.length > 0 ? photos : undefined
       );
-      Alert.alert('Thank You!', 'Your review has been submitted.');
-      onReviewSubmitted();
-      // Reset form
-      setRating(0);
-      setComment('');
-      setSelectedSuggestions([]);
-      setPhotos([]);
+      setAlertModal({
+        visible: true,
+        title: 'Thank You!',
+        message: 'Your review has been submitted.',
+        type: 'success',
+      });
+      setTimeout(() => {
+        onReviewSubmitted();
+        // Reset form
+        setRating(0);
+        setComment('');
+        setSelectedSuggestions([]);
+        setPhotos([]);
+      }, 1500);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit review. Please try again.');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: error.message || 'Failed to submit review. Please try again.',
+        type: 'error',
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    Alert.alert(
-      'Skip Review?',
-      'You can review this service later from your history.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Skip',
-          style: 'destructive',
-            onPress: () => {
-            setRating(0);
-            setComment('');
-            setSelectedSuggestions([]);
-            setPhotos([]);
-            onSkip();
-          },
-        },
-      ],
-    );
+    setShowSkipModal(true);
   };
 
   return (
@@ -388,6 +407,30 @@ export default function ReviewModal({
           </ScrollView>
         </View>
       </View>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({...alertModal, visible: false})}
+      />
+
+      {/* Skip Confirmation Modal */}
+      <ConfirmationModal
+        visible={showSkipModal}
+        title="Skip Review?"
+        message="You can review this service later from your history."
+        confirmText="Skip"
+        cancelText="Cancel"
+        type="info"
+        onConfirm={() => {
+          setShowSkipModal(false);
+          onSkip();
+        }}
+        onCancel={() => setShowSkipModal(false)}
+      />
     </Modal>
   );
 }

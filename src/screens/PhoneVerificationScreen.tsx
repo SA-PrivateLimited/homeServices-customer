@@ -12,7 +12,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -21,17 +20,30 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import authService from '../services/authService';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import CountryCodePicker from '../components/CountryCodePicker';
 import {DEFAULT_COUNTRY_CODE, CountryCode} from '../utils/countryCodes';
+import AlertModal from '../components/AlertModal';
+import SuccessModal from '../components/SuccessModal';
 
 interface PhoneVerificationScreenProps {
   navigation: any;
+  route?: {
+    params?: {
+      mode?: 'secondary' | 'change' | 'initial';
+      phoneNumber?: string;
+    };
+  };
 }
 
 export default function PhoneVerificationScreen({
   navigation,
+  route,
 }: PhoneVerificationScreenProps) {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const mode = route?.params?.mode || 'initial';
+  const initialPhoneNumber = route?.params?.phoneNumber || '';
+  
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
   const [verificationCode, setVerificationCode] = useState('');
   const [confirmResult, setConfirmResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -41,6 +53,27 @@ export default function PhoneVerificationScreen({
 
   const {isDarkMode, currentUser, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Initialize phone number from route params
+  useEffect(() => {
+    if (initialPhoneNumber) {
+      setPhoneNumber(initialPhoneNumber);
+    }
+  }, [initialPhoneNumber]);
 
   // Countdown timer for retry
   useEffect(() => {
@@ -58,22 +91,34 @@ export default function PhoneVerificationScreen({
     if (retryAfter !== null && retryAfter > 0) {
       const minutes = Math.floor(retryAfter / 60);
       const seconds = retryAfter % 60;
-      Alert.alert(
-        'Too Many Attempts',
-        `Please wait ${minutes}:${seconds.toString().padStart(2, '0')} before trying again.`,
-      );
+      setAlertModal({
+        visible: true,
+        title: 'Too Many Attempts',
+        message: `Please wait ${minutes}:${seconds.toString().padStart(2, '0')} before trying again.`,
+        type: 'warning',
+      });
       return;
     }
 
     if (!phoneNumber.trim()) {
-      Alert.alert('Error', 'Please enter your phone number');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Please enter your phone number',
+        type: 'error',
+      });
       return;
     }
 
     // Validate phone number length (minimum 10 digits for India)
     const numericPhone = phoneNumber.replace(/\D/g, '');
     if (numericPhone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Please enter a valid 10-digit phone number',
+        type: 'error',
+      });
       return;
     }
 
@@ -87,7 +132,12 @@ export default function PhoneVerificationScreen({
       setConfirmResult(result);
       setStep('code');
       setRetryAfter(null); // Reset retry timer on success
-      Alert.alert('Success', 'Verification code sent to your phone');
+      setAlertModal({
+        visible: true,
+        title: 'Success',
+        message: 'Verification code sent to your phone',
+        type: 'success',
+      });
     } catch (error: any) {
       console.error('Error sending verification code:', error);
       
@@ -95,13 +145,19 @@ export default function PhoneVerificationScreen({
       if (error.message?.includes('Too many attempts') || error.message?.includes('too many verification attempts') || error.code === 'auth/too-many-requests') {
         // Set retry timer to 120 seconds (2 minutes) - shorter wait for better UX
         setRetryAfter(120);
-        Alert.alert(
-          'Verification Limit Reached',
-          'Too many verification attempts for this number. Please wait 2 minutes before trying again, or use a different phone number.',
-          [{text: 'OK'}],
-        );
+        setAlertModal({
+          visible: true,
+          title: 'Verification Limit Reached',
+          message: 'Too many verification attempts for this number. Please wait 2 minutes before trying again, or use a different phone number.',
+          type: 'warning',
+        });
       } else {
-        Alert.alert('Error', error.message || 'Failed to send verification code. Please try again.');
+        setAlertModal({
+          visible: true,
+          title: 'Error',
+          message: error.message || 'Failed to send verification code. Please try again.',
+          type: 'error',
+        });
       }
     } finally {
       setLoading(false);
@@ -110,46 +166,108 @@ export default function PhoneVerificationScreen({
 
   const handleVerifyPhoneCode = async () => {
     if (!verificationCode.trim()) {
-      Alert.alert('Error', 'Please enter the verification code');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Please enter the verification code',
+        type: 'error',
+      });
       return;
     }
 
     setLoading(true);
     try {
-      const user = await authService.verifyPhoneCode(
-        confirmResult,
-        verificationCode,
-        currentUser?.name || 'User',
-        currentUser?.email,
-      );
+      if (mode === 'secondary') {
+        // Handle secondary phone verification
+        const user = await authService.verifyPhoneCode(
+          confirmResult,
+          verificationCode,
+          currentUser?.name || 'User',
+          currentUser?.email,
+        );
 
-      // Update current user with verified phone
-      const updatedUser = {
-        ...user,
-        phoneVerified: true,
-        role: currentUser?.role || user.role,
-      };
+        // Save secondary phone to Firestore
+        const authUser = auth().currentUser;
+        if (authUser) {
+          const fullPhoneNumber = selectedCountry.dialCode + phoneNumber.replace(/\D/g, '');
+          await firestore()
+            .collection('users')
+            .doc(authUser.uid)
+            .update({
+              secondaryPhone: fullPhoneNumber,
+              secondaryPhoneVerified: true,
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            });
 
-      setCurrentUser(updatedUser);
+          await firestore()
+            .collection('providers')
+            .doc(authUser.uid)
+            .update({
+              secondaryPhone: fullPhoneNumber,
+              secondaryPhoneVerified: true,
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            });
 
-      Alert.alert(
-        'Success',
-        'Phone number verified successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate to main app
-              navigation.reset({
-                index: 0,
-                routes: [{name: 'Main'}],
-              });
+          // Update current user
+          const updatedUser = await authService.getCurrentUser();
+          if (updatedUser) {
+            await setCurrentUser(updatedUser);
+          }
+        }
+
+        setSuccessMessage('Secondary phone number verified successfully!');
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          setShowSuccessModal(false);
+          navigation.goBack();
+        }, 2000);
+      } else {
+        // Handle primary phone verification
+        const user = await authService.verifyPhoneCode(
+          confirmResult,
+          verificationCode,
+          currentUser?.name || 'User',
+          currentUser?.email,
+        );
+
+        // Update current user with verified phone
+        const updatedUser = {
+          ...user,
+          phoneVerified: true,
+          role: currentUser?.role || user.role,
+        };
+
+        setCurrentUser(updatedUser);
+
+        Alert.alert(
+          'Success',
+          'Phone number verified successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (mode === 'initial') {
+                  // Navigate to main app for initial verification
+                  navigation.reset({
+                    index: 0,
+                    routes: [{name: 'Main'}],
+                  });
+                } else {
+                  // Go back for change mode
+                  navigation.goBack();
+                }
+              },
             },
-          },
-        ],
-      );
+          ],
+        );
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to verify code');
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: error.message || 'Failed to verify code',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -161,34 +279,72 @@ export default function PhoneVerificationScreen({
     setConfirmResult(null);
   };
 
+  // Get title and subtitle based on mode
+  const getTitle = () => {
+    if (mode === 'secondary') {
+      return 'Add Secondary Phone Number';
+    } else if (mode === 'change') {
+      return 'Update Phone Number';
+    }
+    return 'Verify Your Phone Number';
+  };
+
+  const getSubtitle = () => {
+    if (mode === 'secondary') {
+      return 'Add a secondary phone number to your account. This will help us reach you if your primary number is unavailable.';
+    } else if (mode === 'change') {
+      return 'Update your phone number to keep your account secure and receive important notifications.';
+    }
+    return 'Phone verification is required to use HomeServices. This helps us ensure account security and enable important features like service requests and notifications.';
+  };
+
+  // Check if back button should be shown (not for initial verification)
+  const showBackButton = mode !== 'initial';
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, {backgroundColor: theme.background}]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* Header with back button */}
+      {showBackButton && (
+        <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, {color: theme.text}]}>
+            {getTitle()}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      )}
+
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <Icon name="phone-portrait" size={64} color={theme.primary} />
         </View>
 
         <Text style={[styles.title, {color: theme.text}]}>
-          Verify Your Phone Number
+          {getTitle()}
         </Text>
         <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-          Phone verification is required to use HomeServices. This helps us
-          ensure account security and enable important features.
+          {getSubtitle()}
         </Text>
 
         {step === 'phone' ? (
           <>
             <View style={styles.phoneInputContainer}>
-              <CountryCodePicker
-                selectedCountry={selectedCountry}
-                onSelect={setSelectedCountry}
-              />
-              <View style={[styles.inputContainer, {flex: 1}]}>
+              <View style={styles.countryCodeWrapper}>
+                <CountryCodePicker
+                  selectedCountry={selectedCountry}
+                  onSelect={setSelectedCountry}
+                />
+              </View>
+              <View style={styles.phoneInputWrapper}>
                 <TextInput
                   style={[
-                    styles.input,
+                    styles.phoneInput,
                     {
                       backgroundColor: theme.card,
                       color: theme.text,
@@ -201,13 +357,20 @@ export default function PhoneVerificationScreen({
                     const numericText = text.replace(/\D/g, '');
                     setPhoneNumber(numericText);
                   }}
-                  placeholder="9876543210"
+                  placeholder="Enter 10-digit phone number"
                   placeholderTextColor={theme.textSecondary}
                   keyboardType="phone-pad"
-                  autoFocus
+                  autoFocus={!initialPhoneNumber}
+                  maxLength={10}
                 />
               </View>
             </View>
+            
+            {mode === 'secondary' && (
+              <Text style={[styles.infoText, {color: theme.textSecondary, marginTop: -8, marginBottom: 16}]}>
+                This number will be used as a backup contact method.
+              </Text>
+            )}
 
             <TouchableOpacity
               style={[
@@ -294,8 +457,9 @@ export default function PhoneVerificationScreen({
         )}
 
         <Text style={[styles.infoText, {color: theme.textSecondary}]}>
-          By continuing, you agree to receive SMS messages for verification
-          purposes.
+          {step === 'phone' 
+            ? 'By continuing, you agree to receive SMS messages for verification purposes. Standard message rates may apply.'
+            : 'Enter the 6-digit verification code sent to your phone number. The code will expire in 10 minutes.'}
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -305,6 +469,28 @@ export default function PhoneVerificationScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    height: 56,
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 32, // Compensate for back button width
+  },
+  headerSpacer: {
+    width: 32, // Same width as back button to center title
   },
   content: {
     flex: 1,
@@ -329,8 +515,22 @@ const styles = StyleSheet.create({
   },
   phoneInputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 12,
+  },
+  countryCodeWrapper: {
+    width: 120,
+  },
+  phoneInputWrapper: {
+    flex: 1,
+  },
+  phoneInput: {
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
   },
   inputContainer: {
     flexDirection: 'row',

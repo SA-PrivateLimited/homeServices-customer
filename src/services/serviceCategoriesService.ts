@@ -5,6 +5,15 @@
 
 import firestore from '@react-native-firebase/firestore';
 
+export interface QuestionnaireQuestion {
+  id: string;
+  question: string;
+  type: 'text' | 'number' | 'select' | 'multiselect' | 'boolean';
+  options?: string[]; // For select and multiselect types
+  required: boolean;
+  placeholder?: string;
+}
+
 export interface ServiceCategory {
   id: string;
   name: string;
@@ -13,6 +22,8 @@ export interface ServiceCategory {
   description?: string;
   isActive: boolean;
   order: number; // Display order
+  questionnaire?: QuestionnaireQuestion[]; // Questions for this service category
+  requiresVehicle?: boolean; // For driver/transport services
   createdAt?: Date;
   updatedAt?: Date;
 }

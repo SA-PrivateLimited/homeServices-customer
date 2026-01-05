@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,19 @@ import {
   TouchableOpacity,
   Switch,
   ScrollView,
-  Alert,
   Image,
+  Linking,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
 import authService from '../services/authService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
+import AlertModal from '../components/AlertModal';
+import SuccessModal from '../components/SuccessModal';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -27,28 +28,74 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const {isDarkMode, toggleTheme, currentUser, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
 
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [showHelpSupportModal, setShowHelpSupportModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const handleHelpSupport = () => {
+    setShowHelpSupportModal(true);
+  };
+
+  const handleEmailSupport = () => {
+    const email = 'support@sa-privatelimited.com';
+    Linking.openURL(`mailto:${email}`).catch(() => {
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Unable to open email client.',
+        type: 'error',
+      });
+    });
+  };
+
+  const handleCallSupport = () => {
+    const phoneNumber = '+918210900726';
+    Linking.openURL(`tel:${phoneNumber}`).catch(() => {
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: 'Unable to make phone call on this device.',
+        type: 'error',
+      });
+    });
+  };
+
   const handleAbout = () => {
-    Alert.alert(
-      'About HomeServices',
-      `Version: 1.0.0\n\nHomeServices is a home services platform that connects customers with verified service providers for plumbing, electrical work, carpentry, AC repair, and more.\n\n© 2025 ${COPYRIGHT_OWNER || 'SA-PrivateLimited'}. All rights reserved.`,
-      [{text: 'OK'}],
-    );
+    setAlertModal({
+      visible: true,
+      title: 'About HomeServices',
+      message: `Version: 1.0.0\n\nHomeServices is a home services platform that connects customers with verified service providers for plumbing, electrical work, carpentry, AC repair, and more.\n\n© 2025 ${COPYRIGHT_OWNER || 'SA-PrivateLimited'}. All rights reserved.`,
+      type: 'info',
+    });
   };
 
   const handlePrivacy = () => {
-    Alert.alert(
-      'Privacy Policy',
-      'HomeServices respects your privacy. Your service request data is securely stored and encrypted. We do not share your personal information with third parties without your consent.\n\nAll service transactions and personal information are protected under our privacy policy.',
-      [{text: 'OK'}],
-    );
+    setAlertModal({
+      visible: true,
+      title: 'Privacy Policy',
+      message: 'HomeServices respects your privacy. Your service request data is securely stored and encrypted. We do not share your personal information with third parties without your consent.\n\nAll service transactions and personal information are protected under our privacy policy.',
+      type: 'info',
+    });
   };
 
   const handleTerms = () => {
-    Alert.alert(
-      'Terms of Service',
-      'HomeServices provides home service connections between customers and verified service providers.\n\nBy using this app, you agree to use the services responsibly and understand that service terms are subject to agreement with your service provider.',
-      [{text: 'OK'}],
-    );
+    setAlertModal({
+      visible: true,
+      title: 'Terms of Service',
+      message: 'HomeServices provides home service connections between customers and verified service providers.\n\nBy using this app, you agree to use the services responsibly and understand that service terms are subject to agreement with your service provider.',
+      type: 'info',
+    });
   };
 
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
@@ -68,51 +115,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         routes: [{name: 'Login'}],
       });
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setAlertModal({
+        visible: true,
+        title: 'Error',
+        message: error.message,
+        type: 'error',
+      });
     }
   };
 
-  const handleRestartAppTour = () => {
-    Alert.alert(
-      'Restart App Tour',
-      'This will show you the interactive guide again when you visit different screens. Would you like to restart the app tour?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Restart Tour',
-          onPress: async () => {
-            try {
-              const currentAuthUser = auth().currentUser;
-              if (!currentAuthUser) return;
-
-              // Clear all guide completion flags from Firestore
-              await firestore()
-                .collection('users')
-                .doc(currentAuthUser.uid)
-                .update({
-                  hasCompletedGuide: firestore.FieldValue.delete(),
-                });
-
-              // Clear all guide completion flags from AsyncStorage
-              const keys = await AsyncStorage.getAllKeys();
-              const guideKeys = keys.filter(key => key.startsWith('@homeservices_guide_completed'));
-              if (guideKeys.length > 0) {
-                await AsyncStorage.multiRemove(guideKeys);
-              }
-
-              Alert.alert(
-                'Success',
-                'App tour has been reset! You will see the guide when you visit different screens.',
-                [{text: 'OK'}]
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to restart app tour. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const SettingItem = ({
     icon,
@@ -207,8 +218,34 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
             {currentUser.name}
           </Text>
           <Text style={[styles.profileHeaderEmail, {color: theme.textSecondary}]}>
-            {currentUser.email || auth().currentUser?.email || 'Not available'}
+            Email: {currentUser.email || auth().currentUser?.email || 'Not available'}
           </Text>
+          {currentUser.phone && (
+            <Text style={[styles.profileHeaderPhone, {color: theme.textSecondary}]}>
+              Phone: {currentUser.phone}
+            </Text>
+          )}
+          {(() => {
+            const address = currentUser.homeAddress?.address || currentUser.officeAddress?.address;
+            const city = currentUser.homeAddress?.city || currentUser.officeAddress?.city;
+            const state = currentUser.homeAddress?.state || currentUser.officeAddress?.state;
+            const pincode = currentUser.homeAddress?.pincode || currentUser.officeAddress?.pincode;
+            
+            if (address || city || state || pincode) {
+              const addressParts = [];
+              if (address) addressParts.push(address);
+              if (city) addressParts.push(city);
+              if (state) addressParts.push(state);
+              if (pincode) addressParts.push(pincode);
+              
+              return (
+                <Text style={[styles.profileHeaderAddress, {color: theme.textSecondary}]}>
+                  {addressParts.join(', ')}
+                </Text>
+              );
+            }
+            return null;
+          })()}
         </TouchableOpacity>
       )}
 
@@ -261,14 +298,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         <SettingItem
           icon="help-circle"
           title="Help & Support"
-          subtitle="Get help with your consultations"
-          onPress={() => navigation.navigate('HelpSupport')}
-        />
-        <SettingItem
-          icon="book"
-          title="App Tour"
-          subtitle="Restart the interactive guide"
-          onPress={handleRestartAppTour}
+          subtitle="Contact us for assistance"
+          onPress={handleHelpSupport}
         />
       </View>
 
@@ -309,7 +340,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         <View style={styles.disclaimer}>
           <Icon name="alert-circle-outline" size={16} color={theme.textSecondary} />
           <Text style={[styles.disclaimerText, {color: theme.textSecondary}]}>
-            For educational purposes only. Always consult healthcare professionals.
+            For quality home services, always verify service providers and read terms before booking.
           </Text>
         </View>
       </View>
@@ -318,6 +349,77 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         visible={showLogoutModal}
         onConfirm={handleConfirmLogout}
         onCancel={() => setShowLogoutModal(false)}
+      />
+
+      {/* Help & Support Modal */}
+      <Modal
+        visible={showHelpSupportModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowHelpSupportModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, {color: theme.text}]}>Help & Support</Text>
+              <TouchableOpacity
+                onPress={() => setShowHelpSupportModal(false)}
+                style={styles.modalCloseButton}>
+                <Icon name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.supportInfo}>
+              <View style={styles.supportItem}>
+                <Icon name="mail-outline" size={24} color={theme.primary} />
+                <View style={styles.supportDetails}>
+                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>Email</Text>
+                  <Text style={[styles.supportValue, {color: theme.text}]}>support@sa-privatelimited.com</Text>
+                </View>
+              </View>
+              
+              <View style={styles.supportItem}>
+                <Icon name="call-outline" size={24} color={theme.primary} />
+                <View style={styles.supportDetails}>
+                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>Phone</Text>
+                  <Text style={[styles.supportValue, {color: theme.text}]}>+91 8210900726</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                onPress={handleEmailSupport}>
+                <Icon name="mail" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Email Us</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionButton, styles.callButton, {backgroundColor: '#4CAF50'}]}
+                onPress={handleCallSupport}>
+                <Icon name="call" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Call Us</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({...alertModal, visible: false})}
+      />
+
+      {/* Success Modal */}
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Success"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
       />
     </ScrollView>
   );
@@ -430,6 +532,84 @@ const styles = StyleSheet.create({
   },
   profileHeaderEmail: {
     fontSize: 14,
+  },
+  profileHeaderPhone: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  profileHeaderAddress: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 20,
+    ...commonStyles.shadowLarge,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  supportInfo: {
+    marginBottom: 24,
+  },
+  supportItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  supportDetails: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  supportLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  supportValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  callButton: {
+    marginLeft: 0,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

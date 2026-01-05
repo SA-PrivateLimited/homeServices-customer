@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Alert,
   Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -16,6 +15,9 @@ import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import type {Doctor} from '../types/consultation';
 import StarRating from '../components/StarRating';
 import {serializeDoctorForNavigation} from '../utils/helpers';
+import ReviewsList from '../components/ReviewsList';
+import AlertModal from '../components/AlertModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -34,8 +36,22 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [imageError, setImageError] = React.useState(false);
-  const [isOnline, setIsOnline] = useState<boolean>(provider.isOnline || false);
+  const [isOnline, setIsOnline] = useState<boolean>((provider as any).isOnline || false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
+
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+    onClose?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Fetch real-time online status from Realtime Database
   useEffect(() => {
@@ -80,39 +96,35 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const handleBookConsultation = () => {
     // Prevent booking if provider is not approved
     if (!isApproved) {
-      Alert.alert(
-        'Provider Not Available',
-        'This provider is not currently available for service requests. Please select another provider.',
-        [{text: 'OK', onPress: () => navigation.goBack()}],
-      );
+      setAlertModal({
+        visible: true,
+        title: 'Provider Not Available',
+        message: 'This provider is not currently available for service requests. Please select another provider.',
+        type: 'warning',
+        onClose: () => {
+          setAlertModal({...alertModal, visible: false});
+          navigation.goBack();
+        },
+      });
       return;
     }
 
     // Check if provider is online and available
     if (!isOnline || !isAvailable) {
-      Alert.alert(
-        'Provider Not Available',
-        'This provider is not currently online or available for service requests. Please select another provider.',
-        [{text: 'OK', onPress: () => navigation.goBack()}],
-      );
+      setAlertModal({
+        visible: true,
+        title: 'Provider Not Available',
+        message: 'This provider is not currently online or available for service requests. Please select another provider.',
+        type: 'warning',
+        onClose: () => {
+          setAlertModal({...alertModal, visible: false});
+          navigation.goBack();
+        },
+      });
       return;
     }
     if (!currentUser) {
-      Alert.alert(
-        'Login Required',
-        'Please login to request a service',
-        [
-          {text: 'Cancel', style: 'cancel'},
-          {
-            text: 'Login',
-            onPress: () => {
-              const serializableProvider = serializeDoctorForNavigation(provider);
-              setRedirectAfterLogin({route: 'ProviderDetails', params: {provider: serializableProvider}});
-              navigation.navigate('Login');
-            },
-          },
-        ],
-      );
+      setShowLoginModal(true);
       return;
     }
 
@@ -211,7 +223,12 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 onPress={() => {
                   const phoneNumber = provider.phone.replace(/[^\d+]/g, '');
                   Linking.openURL(`tel:${phoneNumber}`).catch(() => {
-                    Alert.alert('Error', 'Unable to make phone call');
+                    setAlertModal({
+                      visible: true,
+                      title: 'Error',
+                      message: 'Unable to make phone call',
+                      type: 'error',
+                    });
                   });
                 }}
                 activeOpacity={0.7}>
@@ -315,7 +332,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           </View>
         </View>
 
-        {/* Reviews Section (Placeholder) */}
+        {/* Reviews Section */}
         <View
           style={[
             styles.section,
@@ -325,9 +342,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
             Customer Reviews
           </Text>
-          <Text style={[styles.comingSoonText, {color: theme.textSecondary}]}>
-            Reviews coming soon
-          </Text>
+          <ReviewsList 
+            providerId={(provider as any).id || (provider as any).uid || ''} 
+            showHeader={false}
+          />
         </View>
       </ScrollView>
 
@@ -339,6 +357,37 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           <Text style={styles.bookButtonText}>Request Service</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => {
+          if (alertModal.onClose) {
+            alertModal.onClose();
+          } else {
+            setAlertModal({...alertModal, visible: false});
+          }
+        }}
+      />
+
+      {/* Login Confirmation Modal */}
+      <ConfirmationModal
+        visible={showLoginModal}
+        title="Login Required"
+        message="Please login to request a service"
+        confirmText="Login"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowLoginModal(false);
+          const serializableProvider = serializeDoctorForNavigation(provider);
+          setRedirectAfterLogin({route: 'ServiceRequest', params: {provider: serializableProvider}});
+          navigation.navigate('Login');
+        }}
+        onCancel={() => setShowLoginModal(false)}
+      />
     </View>
   );
 };

@@ -54,7 +54,8 @@ try {
     PolylineExists: !!Polyline,
   });
 } catch (e: any) {
-  console.error('❌ react-native-maps not available:', e?.message || e);
+  const errorMessage = e?.message || String(e || 'Unknown error');
+  console.error('❌ react-native-maps not available:', errorMessage);
   console.log('Using simplified view');
   MapView = null;
   Marker = null;
@@ -80,9 +81,12 @@ import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import {subscribeToJobCardStatus, verifyTaskCompletion} from '../services/jobCardService';
+import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason} from '../services/jobCardService';
+import CancelTaskModal from '../components/CancelTaskModal';
 import {getDistanceToCustomer, formatDistance} from '../services/providerLocationService';
 import ReviewModal from '../components/ReviewModal';
+import ConfirmationModal from '../components/ConfirmationModal';
+import AlertModal from '../components/AlertModal';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import WebSocketService from '../services/websocketService';
 
@@ -119,6 +123,20 @@ export default function ActiveServiceScreen({
   const [eta, setEta] = useState<number>(0);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean>(false);
   const [customerLocation, setCustomerLocation] = useState<any>(null);
+  const [requestCreatedAt, setRequestCreatedAt] = useState<Date | null>(null);
+  const [canReRequest, setCanReRequest] = useState<boolean>(false);
+  const [showReRequestModal, setShowReRequestModal] = useState(false);
+  
+  // Modal states
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  } | null>(null);
 
   // Request location permission and get customer location
   const requestLocationAndGetCurrentLocation = async () => {
@@ -202,14 +220,13 @@ export default function ActiveServiceScreen({
       } else {
         setLocationPermissionGranted(false);
         if (permission === 'never_ask_again') {
-          Alert.alert(
-            'Location Permission Required',
-            'Location permission is required to show your live location on the map. Please enable it in device settings.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Open Settings', onPress: () => Linking.openSettings()},
-            ]
-          );
+          setAlertModalConfig({
+            title: 'Location Permission Required',
+            message: 'Location permission is required to show your live location on the map. Please enable it in device settings.',
+            type: 'warning',
+          });
+          setShowAlertModal(true);
+          // Note: User can open settings manually if needed
         }
       }
     } catch (error) {
@@ -483,11 +500,12 @@ export default function ActiveServiceScreen({
           if (providerId !== userId) {
             // User is neither customer nor provider - permission denied
             console.warn('Permission denied: User does not have access to this consultation');
-            Alert.alert(
-              'Access Denied',
-              'You do not have permission to view this service request.',
-              [{text: 'OK', onPress: () => navigation.goBack()}]
-            );
+            setAlertModalConfig({
+              title: 'Access Denied',
+              message: 'You do not have permission to view this service request.',
+              type: 'error',
+            });
+            setShowAlertModal(true);
             setLoading(false);
             return;
           }
@@ -498,6 +516,12 @@ export default function ActiveServiceScreen({
           ...requestData,
         });
         setStatus(requestData?.status || 'pending');
+        
+        // Track when the request was created for re-request feature
+        if (requestData?.createdAt) {
+          const createdAt = requestData.createdAt.toDate ? requestData.createdAt.toDate() : new Date(requestData.createdAt);
+          setRequestCreatedAt(createdAt);
+        }
         
         // Check if this is an immediate service
         const urgency = requestData?.urgency;
@@ -543,11 +567,22 @@ export default function ActiveServiceScreen({
 
         if (jobCardDoc.exists) {
           const jobCardData = jobCardDoc.data();
-          setJobCard({
+          const jobCardWithPIN = {
             id: jobCardDoc.id,
             ...jobCardData,
-          });
+            createdAt: jobCardData?.createdAt?.toDate() || new Date(),
+            updatedAt: jobCardData?.updatedAt?.toDate() || new Date(),
+            scheduledTime: jobCardData?.scheduledTime?.toDate(),
+            pinGeneratedAt: jobCardData?.pinGeneratedAt?.toDate(),
+            taskPIN: jobCardData?.taskPIN,
+          };
+          setJobCard(jobCardWithPIN);
           setStatus(jobCardData?.status || 'pending');
+          
+          // Log PIN if available
+          if (jobCardData?.taskPIN) {
+            console.log('🔐 Customer PIN loaded:', jobCardData.taskPIN);
+          }
           
           // Check if this is an immediate service (from job card or consultation)
           const jobCardUrgency = jobCardData?.urgency;
@@ -705,26 +740,24 @@ export default function ActiveServiceScreen({
 
       setLoading(false);
     } catch (error: any) {
-      console.error('Error loading service data:', error);
+      const errorMessage = error?.message || String(error || 'Unknown error');
+      console.error('Error loading service data:', errorMessage);
       
       // Handle permission denied errors gracefully
-      if (error.code === 'permission-denied' || error.code === 'permissions-denied') {
-        Alert.alert(
-          'Access Denied',
-          'You do not have permission to view this service request. Please ensure you are logged in with the correct account.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack(),
-            },
-          ],
-        );
+      if (error?.code === 'permission-denied' || error?.code === 'permissions-denied') {
+        setAlertModalConfig({
+          title: 'Access Denied',
+          message: 'You do not have permission to view this service request. Please ensure you are logged in with the correct account.',
+          type: 'error',
+        });
+        setShowAlertModal(true);
       } else {
-        Alert.alert(
-          'Error',
-          error.message || 'Failed to load service data. Please try again.',
-          [{text: 'OK'}],
-        );
+        setAlertModalConfig({
+          title: 'Error',
+          message: errorMessage || 'Failed to load service data. Please try again.',
+          type: 'error',
+        });
+        setShowAlertModal(true);
       }
       
       setLoading(false);
@@ -847,95 +880,278 @@ export default function ActiveServiceScreen({
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
       Linking.openURL(`tel:${formattedPhone}`);
     } else {
-      Alert.alert('Phone number not available');
+      setAlertModalConfig({
+        title: 'Phone Not Available',
+        message: 'Phone number is not available for this provider.',
+        type: 'info',
+      });
+      setShowAlertModal(true);
     }
   };
 
   const handleCancelService = () => {
-    Alert.alert(
-      'Cancel Service?',
-      'Are you sure you want to cancel this service request?',
-      [
-        {text: 'No', style: 'cancel'},
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              
-              // Cancel the consultation/service request
-              if (serviceRequestId) {
-                await firestore()
-                  .collection('consultations')
-                  .doc(serviceRequestId)
-                  .update({
-                    status: 'cancelled',
-                    updatedAt: firestore.FieldValue.serverTimestamp(),
-                  });
-              }
-              
-              // Also cancel job card if it exists
-              if (jobCardId) {
-                await firestore()
-                  .collection('jobCards')
-                  .doc(jobCardId)
-                  .update({
-                    status: 'cancelled',
-                    updatedAt: firestore.FieldValue.serverTimestamp(),
-                  });
-              }
-              
-              Alert.alert('Success', 'Service request cancelled successfully', [
-                {text: 'OK', onPress: () => navigation.goBack()},
-              ]);
-            } catch (error: any) {
-              console.error('Error cancelling service:', error);
-              Alert.alert('Error', error.message || 'Failed to cancel service. Please try again.');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
+    setShowCancelReasonModal(true);
+  };
+
+  const handleReRequest = () => {
+    setShowReRequestModal(true);
+  };
+
+  const confirmReRequest = async () => {
+    try {
+      setLoading(true);
+      setShowReRequestModal(false);
+
+      if (!serviceRequest) {
+        setAlertModalConfig({
+          title: 'Error',
+          message: 'Service request data not found.',
+          type: 'error',
+        });
+        setShowAlertModal(true);
+        setLoading(false);
+        return;
+      }
+
+      // Create a new service request with the same data
+      const authUser = auth().currentUser;
+      if (!authUser) {
+        setAlertModalConfig({
+          title: 'Error',
+          message: 'Please login to re-request service',
+          type: 'error',
+        });
+        setShowAlertModal(true);
+        setLoading(false);
+        return;
+      }
+
+      // Cancel the old request first
+      try {
+        await firestore()
+          .collection('consultations')
+          .doc(serviceRequestId)
+          .update({
+            status: 'cancelled',
+            cancellationReason: 'Re-requested by customer after 10 minutes',
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          });
+      } catch (error) {
+        console.warn('Could not cancel old request:', error);
+        // Continue anyway
+      }
+
+      // Create new service request
+      const newServiceRequestRef = firestore().collection('consultations').doc();
+      
+      const newServiceRequestData: any = {
+        customerId: authUser.uid,
+        customerName: serviceRequest.customerName || (currentUser as any)?.name || 'Customer',
+        customerPhone: serviceRequest.customerPhone || (currentUser as any)?.phone || '',
+        customerAddress: serviceRequest.customerAddress,
+        serviceType: serviceRequest.serviceType,
+        problem: serviceRequest.problem || '',
+        status: 'pending',
+        urgency: serviceRequest.urgency || 'immediate',
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+        questionnaireAnswers: serviceRequest.questionnaireAnswers || undefined,
+      };
+
+      if (serviceRequest.scheduledTime) {
+        const scheduledTime = serviceRequest.scheduledTime.toDate ? serviceRequest.scheduledTime.toDate() : new Date(serviceRequest.scheduledTime);
+        newServiceRequestData.scheduledTime = firestore.Timestamp.fromDate(scheduledTime);
+      } else {
+        newServiceRequestData.scheduledTime = firestore.FieldValue.serverTimestamp();
+      }
+
+      if (serviceRequest.photos && serviceRequest.photos.length > 0) {
+        newServiceRequestData.photos = serviceRequest.photos;
+      }
+
+      await newServiceRequestRef.set(newServiceRequestData);
+
+      // Notify providers via WebSocket
+      try {
+        const onlineProvidersSnapshot = await firestore()
+          .collection('providers')
+          .where('isOnline', '==', true)
+          .where('approvalStatus', '==', 'approved')
+          .where('specialization', '==', serviceRequest.serviceType)
+          .get();
+
+        const onlineProvidersBySpecialtySnapshot = await firestore()
+          .collection('providers')
+          .where('isOnline', '==', true)
+          .where('approvalStatus', '==', 'approved')
+          .where('specialty', '==', serviceRequest.serviceType)
+          .get();
+
+        const allProviderIds = new Set<string>();
+        onlineProvidersSnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
+        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
+
+        const notificationPromises = Array.from(allProviderIds).map(providerId => {
+          return WebSocketService.emitNewBooking(providerId, {
+            consultationId: newServiceRequestRef.id,
+            id: newServiceRequestRef.id,
+            bookingId: newServiceRequestRef.id,
+            customerName: newServiceRequestData.customerName,
+            patientName: newServiceRequestData.customerName,
+            customerPhone: newServiceRequestData.customerPhone,
+            patientPhone: newServiceRequestData.customerPhone,
+            customerAddress: newServiceRequestData.customerAddress,
+            patientAddress: newServiceRequestData.customerAddress,
+            serviceType: serviceRequest.serviceType,
+            problem: serviceRequest.problem || '',
+            scheduledTime: serviceRequest.scheduledTime ? (serviceRequest.scheduledTime.toDate ? serviceRequest.scheduledTime.toDate() : new Date(serviceRequest.scheduledTime)) : new Date(),
+            consultationFee: 0,
+            questionnaireAnswers: newServiceRequestData.questionnaireAnswers || undefined,
+          }).catch(error => {
+            console.error(`Failed to notify provider ${providerId}:`, error);
+          });
+        });
+
+        await Promise.all(notificationPromises);
+      } catch (websocketError) {
+        console.error('Error notifying providers via WebSocket:', websocketError);
+      }
+
+      // Update the current screen with new request ID
+      setAlertModalConfig({
+        title: 'Success',
+        message: 'Service request has been re-submitted. Providers will be notified.',
+        type: 'success',
+      });
+      setShowAlertModal(true);
+      
+      // Reload with new service request ID
+      setTimeout(() => {
+        navigation.replace('ActiveService', {
+          serviceRequestId: newServiceRequestRef.id,
+        });
+      }, 2000);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error || 'Unknown error');
+      setAlertModalConfig({
+        title: 'Error',
+        message: errorMessage || 'Failed to re-request service. Please try again.',
+        type: 'error',
+      });
+      setShowAlertModal(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelWithReason = async (reason: string) => {
+    try {
+      setLoading(true);
+      setShowCancelReasonModal(false);
+      
+      let cancelled = false;
+      
+      // Cancel job card if it exists (this will notify provider)
+      if (jobCardId) {
+        try {
+          await cancelTaskWithReason(jobCardId, reason);
+          cancelled = true;
+        } catch (error: any) {
+          console.error('Error cancelling job card:', error);
+          // Continue to try consultation cancellation
+        }
+      }
+      
+      // Also cancel the consultation/service request if it exists
+      if (serviceRequestId) {
+        try {
+          const consultationDoc = await firestore()
+            .collection('consultations')
+            .doc(serviceRequestId)
+            .get();
+          
+          if (consultationDoc.exists) {
+            await consultationDoc.ref.update({
+              status: 'cancelled',
+              cancellationReason: reason.trim(),
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            });
+            cancelled = true;
+          } else {
+            console.warn('Consultation document not found:', serviceRequestId);
+          }
+        } catch (error: any) {
+          console.error('Error cancelling consultation:', error);
+        }
+      }
+      
+      if (cancelled) {
+        setAlertModalConfig({
+          title: 'Success',
+          message: 'Service request cancelled successfully. Provider has been notified.',
+          type: 'success',
+        });
+        setShowAlertModal(true);
+      } else {
+        // If neither document exists, show a different message
+        setAlertModalConfig({
+          title: 'Info',
+          message: 'Service request not found. It may have already been cancelled or removed.',
+          type: 'info',
+        });
+        setShowAlertModal(true);
+      }
+    } catch (error: any) {
+      console.error('Error cancelling service:', error);
+      setAlertModalConfig({
+        title: 'Error',
+        message: error.message || 'Failed to cancel service. Please try again.',
+        type: 'error',
+      });
+      setShowAlertModal(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyCompletion = () => {
-    Alert.alert(
-      'Verify Task Completion',
-      'Have you verified that the service has been completed to your satisfaction?',
-      [
-        {text: 'No', style: 'cancel'},
-        {
-          text: 'Yes, Verify',
-          onPress: async () => {
-            if (!jobCardId) {
-              Alert.alert('Error', 'Job card ID not found');
-              return;
-            }
+    setShowVerifyModal(true);
+  };
 
-            try {
-              setLoading(true);
-              await verifyTaskCompletion(jobCardId);
-              setStatus('completed');
-              
-              // Reload job card to get updated status
-              await loadServiceData();
-              
-              // Show review modal after a short delay
-              setTimeout(() => {
-                checkReviewStatus();
-              }, 1000);
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to verify task completion');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
+  const confirmVerifyCompletion = async () => {
+    setShowVerifyModal(false);
+    if (!jobCardId) {
+      setAlertModalConfig({
+        title: 'Error',
+        message: 'Job card ID not found',
+        type: 'error',
+      });
+      setShowAlertModal(true);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await verifyTaskCompletion(jobCardId);
+      setStatus('completed');
+      
+      // Reload job card to get updated status
+      await loadServiceData();
+      
+      // Show review modal after a short delay
+      setTimeout(() => {
+        checkReviewStatus();
+      }, 1000);
+    } catch (error: any) {
+      setAlertModalConfig({
+        title: 'Error',
+        message: error.message || 'Failed to verify task completion',
+        type: 'error',
+      });
+      setShowAlertModal(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (statusValue: string) => {
@@ -1266,9 +1482,25 @@ export default function ActiveServiceScreen({
               </Text>
             )}
             {status === 'in-progress' && (
-              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                Service in progress
-              </Text>
+              <View style={styles.pinContainer}>
+                <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
+                  Service in progress
+                </Text>
+                {jobCard?.taskPIN && (
+                  <View style={[styles.pinDisplay, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
+                    <Icon name="lock" size={16} color={theme.primary} />
+                    <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
+                      Your Verification PIN:
+                    </Text>
+                    <Text style={[styles.pinValue, {color: theme.primary}]}>
+                      {jobCard.taskPIN}
+                    </Text>
+                    <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
+                      Share this PIN when provider completes the service
+                    </Text>
+                  </View>
+                )}
+              </View>
             )}
             {status === 'pending' && (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
@@ -1438,16 +1670,30 @@ export default function ActiveServiceScreen({
             )}
 
             {status === 'pending' && (
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  {backgroundColor: theme.error},
-                ]}
-                onPress={handleCancelService}
-                disabled={loading}>
-                <Icon name="cancel" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>Cancel Service</Text>
-              </TouchableOpacity>
+              <>
+                {canReRequest && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      {backgroundColor: theme.primary},
+                    ]}
+                    onPress={handleReRequest}
+                    disabled={loading}>
+                    <Icon name="refresh" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>Re-Request Service</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    {backgroundColor: theme.error},
+                  ]}
+                  onPress={handleCancelService}
+                  disabled={loading}>
+                  <Icon name="cancel" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>Cancel Service</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {status === 'accepted' && (
@@ -1496,23 +1742,71 @@ export default function ActiveServiceScreen({
             setReviewDismissed(false); // Reset dismissed state
             // Reload data to show updated status
             loadServiceData();
-            Alert.alert(
-              'Thank You!',
-              'Your review has been submitted successfully.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Optionally navigate to service history
-                    // navigation.navigate('ServiceHistory');
-                  },
-                },
-              ],
-            );
+            setAlertModalConfig({
+              title: 'Thank You!',
+              message: 'Your review has been submitted successfully.',
+              type: 'success',
+            });
+            setShowAlertModal(true);
           }}
           onSkip={() => {
             setShowReviewModal(false);
             setReviewDismissed(true); // Mark as dismissed so it won't show again automatically
+          }}
+        />
+      )}
+
+      {/* Cancel Service Reason Modal */}
+      <CancelTaskModal
+        visible={showCancelReasonModal}
+        onCancel={handleCancelWithReason}
+        onClose={() => setShowCancelReasonModal(false)}
+      />
+
+      {/* Verify Completion Confirmation Modal */}
+      <ConfirmationModal
+        visible={showVerifyModal}
+        title="Verify Task Completion"
+        message="Have you verified that the service has been completed to your satisfaction?"
+        confirmText="Yes, Verify"
+        cancelText="No"
+        type="info"
+        icon="checkmark-circle"
+        onConfirm={confirmVerifyCompletion}
+        onCancel={() => setShowVerifyModal(false)}
+      />
+
+      {/* Re-Request Confirmation Modal */}
+      <ConfirmationModal
+        visible={showReRequestModal}
+        title="Re-Request Service"
+        message="No provider has accepted your request in the last 10 minutes. Would you like to re-submit your service request? This will cancel the current request and create a new one to notify providers again."
+        confirmText="Yes, Re-Request"
+        cancelText="Cancel"
+        type="info"
+        icon="refresh"
+        onConfirm={confirmReRequest}
+        onCancel={() => setShowReRequestModal(false)}
+      />
+
+      {/* Alert Modal */}
+      {alertModalConfig && (
+        <AlertModal
+          visible={showAlertModal}
+          title={alertModalConfig.title}
+          message={alertModalConfig.message}
+          type={alertModalConfig.type}
+          onClose={() => {
+            setShowAlertModal(false);
+            // Navigate back if it was a success cancel
+            if (alertModalConfig.title === 'Success' && alertModalConfig.message.includes('cancelled')) {
+              navigation.goBack();
+            }
+            // Navigate back if it was an access denied error
+            if (alertModalConfig.title === 'Access Denied') {
+              navigation.goBack();
+            }
+            setAlertModalConfig(null);
           }}
         />
       )}
@@ -1638,6 +1932,37 @@ const styles = StyleSheet.create({
   },
   distanceText: {
     fontSize: 14,
+    marginTop: 4,
+  },
+  pinContainer: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  pinDisplay: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginTop: 8,
+    gap: 8,
+    minWidth: 200,
+  },
+  pinLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  pinValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: 4,
+    textAlign: 'center',
+  },
+  pinInstruction: {
+    fontSize: 11,
+    textAlign: 'center',
+    fontStyle: 'italic',
     marginTop: 4,
   },
   detailsContainer: {

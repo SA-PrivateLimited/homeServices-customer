@@ -20,12 +20,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import messaging from '@react-native-firebase/messaging';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
+import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion} from '../services/serviceCategoriesService';
 import GeolocationService from '../services/geolocationService';
 import {
   getSavedAddresses,
@@ -37,7 +38,7 @@ import {
 } from '../services/addressService';
 import type {UserLocation} from '../types/consultation';
 import WebSocketService from '../services/websocketService';
-import SuccessModal from '../components/SuccessModal';
+import Toast from '../components/Toast';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -59,6 +60,9 @@ export default function ServiceRequestScreen({
   const [selectedServiceType, setSelectedServiceType] = useState<string>(
     route?.params?.serviceType || '',
   );
+  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+  const [questionnaire, setQuestionnaire] = useState<QuestionnaireQuestion[]>([]);
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, any>>({});
   const [problem, setProblem] = useState('');
   const [selectedAddress, setSelectedAddress] = useState<UserLocation | null>(null);
   const [urgency, setUrgency] = useState<'immediate' | 'scheduled'>('immediate');
@@ -84,8 +88,13 @@ export default function ServiceRequestScreen({
   const [editCustomLabel, setEditCustomLabel] = useState('');
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isFetchingAddress, setIsFetchingAddress] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const [submittedServiceRequestId, setSubmittedServiceRequestId] = useState<string | null>(null);
+  const [showDateTimeModal, setShowDateTimeModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tempScheduledDate, setTempScheduledDate] = useState<Date>(new Date());
 
   useEffect(() => {
     loadServiceCategories();
@@ -95,7 +104,11 @@ export default function ServiceRequestScreen({
   useEffect(() => {
     if (currentPincode && !selectedAddress) {
       // Try to auto-detect address
-      loadCurrentAddress();
+      // Add a small delay to prevent race conditions
+      const timer = setTimeout(() => {
+        loadCurrentAddress();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [currentPincode]);
 
@@ -109,13 +122,51 @@ export default function ServiceRequestScreen({
   const loadServiceCategories = async () => {
     try {
       setLoadingCategories(true);
-      const categories = await fetchServiceCategories();
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout loading service categories')), 10000);
+      });
+      
+      const categories = await Promise.race([
+        fetchServiceCategories(),
+        timeoutPromise,
+      ]);
+      
       setServiceCategories(categories);
-    } catch (error) {
+
+      // If service type was pre-selected, load its questionnaire
+      if (route?.params?.serviceType) {
+        const category = categories.find(cat => cat.name === route.params.serviceType);
+        if (category) {
+          handleSelectServiceType(category);
+        }
+      }
+    } catch (error: any) {
       console.error('Error loading service categories:', error);
+      // Set empty array on error to prevent infinite loading
+      setServiceCategories([]);
+      if (error.message !== 'Timeout loading service categories') {
+        Alert.alert('Error', 'Failed to load service categories. Please try again.');
+      }
     } finally {
       setLoadingCategories(false);
     }
+  };
+
+  const handleSelectServiceType = (category: ServiceCategory) => {
+    setSelectedServiceType(category.name);
+    setSelectedCategory(category);
+    setQuestionnaire(category.questionnaire || []);
+    setQuestionnaireAnswers({});
+    setShowServiceTypeModal(false);
+  };
+
+  const handleQuestionnaireAnswer = (questionId: string, answer: any) => {
+    setQuestionnaireAnswers(prev => ({
+      ...prev,
+      [questionId]: answer,
+    }));
   };
 
   // Helper function to clean address object (remove undefined and null values)
@@ -207,7 +258,16 @@ export default function ServiceRequestScreen({
 
   const loadCurrentAddress = async () => {
     try {
-      const location = await GeolocationService.getCurrentLocation();
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout getting location')), 15000);
+      });
+      
+      const location = await Promise.race([
+        GeolocationService.getCurrentLocation(),
+        timeoutPromise,
+      ]);
+      
       if (location) {
         const address: UserLocation = {
           pincode: location.pincode,
@@ -230,9 +290,12 @@ export default function ServiceRequestScreen({
         setEditCustomLabel('');
         setShowEditAddressModal(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading current address:', error);
-      Alert.alert('Error', 'Failed to get current location');
+      // Don't show alert for timeout, just log it
+      if (error.message !== 'Timeout getting location') {
+        Alert.alert('Error', 'Failed to get current location');
+      }
     }
   };
 
@@ -609,7 +672,32 @@ export default function ServiceRequestScreen({
       return;
     }
 
-    if (!problem.trim()) {
+    // Validate questionnaire answers
+    if (questionnaire && questionnaire.length > 0) {
+      const missingAnswers = questionnaire
+        .filter(q => q.required)
+        .filter(q => {
+          const answer = questionnaireAnswers[q.id];
+          if (answer === undefined || answer === null || answer === '') {
+            return true;
+          }
+          if (Array.isArray(answer) && answer.length === 0) {
+            return true;
+          }
+          return false;
+        });
+
+      if (missingAnswers.length > 0) {
+        Alert.alert(
+          'Required Questions',
+          `Please answer all required questions:\n\n${missingAnswers.map(q => `• ${q.question}`).join('\n')}`,
+        );
+        return;
+      }
+    }
+
+    // If no questionnaire, problem description is required
+    if ((!questionnaire || questionnaire.length === 0) && !problem.trim()) {
       Alert.alert('Problem Description Required', 'Please describe the problem');
       return;
     }
@@ -781,6 +869,11 @@ export default function ServiceRequestScreen({
         }
       }
 
+      // Include questionnaire answers if available
+      if (questionnaire && questionnaire.length > 0 && Object.keys(questionnaireAnswers).length > 0) {
+        serviceRequestDataRaw.questionnaireAnswers = questionnaireAnswers;
+      }
+
       // Remove all undefined values before saving
       const serviceRequestData = removeUndefinedValues(serviceRequestDataRaw);
 
@@ -820,7 +913,9 @@ export default function ServiceRequestScreen({
         // Emit WebSocket notification to each provider
         const notificationPromises = Array.from(allProviderIds).map(providerId => {
           console.log(`📤 Sending WebSocket notification to provider: ${providerId}`);
-          return WebSocketService.emitNewBooking(providerId, {
+          
+          // Build WebSocket payload
+          const websocketPayload: any = {
             consultationId: serviceRequestRef.id,
             id: serviceRequestRef.id,
             bookingId: serviceRequestRef.id,
@@ -834,7 +929,28 @@ export default function ServiceRequestScreen({
             problem: problem.trim(),
             scheduledTime: urgency === 'scheduled' && scheduledDate ? scheduledDate : new Date(),
             consultationFee: 0, // Service requests don't have fees upfront
-          }).catch(error => {
+          };
+
+          // Only include problem if it has a value AND there's no questionnaire
+          // If questionnaire exists, the problem field is optional and shouldn't be sent if empty
+          const hasQuestionnaire = questionnaire && questionnaire.length > 0 && Object.keys(questionnaireAnswers).length > 0;
+          const hasProblem = problem.trim().length > 0;
+          
+          if (hasProblem && !hasQuestionnaire) {
+            // Problem is required when no questionnaire
+            websocketPayload.problem = problem.trim();
+          } else if (hasProblem && hasQuestionnaire) {
+            // Problem is optional when questionnaire exists, only include if provided
+            websocketPayload.problem = problem.trim();
+          }
+          // If no problem and questionnaire exists, don't include problem field
+
+          // Include questionnaire answers if available
+          if (hasQuestionnaire) {
+            websocketPayload.questionnaireAnswers = serviceRequestData.questionnaireAnswers;
+          }
+
+          return WebSocketService.emitNewBooking(providerId, websocketPayload).catch(error => {
             console.error(`Failed to notify provider ${providerId}:`, error);
             // Don't fail the request if WebSocket notification fails
           });
@@ -847,19 +963,26 @@ export default function ServiceRequestScreen({
         // Don't fail the request if WebSocket notification fails
       }
 
-      // Show success modal instead of Alert
+      // Show toast notification
       setSubmittedServiceRequestId(serviceRequestRef.id);
-      setShowSuccessModal(true);
+      setToastMessage('Your service request has been submitted. Nearby providers will be notified.');
+      setShowToast(true);
+      
+      // Navigate to ActiveService after a short delay
+      setTimeout(() => {
+        if (serviceRequestRef.id) {
+          navigation.navigate('ActiveService', {
+            serviceRequestId: serviceRequestRef.id,
+          });
+          setSubmittedServiceRequestId(null);
+        }
+      }, 2000);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to submit service request');
     } finally {
       setLoading(false);
     }
   };
-
-  const selectedCategory = serviceCategories.find(
-    cat => cat.name === selectedServiceType,
-  );
 
   return (
     <ScrollView
@@ -906,32 +1029,213 @@ export default function ServiceRequestScreen({
         </TouchableOpacity>
       </View>
 
+      {/* Questionnaire */}
+      {questionnaire && questionnaire.length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, {color: theme.text}]}>
+            Service Details
+          </Text>
+          <Text style={[styles.sectionSubheader, {color: theme.textSecondary}]}>
+            Please answer these questions to help us serve you better
+          </Text>
+          {questionnaire.map((question, index) => (
+            <View key={question.id} style={styles.questionContainer}>
+              <Text style={[styles.questionText, {color: theme.text}]}>
+                {index + 1}. {question.question}
+                {question.required && <Text style={styles.requiredStar}> *</Text>}
+              </Text>
+
+              {/* Text Input */}
+              {question.type === 'text' && (
+                <TextInput
+                  style={[
+                    styles.questionInput,
+                    {backgroundColor: theme.card, color: theme.text, borderColor: theme.border},
+                  ]}
+                  value={questionnaireAnswers[question.id] || ''}
+                  onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
+                  placeholder={question.placeholder || 'Enter your answer...'}
+                  placeholderTextColor={theme.textSecondary}
+                  multiline
+                />
+              )}
+
+              {/* Number Input */}
+              {question.type === 'number' && (
+                <TextInput
+                  style={[
+                    styles.questionInput,
+                    {backgroundColor: theme.card, color: theme.text, borderColor: theme.border},
+                  ]}
+                  value={questionnaireAnswers[question.id] || ''}
+                  onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
+                  placeholder={question.placeholder || 'Enter a number...'}
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="numeric"
+                />
+              )}
+
+              {/* Boolean (Yes/No) */}
+              {question.type === 'boolean' && (
+                <View style={styles.booleanButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.booleanButton,
+                      questionnaireAnswers[question.id] === true && styles.booleanButtonSelected,
+                      {borderColor: theme.border},
+                      questionnaireAnswers[question.id] === true && {backgroundColor: theme.primary},
+                    ]}
+                    onPress={() => handleQuestionnaireAnswer(question.id, true)}>
+                    <Text style={[
+                      styles.booleanButtonText,
+                      {color: questionnaireAnswers[question.id] === true ? '#fff' : theme.text},
+                    ]}>
+                      Yes
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.booleanButton,
+                      questionnaireAnswers[question.id] === false && styles.booleanButtonSelected,
+                      {borderColor: theme.border},
+                      questionnaireAnswers[question.id] === false && {backgroundColor: theme.primary},
+                    ]}
+                    onPress={() => handleQuestionnaireAnswer(question.id, false)}>
+                    <Text style={[
+                      styles.booleanButtonText,
+                      {color: questionnaireAnswers[question.id] === false ? '#fff' : theme.text},
+                    ]}>
+                      No
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Select (Single choice) */}
+              {question.type === 'select' && question.options && (
+                <View style={styles.selectOptions}>
+                  {question.options.map((option, optIdx) => (
+                    <TouchableOpacity
+                      key={optIdx}
+                      style={[
+                        styles.selectOption,
+                        {borderColor: theme.border},
+                        questionnaireAnswers[question.id] === option && {
+                          backgroundColor: theme.primary + '20',
+                          borderColor: theme.primary,
+                        },
+                      ]}
+                      onPress={() => handleQuestionnaireAnswer(question.id, option)}>
+                      <Icon
+                        name={questionnaireAnswers[question.id] === option ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        size={20}
+                        color={questionnaireAnswers[question.id] === option ? theme.primary : theme.textSecondary}
+                      />
+                      <Text style={[styles.selectOptionText, {color: theme.text}]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Multi-select */}
+              {question.type === 'multiselect' && question.options && (
+                <View style={styles.selectOptions}>
+                  {question.options.map((option, optIdx) => {
+                    const selectedOptions = questionnaireAnswers[question.id] || [];
+                    const isSelected = Array.isArray(selectedOptions) && selectedOptions.includes(option);
+                    return (
+                      <TouchableOpacity
+                        key={optIdx}
+                        style={[
+                          styles.selectOption,
+                          {borderColor: theme.border},
+                          isSelected && {
+                            backgroundColor: theme.primary + '20',
+                            borderColor: theme.primary,
+                          },
+                        ]}
+                        onPress={() => {
+                          const current = questionnaireAnswers[question.id] || [];
+                          const updated = Array.isArray(current)
+                            ? isSelected
+                              ? current.filter(v => v !== option)
+                              : [...current, option]
+                            : [option];
+                          handleQuestionnaireAnswer(question.id, updated);
+                        }}>
+                        <Icon
+                          name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+                          size={20}
+                          color={isSelected ? theme.primary : theme.textSecondary}
+                        />
+                        <Text style={[styles.selectOptionText, {color: theme.text}]}>{option}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Problem Description */}
-      <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          Describe the Problem *
-        </Text>
-        <TextInput
-          style={[
-            styles.problemInput,
-            {
-              backgroundColor: theme.card,
-              color: theme.text,
-              borderColor: theme.border,
-            },
-          ]}
-          value={problem}
-          onChangeText={setProblem}
-          placeholder="E.g., Leaking pipe in kitchen, need immediate repair"
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          numberOfLines={4}
-          maxLength={500}
-        />
-        <Text style={[styles.charCount, {color: theme.textSecondary}]}>
-          {problem.length}/500
-        </Text>
-      </View>
+      {questionnaire && questionnaire.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={[styles.label, {color: theme.text}]}>
+           Problem in brief *
+          </Text>
+          <Text style={[styles.sectionSubheader, {color: theme.textSecondary, marginBottom: 8}]}>
+            Add any additional information that wasn't covered in the questions above. This will be used to help the provider understand your problem better.
+          </Text>
+          <TextInput
+            style={[
+              styles.problemInput,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
+            value={problem}
+            onChangeText={setProblem}
+            placeholder="E.g., Any specific instructions or additional details..."
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            numberOfLines={4}
+            maxLength={500}
+          />
+          <Text style={[styles.charCount, {color: theme.textSecondary}]}>
+            {problem.length}/500
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <Text style={[styles.label, {color: theme.text}]}>
+            Describe the Problem *
+          </Text>
+          <TextInput
+            style={[
+              styles.problemInput,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
+            value={problem}
+            onChangeText={setProblem}
+            placeholder="E.g., Leaking pipe in kitchen, need immediate repair"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            numberOfLines={4}
+            maxLength={500}
+          />
+          <Text style={[styles.charCount, {color: theme.textSecondary}]}>
+            {problem.length}/500
+          </Text>
+        </View>
+      )}
 
       {/* Photos */}
       <View style={styles.section}>
@@ -1086,8 +1390,9 @@ export default function ServiceRequestScreen({
               {backgroundColor: theme.card, borderColor: theme.border},
             ]}
             onPress={() => {
-              // TODO: Add date/time picker
-              Alert.alert('Coming Soon', 'Date/time picker will be added');
+              // Initialize with current date/time or existing scheduled date
+              setTempScheduledDate(scheduledDate || new Date());
+              setShowDateTimeModal(true);
             }}>
             <Icon name="calendar-today" size={24} color={theme.primary} />
             <Text style={[styles.dateTimeText, {color: theme.text}]}>
@@ -1161,10 +1466,7 @@ export default function ServiceRequestScreen({
                           : 'transparent',
                     },
                   ]}
-                  onPress={() => {
-                    setSelectedServiceType(item.name);
-                    setShowServiceTypeModal(false);
-                  }}>
+                  onPress={() => handleSelectServiceType(item)}>
                   <View
                     style={[
                       styles.categoryIcon,
@@ -1644,23 +1946,149 @@ export default function ServiceRequestScreen({
         </View>
       </Modal>
 
-      {/* Success Modal */}
-      <SuccessModal
-        visible={showSuccessModal}
-        title="Service Requested!"
-        message="Your service request has been submitted. Nearby providers will be notified."
-        icon="checkmark-circle"
-        iconColor="#34C759"
-        buttonText="OK"
-        onClose={() => {
-          setShowSuccessModal(false);
-          if (submittedServiceRequestId) {
-            navigation.navigate('ActiveService', {
-              serviceRequestId: submittedServiceRequestId,
-            });
-            setSubmittedServiceRequestId(null);
-          }
-        }}
+      {/* Date/Time Picker Modal */}
+      <Modal
+        visible={showDateTimeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDateTimeModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.dateTimeModal, {backgroundColor: theme.card}]}>
+            <View style={styles.dateTimeModalHeader}>
+              <Text style={[styles.dateTimeModalTitle, {color: theme.text}]}>
+                Select Date & Time
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowDateTimeModal(false)}
+                style={styles.modalCloseButton}>
+                <Icon name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateTimeModalContent}>
+              {/* Date Picker */}
+              <View style={styles.dateTimePickerSection}>
+                <Text style={[styles.dateTimePickerLabel, {color: theme.text}]}>
+                  Select Date
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.dateTimePickerButton,
+                    {backgroundColor: theme.background, borderColor: theme.border},
+                  ]}
+                  onPress={() => setShowDatePicker(true)}>
+                  <Icon name="calendar-today" size={20} color={theme.primary} />
+                  <Text style={[styles.dateTimePickerButtonText, {color: theme.text}]}>
+                    {tempScheduledDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={tempScheduledDate}
+                    mode="date"
+                    minimumDate={new Date()}
+                    display="default"
+                    onChange={(event, selectedDate) => {
+                      setShowDatePicker(false);
+                      if (selectedDate) {
+                        // Preserve the time when changing date
+                        const newDate = new Date(selectedDate);
+                        newDate.setHours(tempScheduledDate.getHours());
+                        newDate.setMinutes(tempScheduledDate.getMinutes());
+                        setTempScheduledDate(newDate);
+                      }
+                    }}
+                  />
+                )}
+              </View>
+
+              {/* Time Picker */}
+              <View style={styles.dateTimePickerSection}>
+                <Text style={[styles.dateTimePickerLabel, {color: theme.text}]}>
+                  Select Time
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.dateTimePickerButton,
+                    {backgroundColor: theme.background, borderColor: theme.border},
+                  ]}
+                  onPress={() => setShowTimePicker(true)}>
+                  <Icon name="access-time" size={20} color={theme.primary} />
+                  <Text style={[styles.dateTimePickerButtonText, {color: theme.text}]}>
+                    {tempScheduledDate.toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </Text>
+                </TouchableOpacity>
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={tempScheduledDate}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={(event, selectedTime) => {
+                      setShowTimePicker(false);
+                      if (selectedTime) {
+                        // Preserve the date when changing time
+                        const newDate = new Date(tempScheduledDate);
+                        newDate.setHours(selectedTime.getHours());
+                        newDate.setMinutes(selectedTime.getMinutes());
+                        setTempScheduledDate(newDate);
+                      }
+                    }}
+                  />
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.dateTimeModalActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.dateTimeModalCancelButton,
+                    {borderColor: theme.border},
+                  ]}
+                  onPress={() => setShowDateTimeModal(false)}>
+                  <Text style={[styles.dateTimeModalCancelText, {color: theme.text}]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dateTimeModalConfirmButton, {backgroundColor: theme.primary}]}
+                  onPress={() => {
+                    // Validate that selected date/time is in the future
+                    const now = new Date();
+                    if (tempScheduledDate <= now) {
+                      Alert.alert(
+                        'Invalid Date/Time',
+                        'Please select a future date and time for scheduled service.',
+                      );
+                      return;
+                    }
+                    setScheduledDate(tempScheduledDate);
+                    setShowDateTimeModal(false);
+                  }}>
+                  <Text style={styles.dateTimeModalConfirmText}>Confirm</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Toast Notification */}
+      <Toast
+        visible={showToast}
+        message={toastMessage}
+        type="success"
+        duration={3000}
+        onHide={() => setShowToast(false)}
       />
     </ScrollView>
   );
@@ -2133,6 +2561,144 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     marginTop: 8,
+  },
+  dateTimeModal: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  dateTimeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  dateTimeModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  dateTimeModalContent: {
+    padding: 20,
+  },
+  dateTimePickerSection: {
+    marginBottom: 24,
+  },
+  dateTimePickerLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  dateTimePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  dateTimePickerButtonText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  dateTimeModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  dateTimeModalCancelButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  dateTimeModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dateTimeModalConfirmButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  dateTimeModalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Questionnaire styles
+  sectionHeader: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  sectionSubheader: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  questionContainer: {
+    marginBottom: 20,
+  },
+  questionText: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  requiredStar: {
+    color: '#FF3B30',
+    fontWeight: 'bold',
+  },
+  questionInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  booleanButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  booleanButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  booleanButtonSelected: {
+    // Styles applied when selected
+  },
+  booleanButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectOptions: {
+    gap: 10,
+  },
+  selectOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  selectOptionText: {
+    fontSize: 15,
+    flex: 1,
   },
 });
 

@@ -5,14 +5,17 @@ import type {Consultation, UserRole} from '../types/consultation';
 const COLLECTIONS = {
   USERS: 'users',
   DOCTORS: 'doctors',
+  PROVIDERS: 'providers',
 };
 
 export interface PushNotificationData {
   title: string;
   body: string;
-  type: 'consultation' | 'prescription' | 'reminder' | 'admin' | 'chat';
+  type: 'consultation' | 'prescription' | 'reminder' | 'admin' | 'chat' | 'service';
   consultationId?: string;
   prescriptionId?: string;
+  status?: string;
+  cancellationReason?: string;
   [key: string]: any;
 }
 
@@ -158,6 +161,17 @@ class PushNotificationService {
       }
     } catch (error) {
     }
+  }
+
+  /**
+   * Send push notification to a provider by provider ID
+   */
+  async sendToProvider(
+    providerId: string,
+    notification: PushNotificationData,
+  ): Promise<void> {
+    // Use sendToDoctor as it already handles providers collection
+    await this.sendToDoctor(providerId, notification);
   }
 
   /**
