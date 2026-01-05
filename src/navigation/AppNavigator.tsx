@@ -48,8 +48,9 @@ export default function AppNavigator() {
       if (authUser) {
         try {
           // Initialize FCM and save token for push notifications
+          // Force reinit to ensure handlers are set up after login
           try {
-            await NotificationService.initializeAndSaveToken();
+            await NotificationService.initializeAndSaveToken(true);
             console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
           } catch (fcmError: any) {
             console.warn('⚠️ Failed to initialize FCM token (non-critical):', fcmError.message);

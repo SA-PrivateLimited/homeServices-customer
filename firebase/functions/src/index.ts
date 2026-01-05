@@ -342,6 +342,173 @@ export const onPrescriptionCreated = functions.firestore
   });
 
 /**
+ * Send notification to customer when job card is created (provider accepts service)
+ */
+export const onJobCardCreated = functions.firestore
+  .document("jobCards/{jobCardId}")
+  .onCreate(async (snap, context) => {
+    const jobCard = snap.data();
+    const {customerId, providerName, serviceType, consultationId} = jobCard;
+
+    if (!customerId) {
+      console.log("No customerId in job card");
+      return null;
+    }
+
+    try {
+      // Get customer's FCM token
+      const userDoc = await admin.firestore()
+        .collection("users")
+        .doc(customerId)
+        .get();
+
+      const fcmToken = userDoc.data()?.fcmToken;
+
+      if (!fcmToken) {
+        console.log(`No FCM token for customer ${customerId}`);
+        return null;
+      }
+
+      // Send acceptance notification
+      const message = {
+        notification: {
+          title: "Service Request Accepted",
+          body: `${providerName} has accepted your ${serviceType || "service"} request`,
+        },
+        data: {
+          jobCardId: context.params.jobCardId,
+          consultationId: consultationId || "",
+          type: "service",
+          status: "accepted",
+        },
+        token: fcmToken,
+        android: {
+          priority: "high" as const,
+          notification: {
+            channelId: "service_requests",
+            sound: "default",
+            priority: "high" as const,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      };
+
+      await admin.messaging().send(message);
+      console.log(`Sent job card acceptance notification to customer ${customerId}`);
+
+      return null;
+    } catch (error) {
+      console.error("Error sending job card acceptance notification:", error);
+      return null;
+    }
+  });
+
+/**
+ * Send notification to customer when job card status changes
+ */
+export const onJobCardUpdated = functions.firestore
+  .document("jobCards/{jobCardId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const {customerId, providerName, serviceType, consultationId} = after;
+
+    // Only send notification if status changed
+    if (before.status === after.status) {
+      return null;
+    }
+
+    if (!customerId) {
+      console.log("No customerId in job card");
+      return null;
+    }
+
+    try {
+      // Get customer's FCM token
+      const userDoc = await admin.firestore()
+        .collection("users")
+        .doc(customerId)
+        .get();
+
+      const fcmToken = userDoc.data()?.fcmToken;
+
+      if (!fcmToken) {
+        console.log(`No FCM token for customer ${customerId}`);
+        return null;
+      }
+
+      // Determine notification message based on status
+      let title = "Service Update";
+      let body = "";
+      
+      switch (after.status) {
+        case "in-progress":
+          title = "Service Started";
+          body = `${providerName} has started your ${serviceType || "service"}`;
+          break;
+        case "completed":
+          title = "Service Completed";
+          body = `${providerName} has completed your ${serviceType || "service"}`;
+          break;
+        case "cancelled":
+          title = "Service Cancelled";
+          const reason = after.cancellationReason || "No reason provided";
+          body = `${providerName} has cancelled your ${serviceType || "service"}. Reason: ${reason}`;
+          break;
+        default:
+          // Don't send notification for other status changes
+          return null;
+      }
+
+      // Send status update notification
+      const message = {
+        notification: {
+          title,
+          body,
+        },
+        data: {
+          jobCardId: context.params.jobCardId,
+          consultationId: consultationId || "",
+          type: "service",
+          status: after.status,
+        },
+        token: fcmToken,
+        android: {
+          priority: "high" as const,
+          notification: {
+            channelId: "service_requests",
+            sound: "default",
+            priority: "high" as const,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      };
+
+      await admin.messaging().send(message);
+      console.log(`Sent job card status update notification to customer ${customerId}: ${after.status}`);
+
+      return null;
+    } catch (error) {
+      console.error("Error sending job card status update notification:", error);
+      return null;
+    }
+  });
+
+/**
  * Send push notification via FCM (Callable Function)
  * 
  * Call this function from your React Native app:

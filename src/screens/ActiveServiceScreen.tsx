@@ -1208,7 +1208,7 @@ export default function ActiveServiceScreen({
   }
 
   const customerAddress = serviceRequest?.customerAddress || jobCard?.customerAddress;
-  const provider = jobCard || serviceRequest;
+  const provider = jobCard || serviceRequest || {};
 
   // Debug logging
   console.log('🗺️ Map rendering check:', {
@@ -1427,11 +1427,11 @@ export default function ActiveServiceScreen({
                 ? 'Provider is on the way'
                 : 'Waiting for provider...'}
             </Text>
-            {distance && (
+            {distance ? (
               <Text style={styles.mapPlaceholderDistance}>
                 {distance} away • ETA: ~{eta} min
               </Text>
-            )}
+            ) : null}
           </View>
         </View>
       )}
@@ -1471,11 +1471,11 @@ export default function ActiveServiceScreen({
                 </Text>
               </View>
             </View>
-            {status === 'accepted' && providerLocation && distance && (
+            {status === 'accepted' && providerLocation && distance ? (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
                 Provider is {distance} away • ETA: ~{eta} min
               </Text>
-            )}
+            ) : null}
             {status === 'accepted' && !providerLocation && (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
                 Provider location will appear here
@@ -1486,7 +1486,7 @@ export default function ActiveServiceScreen({
                 <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
                   Service in progress
                 </Text>
-                {jobCard?.taskPIN && (
+                {jobCard?.taskPIN ? (
                   <View style={[styles.pinDisplay, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
                     <Icon name="lock" size={16} color={theme.primary} />
                     <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
@@ -1499,7 +1499,7 @@ export default function ActiveServiceScreen({
                       Share this PIN when provider completes the service
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
             )}
             {status === 'pending' && (
@@ -1529,28 +1529,34 @@ export default function ActiveServiceScreen({
               ) : (
                 <View style={styles.providerAvatar}>
                   <Text style={styles.providerInitial}>
-                    {(providerProfile?.name || serviceRequest?.providerName || provider?.providerName || 'P').charAt(0).toUpperCase()}
+                    {((providerProfile?.name || serviceRequest?.providerName || jobCard?.providerName || (provider as any)?.providerName || 'P') as string).charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
               <View style={styles.providerDetails}>
-                <Text style={[styles.providerName, {color: theme.text}]}>
-                  {providerProfile?.name || serviceRequest?.providerName || jobCard?.providerName || provider?.providerName || 'Provider'}
+                <Text 
+                  style={[styles.providerName, {color: theme.text}]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail">
+                  {providerProfile?.name || serviceRequest?.providerName || jobCard?.providerName || (provider as any)?.providerName || 'Provider'}
                 </Text>
-                <Text style={[styles.serviceType, {color: theme.textSecondary}]}>
-                  {providerProfile?.specialization || providerProfile?.specialty || serviceRequest?.providerSpecialization || jobCard?.serviceType || provider?.serviceType || serviceRequest?.serviceType || 'Service'}
+                <Text 
+                  style={[styles.serviceType, {color: theme.textSecondary}]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail">
+                  {providerProfile?.specialization || providerProfile?.specialty || serviceRequest?.providerSpecialization || jobCard?.serviceType || (provider as any)?.serviceType || serviceRequest?.serviceType || 'Service'}
                 </Text>
-                {(providerProfile?.rating || serviceRequest?.providerRating || provider?.rating) && (
+                {(providerProfile?.rating || serviceRequest?.providerRating || (provider as any)?.rating) && (
                   <View style={styles.ratingContainer}>
                     <Icon name="star" size={16} color="#FFD700" />
                     <Text style={[styles.rating, {color: theme.text}]}>
-                      {(providerProfile?.rating || serviceRequest?.providerRating || provider?.rating || 0).toFixed(1)}
+                      {(providerProfile?.rating || serviceRequest?.providerRating || (provider as any)?.rating || 0).toFixed(1)}
                     </Text>
-                    {providerProfile?.totalConsultations && (
+                    {providerProfile?.totalConsultations ? (
                       <Text style={[styles.reviewsCount, {color: theme.textSecondary}]}>
                         ({providerProfile.totalConsultations} reviews)
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 )}
               </View>
@@ -1564,7 +1570,10 @@ export default function ActiveServiceScreen({
                   onPress={handleCallProvider}
                   activeOpacity={0.7}>
                   <Icon name="phone" size={20} color={theme.primary} />
-                  <Text style={[styles.contactValue, {color: theme.primary}]}>
+                  <Text 
+                    style={[styles.contactValue, {color: theme.primary}]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail">
                     {providerProfile?.phoneNumber || providerProfile?.phone || serviceRequest?.providerPhone || jobCard?.providerPhone || 'N/A'}
                   </Text>
                   <Icon name="chevron-right" size={20} color={theme.textSecondary} />
@@ -1583,27 +1592,35 @@ export default function ActiveServiceScreen({
             {/* Additional Provider Info */}
             {(providerProfile?.experience || providerProfile?.address || jobCard?.providerAddress) && (
               <View style={styles.additionalInfo}>
-                {providerProfile?.experience && (
+                {providerProfile?.experience ? (
                   <View style={styles.infoRow}>
                     <Icon name="work" size={18} color={theme.textSecondary} />
                     <Text style={[styles.infoText, {color: theme.text}]}>
                       {providerProfile.experience} years of experience
                     </Text>
                   </View>
-                )}
+                ) : null}
                 {(providerProfile?.address || jobCard?.providerAddress) && (
                   <View style={styles.infoRow}>
                     <Icon name="location-on" size={18} color={theme.textSecondary} />
                     <Text style={[styles.infoText, {color: theme.text}]}>
-                      {providerProfile?.address 
-                        ? (typeof providerProfile.address === 'string' 
-                            ? providerProfile.address 
-                            : `${providerProfile.address.address || ''}${providerProfile.address.city ? `, ${providerProfile.address.city}` : ''}${providerProfile.address.pincode ? ` - ${providerProfile.address.pincode}` : ''}`)
-                        : (jobCard?.providerAddress 
-                            ? (typeof jobCard.providerAddress === 'string' 
-                                ? jobCard.providerAddress 
-                                : `${jobCard.providerAddress.address || ''}${jobCard.providerAddress.city ? `, ${jobCard.providerAddress.city}` : ''}${jobCard.providerAddress.pincode ? ` - ${jobCard.providerAddress.pincode}` : ''}`)
-                            : 'Address not available')}
+                      {(() => {
+                        if (providerProfile?.address) {
+                          if (typeof providerProfile.address === 'string') {
+                            return providerProfile.address;
+                          }
+                          const addr = providerProfile.address;
+                          return `${addr.address || ''}${addr.city ? `, ${addr.city}` : ''}${addr.pincode ? ` - ${addr.pincode}` : ''}`;
+                        }
+                        if (jobCard?.providerAddress) {
+                          if (typeof jobCard.providerAddress === 'string') {
+                            return jobCard.providerAddress;
+                          }
+                          const addr = jobCard.providerAddress;
+                          return `${addr.address || ''}${addr.city ? `, ${addr.city}` : ''}${addr.pincode ? ` - ${addr.pincode}` : ''}`;
+                        }
+                        return 'Address not available';
+                      })()}
                     </Text>
                   </View>
                 )}
@@ -1622,17 +1639,17 @@ export default function ActiveServiceScreen({
                 Service Type:
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
-                {provider.serviceType || serviceRequest?.serviceType || 'N/A'}
+                {provider?.serviceType || serviceRequest?.serviceType || jobCard?.serviceType || 'N/A'}
               </Text>
             </View>
-            {serviceRequest?.problem && (
+            {(serviceRequest?.problem || jobCard?.problem) && (
               <View style={styles.detailRow}>
                 <Icon name="description" size={20} color={theme.primary} />
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
                   Problem:
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {serviceRequest.problem}
+                  {serviceRequest?.problem || jobCard?.problem || ''}
                 </Text>
               </View>
             )}
@@ -1643,7 +1660,7 @@ export default function ActiveServiceScreen({
                   Address:
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {customerAddress.address}
+                  {customerAddress.address || 'Address not available'}
                   {customerAddress.pincode && `, ${customerAddress.pincode}`}
                 </Text>
               </View>
@@ -2005,14 +2022,17 @@ const styles = StyleSheet.create({
   },
   providerDetails: {
     flex: 1,
+    minWidth: 0, // Allow flex children to shrink
   },
   providerName: {
     fontSize: 18,
     fontWeight: '600',
+    flexShrink: 1,
   },
   serviceType: {
     fontSize: 14,
     marginTop: 4,
+    flexShrink: 1,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -2044,11 +2064,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     gap: 12,
+    minWidth: 0, // Allow flex children to shrink
   },
   contactValue: {
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
+    flexShrink: 1,
+    minWidth: 0, // Allow text to shrink and not wrap
   },
   additionalInfo: {
     marginTop: 12,

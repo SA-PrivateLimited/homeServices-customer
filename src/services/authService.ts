@@ -57,8 +57,8 @@ export const signUpWithEmail = async (
       fcmToken,
     };
 
-    // Initialize notification service to save token
-    await NotificationService.initializeAndSaveToken();
+    // Initialize notification service to save token (force reinit after login)
+    await NotificationService.initializeAndSaveToken(true);
 
     // FCM token handled by notificationService
 
@@ -111,8 +111,8 @@ export const loginWithEmail = async (
       .doc(userCredential.user.uid)
       .set({fcmToken}, {merge: true});
 
-    // Initialize notification service to save token
-    await NotificationService.initializeAndSaveToken();
+    // Initialize notification service to save token (force reinit after login)
+    await NotificationService.initializeAndSaveToken(true);
 
     // FCM token handled by notificationService
     try {

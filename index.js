@@ -26,7 +26,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
     } else if (data?.type === 'reminder') {
       channelId = 'consultation-reminders';
     } else if (data?.type === 'service') {
-      channelId = 'consultation-updates';
+      channelId = 'service_requests';
     }
 
     // Show local notification when app is in background

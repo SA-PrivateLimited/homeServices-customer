@@ -91,112 +91,11 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
       setLoading(true);
       console.log('📋 Loading job cards for customer:', user.uid);
-
-      // Fetch job cards by customerId
-      let cardsByCustomerId = await getCustomerJobCards(user.uid);
-      console.log(`✅ Loaded ${cardsByCustomerId.length} job cards by customerId`);
-
-      // ALWAYS fetch by phone number as well and merge results
-      let cardsByPhone: JobCard[] = [];
-      if (user.phoneNumber) {
-        console.log('🔍 Also fetching by phone number:', user.phoneNumber);
-        try {
-          const phoneSnapshot = await firestore()
-            .collection('jobCards')
-            .where('customerPhone', '==', user.phoneNumber)
-            .get();
-
-          cardsByPhone = phoneSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              ...data,
-              createdAt: data?.createdAt?.toDate() || new Date(),
-              updatedAt: data?.updatedAt?.toDate() || new Date(),
-              scheduledTime: data?.scheduledTime?.toDate(),
-              pinGeneratedAt: data?.pinGeneratedAt?.toDate(),
-              taskPIN: data?.taskPIN,
-            };
-          }) as JobCard[];
-
-          console.log(`✅ Found ${cardsByPhone.length} cards by phone number`);
-        } catch (error) {
-          console.error('❌ Error fetching by phone:', error);
-        }
-      }
-
-      // Merge and deduplicate cards (prefer cardsByPhone if duplicate IDs)
-      const cardsMap = new Map<string, JobCard>();
-
-      // Add cards by customerId first
-      cardsByCustomerId.forEach(card => {
-        if (card.id) cardsMap.set(card.id, card);
-      });
-
-      // Add/override with cards by phone (in case customerId is wrong but phone is correct)
-      cardsByPhone.forEach(card => {
-        if (card.id) cardsMap.set(card.id, card);
-      });
-
-      const cards = Array.from(cardsMap.values());
-      console.log(`📊 Total unique cards after merge: ${cards.length}`);
-
-      // DEBUG: Directly query Firestore to see ALL job cards
-      console.log('🔍 DEBUG: Current user ID:', user.uid);
-      console.log('🔍 DEBUG: User phone:', user.phoneNumber);
-
-      const debugSnapshot = await firestore()
-        .collection('jobCards')
-        .where('customerId', '==', user.uid)
-        .get();
-      console.log('🔍 DEBUG: Total job cards in Firestore (by customerId):', debugSnapshot.size);
-      const debugStatuses = debugSnapshot.docs.map(doc => doc.data().status);
-      console.log('🔍 DEBUG: All statuses in Firestore:', debugStatuses);
-      const debugAcceptedCount = debugStatuses.filter(s => s === 'accepted').length;
-      console.log('🔍 DEBUG: Accepted count in Firestore:', debugAcceptedCount);
-
-      // Check if there are job cards with different customerId but same phone
-      if (user.phoneNumber) {
-        const phoneSnapshot = await firestore()
-          .collection('jobCards')
-          .where('customerPhone', '==', user.phoneNumber)
-          .get();
-        console.log('🔍 DEBUG: Job cards by phone:', phoneSnapshot.size);
-        phoneSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          console.log(`  - ID: ${doc.id}, customerId: ${data.customerId}, status: ${data.status}`);
-        });
-      }
-
-      // Debug: Log unique status values
-      const uniqueStatuses = new Set(cards.map(card => card.status));
-      console.log('📊 Unique status values:', Array.from(uniqueStatuses));
-
-      // Debug: Count by status
-      const statusCounts = {
-        pending: cards.filter(c => c.status === 'pending').length,
-        accepted: cards.filter(c => c.status === 'accepted').length,
-        'in-progress': cards.filter(c => c.status === 'in-progress').length,
-        completed: cards.filter(c => c.status === 'completed').length,
-      };
-      console.log('📈 Status counts (raw):', statusCounts);
-
-      // Debug: Log all accepted cards details
-      const acceptedCards = cards.filter(c => c.status === 'accepted');
-      console.log('✅ Accepted cards:', acceptedCards.length);
-      acceptedCards.forEach((card, index) => {
-        console.log(`  ${index + 1}. ID: ${card.id}, Status: "${card.status}", Provider: ${card.providerName || 'N/A'}`);
-      });
-
-      // Debug: Log normalized status counts
-      const normalizedCounts = {
-        pending: cards.filter(c => normalizeStatus(c.status) === 'pending').length,
-        accepted: cards.filter(c => normalizeStatus(c.status) === 'accepted').length,
-        'in-progress': cards.filter(c => normalizeStatus(c.status) === 'in-progress').length,
-        completed: cards.filter(c => normalizeStatus(c.status) === 'completed').length,
-      };
-      console.log('📊 Status counts (normalized):', normalizedCounts);
-
+      
+      // Fetch job cards
+      const cards = await getCustomerJobCards(user.uid);
+      console.log(`✅ Loaded ${cards.length} job cards`);
+      
       // Use job cards directly
       const allCards = cards;
       
@@ -363,27 +262,17 @@ export default function ServiceHistoryScreen({navigation}: any) {
   };
 
   const normalizeStatus = (status: string): 'pending' | 'accepted' | 'in-progress' | 'completed' => {
-    const lowerStatus = status?.toLowerCase() || '';
-
-    // Completed statuses
-    if (lowerStatus === 'completed' || lowerStatus === 'done' || lowerStatus === 'finished') {
+    // Keep in-progress as separate status
+    if (status === 'completed') {
       return 'completed';
     }
-
-    // In-progress statuses
-    if (lowerStatus === 'in-progress' || lowerStatus === 'in progress' ||
-        lowerStatus === 'inprogress' || lowerStatus === 'active' ||
-        lowerStatus === 'ongoing' || lowerStatus === 'started') {
+    if (status === 'in-progress') {
       return 'in-progress';
     }
-
-    // Accepted statuses
-    if (lowerStatus === 'accepted' || lowerStatus === 'confirmed' ||
-        lowerStatus === 'assigned' || lowerStatus === 'provider-accepted') {
+    if (status === 'accepted') {
       return 'accepted';
     }
-
-    // Everything else (pending, waiting, new, cancelled, etc.) is treated as pending
+    // Everything else (pending, cancelled, etc.) is treated as pending
     return 'pending';
   };
 
@@ -541,166 +430,6 @@ export default function ServiceHistoryScreen({navigation}: any) {
       default: return 'All Time';
     }
   };
-
-  const renderServiceCard = (jobCard: JobCard) => (
-    <TouchableOpacity
-      key={jobCard.id}
-      style={[styles.jobCard, {backgroundColor: theme.card}]}
-      onPress={() => {
-        if (jobCard.status === 'completed') {
-          setSelectedCompletedService(jobCard);
-          setShowCompletedServiceModal(true);
-        } else {
-          navigation.navigate('ActiveService', {
-            serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-            jobCardId: jobCard.id,
-          });
-        }
-      }}>
-      {/* Header */}
-      <View style={styles.jobCardHeader}>
-        <View style={styles.serviceTypeContainer}>
-          <Icon name="build" size={24} color={theme.primary} />
-          <View style={styles.serviceTypeText}>
-            <Text style={[styles.serviceType, {color: theme.text}]}>
-              {jobCard.serviceType}
-            </Text>
-            <Text style={[styles.providerName, {color: theme.textSecondary}]}>
-              {jobCard.providerName || 'Waiting for provider...'}
-            </Text>
-
-            {/* Show provider phone for accepted and in-progress status */}
-            {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress') &&
-             providerPhones[jobCard.providerId] && (
-              <View style={styles.providerPhoneRow}>
-                <Icon name="phone" size={14} color={theme.primary} />
-                <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
-                  {providerPhones[jobCard.providerId]}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.callButton, {backgroundColor: theme.primary}]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleCallProvider(providerPhones[jobCard.providerId]);
-                  }}>
-                  <Icon name="phone" size={14} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Show PIN for in-progress status */}
-            {normalizeStatus(jobCard.status) === 'in-progress' && (jobCard as any).taskPIN && (
-              <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
-                <Icon name="lock" size={16} color={theme.primary} />
-                <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                  Your Verification PIN:
-                </Text>
-                <Text style={[styles.pinValue, {color: theme.primary}]}>
-                  {(jobCard as any).taskPIN}
-                </Text>
-                <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                  Share this PIN when provider completes the service
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={styles.statusChipsContainer}>
-          <View
-            style={[
-              styles.statusBadge,
-              {backgroundColor: getStatusColor(jobCard.status) + '20'},
-            ]}>
-            <Text
-              style={[
-                styles.statusText,
-                {color: getStatusColor(jobCard.status)},
-              ]}>
-              {getStatusText(jobCard.status)}
-            </Text>
-          </View>
-          {/* Service Type Chip */}
-          {(() => {
-            const urgency = (jobCard as any).urgency;
-            if (urgency === 'immediate') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#FF9500' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#FF9500'}]}>
-                    Immediate
-                  </Text>
-                </View>
-              );
-            }
-            if (urgency === 'scheduled') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#007AFF' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#007AFF'}]}>
-                    Scheduled
-                  </Text>
-                </View>
-              );
-            }
-            const hasScheduledTime = jobCard.scheduledTime && jobCard.scheduledTime instanceof Date && !isNaN(jobCard.scheduledTime.getTime());
-            const isImmediate = !hasScheduledTime;
-            return (
-              <View style={[styles.serviceTypeChip, {backgroundColor: isImmediate ? '#FF9500' + '20' : '#007AFF' + '20'}]}>
-                <Text style={[styles.serviceTypeChipText, {color: isImmediate ? '#FF9500' : '#007AFF'}]}>
-                  {isImmediate ? 'Immediate' : 'Scheduled'}
-                </Text>
-              </View>
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* Problem */}
-      {jobCard.problem && (
-        <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
-          {jobCard.problem}
-        </Text>
-      )}
-
-      {/* Address */}
-      {jobCard.customerAddress && (
-        <View style={styles.addressRow}>
-          <Icon name="location-on" size={16} color={theme.textSecondary} />
-          <Text style={[styles.addressText, {color: theme.textSecondary}]} numberOfLines={1}>
-            {jobCard.customerAddress.address}
-            {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
-          </Text>
-        </View>
-      )}
-
-      {/* Date */}
-      <View style={styles.dateRow}>
-        <Icon name="calendar-today" size={16} color={theme.textSecondary} />
-        <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-          {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
-        </Text>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        {jobCard.status === 'completed' && (
-          <TouchableOpacity
-            style={styles.reviewButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleReview(jobCard);
-            }}>
-            <Icon name="star" size={16} color="#FFD700" />
-            <Text style={styles.reviewButtonText}>Review</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.viewButton}>
-          <Text style={[styles.viewButtonText, {color: theme.primary}]}>
-            View Details
-          </Text>
-          <Icon name="chevron-right" size={20} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
@@ -868,6 +597,526 @@ export default function ServiceHistoryScreen({navigation}: any) {
           }
         />
       )}
+
+      {/* Service Type Filter Modal */}
+                      </Text>
+                    </View>
+                    {activeCards.map(jobCard => (
+                  <TouchableOpacity
+                    key={jobCard.id}
+                    style={[styles.jobCard, {backgroundColor: theme.card}]}
+                    onPress={() => {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }}>
+                    {/* Header */}
+                    <View style={styles.jobCardHeader}>
+                      <View style={styles.serviceTypeContainer}>
+                        <Icon name="build" size={24} color={theme.primary} />
+                        <View style={styles.serviceTypeText}>
+                          <Text style={[styles.serviceType, {color: theme.text}]}>
+                            {jobCard.serviceType}
+                          </Text>
+                          <Text style={[styles.providerName, {color: theme.textSecondary}]}>
+                            {jobCard.providerName || 'Waiting for provider...'}
+                          </Text>
+                          {/* Show provider phone for accepted and in-progress status */}
+                          {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress') && 
+                           providerPhones[jobCard.providerId] && (
+                            <View style={styles.providerPhoneRow}>
+                              <Icon name="phone" size={14} color={theme.primary} />
+                              <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
+                                {providerPhones[jobCard.providerId]}
+                              </Text>
+                              <TouchableOpacity
+                                style={[styles.callButton, {backgroundColor: theme.primary}]}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleCallProvider(providerPhones[jobCard.providerId]);
+                                }}>
+                                <Icon name="phone" size={14} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          {/* Show PIN for in-progress status */}
+                          {normalizeStatus(jobCard.status) === 'in-progress' && (jobCard as any).taskPIN && (
+                            <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
+                              <Icon name="lock" size={16} color={theme.primary} />
+                              <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
+                                Your Verification PIN:
+                              </Text>
+                              <Text style={[styles.pinValue, {color: theme.primary}]}>
+                                {(jobCard as any).taskPIN}
+                              </Text>
+                              <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
+                                Share this PIN when provider completes the service
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.statusChipsContainer}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            {backgroundColor: getStatusColor(jobCard.status) + '20'},
+                          ]}>
+                          <Text
+                            style={[
+                              styles.statusText,
+                              {color: getStatusColor(jobCard.status)},
+                            ]}>
+                            {getStatusText(jobCard.status)}
+                          </Text>
+                        </View>
+                        {/* Service Type Chip */}
+                        {(() => {
+                          // Check urgency field first - this is the source of truth
+                          const urgency = (jobCard as any).urgency;
+                          // If urgency is explicitly set, use it
+                          if (urgency === 'immediate') {
+                            return (
+                              <View
+                                style={[
+                                  styles.serviceTypeChip,
+                                  {backgroundColor: '#FF9500' + '20'},
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.serviceTypeChipText,
+                                    {color: '#FF9500'},
+                                  ]}>
+                                  Immediate
+                                </Text>
+                              </View>
+                            );
+                          }
+                          if (urgency === 'scheduled') {
+                            return (
+                              <View
+                                style={[
+                                  styles.serviceTypeChip,
+                                  {backgroundColor: '#007AFF' + '20'},
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.serviceTypeChipText,
+                                    {color: '#007AFF'},
+                                  ]}>
+                                  Scheduled
+                                </Text>
+                              </View>
+                            );
+                          }
+                          // Fallback: if no urgency field, check scheduledTime
+                          const hasScheduledTime = jobCard.scheduledTime && 
+                            jobCard.scheduledTime instanceof Date && 
+                            !isNaN(jobCard.scheduledTime.getTime());
+                          const isImmediate = !hasScheduledTime;
+                          return (
+                            <View
+                              style={[
+                                styles.serviceTypeChip,
+                                {
+                                  backgroundColor: isImmediate
+                                    ? '#FF9500' + '20'
+                                    : '#007AFF' + '20',
+                                },
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.serviceTypeChipText,
+                                  {
+                                    color: isImmediate ? '#FF9500' : '#007AFF',
+                                  },
+                                ]}>
+                                {isImmediate ? 'Immediate' : 'Scheduled'}
+                              </Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
+                    </View>
+
+                    {/* Problem */}
+                    {jobCard.problem && (
+                      <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
+                        {jobCard.problem}
+                      </Text>
+                    )}
+
+                    {/* Address */}
+                    {jobCard.customerAddress && (
+                      <View style={styles.addressRow}>
+                        <Icon name="location-on" size={16} color={theme.textSecondary} />
+                        <Text
+                          style={[styles.addressText, {color: theme.textSecondary}]}
+                          numberOfLines={1}>
+                          {jobCard.customerAddress.address}
+                          {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Date */}
+                    <View style={styles.dateRow}>
+                      <Icon name="calendar-today" size={16} color={theme.textSecondary} />
+                      <Text style={[styles.dateText, {color: theme.textSecondary}]}>
+                        {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+                      </Text>
+                    </View>
+
+                    {/* Actions */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={styles.viewButton}
+                        onPress={() => {
+                          navigation.navigate('ActiveService', {
+                            serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                            jobCardId: jobCard.id,
+                          });
+                        }}>
+                        <Text style={[styles.viewButtonText, {color: theme.primary}]}>
+                          View Details
+                        </Text>
+                        <Icon name="chevron-right" size={20} color={theme.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+                {/* Completed Cards Section */}
+                {completedCards.length > 0 && (
+                  <>
+                    {activeCards.length > 0 && (
+                      <View style={styles.sectionHeader}>
+                        <Text style={[styles.sectionTitle, {color: theme.text}]}>
+                          Completed Services ({completedCards.length})
+                        </Text>
+                      </View>
+                    )}
+                    {completedCards.map(jobCard => (
+            <TouchableOpacity
+              key={jobCard.id}
+              style={[styles.jobCard, {backgroundColor: theme.card}]}
+              onPress={async () => {
+                setSelectedCompletedService(jobCard);
+                setShowCompletedServiceModal(true);
+                // Reset previous data
+                setProviderDetails(null);
+                setProviderReview(null);
+                // Fetch provider details and review
+                await loadProviderDetailsAndReview(jobCard);
+              }}>
+              {/* Header */}
+              <View style={styles.jobCardHeader}>
+                <View style={styles.serviceTypeContainer}>
+                  <Icon name="build" size={24} color={theme.primary} />
+                  <View style={styles.serviceTypeText}>
+                    <Text style={[styles.serviceType, {color: theme.text}]}>
+                      {jobCard.serviceType}
+                    </Text>
+                    <View>
+                      <Text style={[styles.providerName, {color: theme.textSecondary}]}>
+                        {jobCard.providerName}
+                      </Text>
+                      {/* Show provider phone for completed status */}
+                      {normalizeStatus(jobCard.status) === 'completed' && 
+                       providerPhones[jobCard.providerId] && (
+                        <View style={styles.providerPhoneRow}>
+                          <Icon name="phone" size={14} color={theme.primary} />
+                          <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
+                            {providerPhones[jobCard.providerId]}
+                          </Text>
+                          <TouchableOpacity
+                            style={[styles.callButton, {backgroundColor: theme.primary}]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleCallProvider(providerPhones[jobCard.providerId]);
+                            }}>
+                            <Icon name="phone" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.statusChipsContainer}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {backgroundColor: getStatusColor(jobCard.status) + '20'},
+                  ]}>
+                  <Text
+                    style={[
+                      styles.statusText,
+                      {color: getStatusColor(jobCard.status)},
+                    ]}>
+                    {getStatusText(jobCard.status)}
+                  </Text>
+                  </View>
+                  {/* Service Type Chip */}
+                  {(() => {
+                    const isImmediate = !jobCard.scheduledTime || (jobCard as any).urgency === 'immediate';
+                    return (
+                      <View
+                        style={[
+                          styles.serviceTypeChip,
+                          {
+                            backgroundColor: isImmediate
+                              ? '#FF9500' + '20'
+                              : '#007AFF' + '20',
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            styles.serviceTypeChipText,
+                            {
+                              color: isImmediate ? '#FF9500' : '#007AFF',
+                            },
+                          ]}>
+                          {isImmediate ? 'Immediate' : 'Scheduled'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+
+              {/* Problem */}
+              {jobCard.problem && (
+                <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
+                  {jobCard.problem}
+                </Text>
+              )}
+
+              {/* Address */}
+              {jobCard.customerAddress && (
+                <View style={styles.addressRow}>
+                  <Icon name="location-on" size={16} color={theme.textSecondary} />
+                  <Text
+                    style={[styles.addressText, {color: theme.textSecondary}]}
+                    numberOfLines={1}>
+                    {jobCard.customerAddress.address}
+                    {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Date */}
+              <View style={styles.dateRow}>
+                <Icon name="calendar-today" size={16} color={theme.textSecondary} />
+                <Text style={[styles.dateText, {color: theme.textSecondary}]}>
+                  {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+                </Text>
+              </View>
+
+              {/* Actions */}
+              <View style={styles.actionsRow}>
+                {jobCard.status === 'completed' && (
+                  <TouchableOpacity
+                    style={styles.reviewButton}
+                    onPress={() => handleReview(jobCard)}>
+                    <Icon name="star" size={16} color="#FFD700" />
+                    <Text style={styles.reviewButtonText}>Review</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => {
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
+                  }}>
+                  <Text style={[styles.viewButtonText, {color: theme.primary}]}>
+                    View Details
+                  </Text>
+                  <Icon name="chevron-right" size={20} color={theme.primary} />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+                    ))}
+                  </>
+                )}
+              </>
+            ) : (
+              // Show filtered cards without sections when filters are applied
+              filteredCards.map(jobCard => (
+                <TouchableOpacity
+                  key={jobCard.id}
+                  style={[styles.jobCard, {backgroundColor: theme.card}]}
+                  onPress={() => {
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
+                  }}>
+              {/* Header */}
+              <View style={styles.jobCardHeader}>
+                <View style={styles.serviceTypeContainer}>
+                  <Icon name="build" size={24} color={theme.primary} />
+                  <View style={styles.serviceTypeText}>
+                    <Text style={[styles.serviceType, {color: theme.text}]}>
+                      {jobCard.serviceType}
+                    </Text>
+                    <Text style={[styles.providerName, {color: theme.textSecondary}]}>
+                      {jobCard.providerName || 'Waiting for provider...'}
+                    </Text>
+                    {/* Show provider phone for accepted, in-progress and completed status */}
+                    {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress' || normalizeStatus(jobCard.status) === 'completed') && 
+                     providerPhones[jobCard.providerId] && (
+                      <View style={styles.providerPhoneRow}>
+                        <Icon name="phone" size={14} color={theme.primary} />
+                        <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
+                          {providerPhones[jobCard.providerId]}
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.callButton, {backgroundColor: theme.primary}]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCallProvider(providerPhones[jobCard.providerId]);
+                          }}>
+                          <Icon name="phone" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {/* Show PIN for in-progress status */}
+                    {normalizeStatus(jobCard.status) === 'in-progress' && (jobCard as any).taskPIN && (
+                      <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
+                        <Icon name="lock" size={16} color={theme.primary} />
+                        <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
+                          Your Verification PIN:
+                        </Text>
+                        <Text style={[styles.pinValue, {color: theme.primary}]}>
+                          {(jobCard as any).taskPIN}
+                        </Text>
+                        <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
+                          Share this PIN when provider completes the service
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.statusChipsContainer}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {backgroundColor: getStatusColor(jobCard.status) + '20'},
+                    ]}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        {color: getStatusColor(jobCard.status)},
+                      ]}>
+                      {getStatusText(jobCard.status)}
+                    </Text>
+                  </View>
+                  {/* Service Type Chip */}
+                  {(() => {
+                    const isImmediate = !jobCard.scheduledTime || (jobCard as any).urgency === 'immediate';
+                    return (
+                      <View
+                        style={[
+                          styles.serviceTypeChip,
+                          {
+                            backgroundColor: isImmediate
+                              ? '#FF9500' + '20'
+                              : '#007AFF' + '20',
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            styles.serviceTypeChipText,
+                            {
+                              color: isImmediate ? '#FF9500' : '#007AFF',
+                            },
+                          ]}>
+                          {isImmediate ? 'Immediate' : 'Scheduled'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+
+                  {/* Problem */}
+                  {jobCard.problem && (
+                    <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
+                      {jobCard.problem}
+                    </Text>
+                  )}
+
+                  {/* Address */}
+                  {jobCard.customerAddress && (
+                    <View style={styles.addressRow}>
+                      <Icon name="location-on" size={16} color={theme.textSecondary} />
+                      <Text
+                        style={[styles.addressText, {color: theme.textSecondary}]}
+                        numberOfLines={1}>
+                        {jobCard.customerAddress.address}
+                        {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Date */}
+                  <View style={styles.dateRow}>
+                    <Icon name="calendar-today" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.dateText, {color: theme.textSecondary}]}>
+                      {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+                </Text>
+              </View>
+
+              {/* Actions */}
+              <View style={styles.actionsRow}>
+                {jobCard.status === 'completed' && (
+                  <TouchableOpacity
+                    style={styles.reviewButton}
+                    onPress={() => handleReview(jobCard)}>
+                    <Icon name="star" size={16} color="#FFD700" />
+                    <Text style={styles.reviewButtonText}>Review</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => {
+                    if (jobCard.status === 'completed') {
+                      setSelectedCompletedService(jobCard);
+                      setShowCompletedServiceModal(true);
+                    } else {
+                      navigation.navigate('ActiveService', {
+                        serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+                        jobCardId: jobCard.id,
+                      });
+                    }
+                  }}>
+                  <Text style={[styles.viewButtonText, {color: theme.primary}]}>
+                    View Details
+                  </Text>
+                  <Icon name="chevron-right" size={20} color={theme.primary} />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ))
+            )}
+          </>
+        )}
+      </ScrollView>
 
       {/* Service Type Filter Modal */}
       <Modal
@@ -1247,23 +1496,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  listContent: {
-    padding: 16,
-  },
   centerContent: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1353,7 +1585,7 @@ const styles = StyleSheet.create({
   },
   providerPhoneText: {
     fontSize: 14,
-    flex: 1
+    flex: 1,
   },
   modalCallButton: {
     flexDirection: 'row',
@@ -1476,21 +1708,19 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingVertical: 12,
     paddingTop: 16,
+    marginTop: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
   filterScrollContent: {
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
   },
   filterButton: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 12,
-    minWidth: 100,
-    alignItems: 'center',
+    marginRight: 8,
   },
   filterButtonActive: {
     // Active state handled by backgroundColor
