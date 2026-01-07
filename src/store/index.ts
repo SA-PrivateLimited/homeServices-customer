@@ -25,6 +25,10 @@ interface AppState {
   isDarkMode: boolean;
   toggleTheme: () => void;
 
+  // Language
+  language: 'en' | 'hi';
+  setLanguage: (language: 'en' | 'hi') => Promise<void>;
+
   // Loading states
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
@@ -80,6 +84,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   isDarkMode: false,
   isLoading: false,
+  language: 'en',
 
   // Consultation initial state
   currentUser: null,
@@ -96,6 +101,14 @@ export const useStore = create<AppState>((set, get) => ({
     const newTheme = !get().isDarkMode;
     set({isDarkMode: newTheme});
     await AsyncStorage.setItem('theme', JSON.stringify(newTheme));
+  },
+
+  setLanguage: async (language: 'en' | 'hi') => {
+    set({language});
+    await AsyncStorage.setItem('language', language);
+    // Change i18n language
+    const {changeLanguage} = await import('../i18n');
+    await changeLanguage(language);
   },
 
   setIsLoading: (loading: boolean) => set({isLoading: loading}),
@@ -234,6 +247,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const [
         theme,
+        language,
         currentUser,
         doctors,
         consultations,
@@ -241,6 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
         notifications,
       ] = await Promise.all([
         AsyncStorage.getItem('theme'),
+        AsyncStorage.getItem('language'),
         AsyncStorage.getItem('currentUser'),
         AsyncStorage.getItem('doctors'),
         AsyncStorage.getItem('consultations'),
@@ -248,8 +263,15 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem('notifications'),
       ]);
 
+      const storedLanguage = (language || 'en') as 'en' | 'hi';
+      
+      // Initialize i18n with stored language
+      const {changeLanguage} = await import('../i18n');
+      await changeLanguage(storedLanguage);
+
       set({
         isDarkMode: theme ? JSON.parse(theme) : false,
+        language: storedLanguage,
         currentUser: currentUser ? JSON.parse(currentUser) : null,
         doctors: doctors ? JSON.parse(doctors) : [],
         consultations: consultations ? JSON.parse(consultations) : [],

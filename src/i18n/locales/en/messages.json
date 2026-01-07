@@ -1,0 +1,8 @@
+{
+  "welcome": "Welcome",
+  "thankYou": "Thank You",
+  "pleaseWait": "Please wait...",
+  "operationSuccess": "Operation completed successfully",
+  "operationFailed": "Operation failed. Please try again.",
+  "noDataAvailable": "No data available"
+}

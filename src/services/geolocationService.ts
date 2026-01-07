@@ -411,8 +411,33 @@ class GeolocationService {
       const pincode = address.postcode || address.pin_code || undefined;
       const city = address.city || address.town || address.village || address.county || undefined;
       const state = address.state || undefined;
-      const country = address.country || undefined;
-      
+      let country = address.country || undefined;
+
+      // Override country to India if pincode is Indian format (6 digits starting with 1-8)
+      // This handles cases where GPS coordinates are incorrect but pincode is detected correctly
+      if (pincode && /^[1-8]\d{5}$/.test(pincode)) {
+        country = 'India';
+
+        // If we detected an Indian pincode but country from API was not India,
+        // it means GPS coordinates are wrong. Re-geocode using the pincode to get correct data.
+        if (address.country && address.country !== 'India') {
+          try {
+            const pincodeData = await this.geocodePincode(pincode);
+            if (pincodeData.address) {
+              return {
+                pincode,
+                address: pincodeData.address,
+                city: pincodeData.city,
+                state: pincodeData.state,
+                country: 'India',
+              };
+            }
+          } catch (error) {
+            // If pincode geocoding fails, continue with current data but corrected country
+          }
+        }
+      }
+
       // Build full address string
       const addressParts = [];
       if (address.house_number || address.house_name) {

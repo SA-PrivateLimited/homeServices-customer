@@ -50,11 +50,17 @@ export default function AppNavigator() {
           // Initialize FCM and save token for push notifications
           // Force reinit to ensure handlers are set up after login
           try {
-            await NotificationService.initializeAndSaveToken(true);
-            console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
+            console.log('🔄 FCM: Initializing FCM for customer:', authUser.uid);
+            const token = await NotificationService.initializeAndSaveToken(true);
+            if (token) {
+              console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
+              console.log('📱 FCM Token:', token.substring(0, 30) + '...');
+            } else {
+              console.warn('⚠️ FCM: No token received after initialization');
+            }
           } catch (fcmError: any) {
-            console.warn('⚠️ Failed to initialize FCM token (non-critical):', fcmError.message);
-            // Don't block app initialization if FCM fails
+            console.error('❌ Failed to initialize FCM token:', fcmError.message || fcmError);
+            // Don't block app initialization if FCM fails, but log the error
           }
 
           const userDoc = await firestore()

@@ -1,0 +1,18 @@
+{
+  "title": "Settings",
+  "profile": "Profile",
+  "notifications": "Notifications",
+  "language": "Language",
+  "theme": "Theme",
+  "darkMode": "Dark Mode",
+  "lightMode": "Light Mode",
+  "help": "Help & Support",
+  "about": "About",
+  "privacy": "Privacy Policy",
+  "terms": "Terms of Service",
+  "version": "Version",
+  "selectLanguage": "Select Language",
+  "english": "English",
+  "hindi": "हिंदी",
+  "languageChanged": "Language changed successfully"
+}

@@ -35,8 +35,10 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       title: notification.title || 'HomeServices',
       message: notification.body || '',
       playSound: true,
-      soundName: 'default',
+      soundName: channelId === 'service_requests' ? 'hooter.wav' : 'default',
       userInfo: data || {},
+      priority: 'high',
+      importance: 'high',
     });
   }
 });

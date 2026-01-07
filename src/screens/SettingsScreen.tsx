@@ -19,14 +19,16 @@ import auth from '@react-native-firebase/auth';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
+import useTranslation from '../hooks/useTranslation';
 
 interface SettingsScreenProps {
   navigation: any;
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
-  const {isDarkMode, toggleTheme, currentUser, setCurrentUser} = useStore();
+  const {isDarkMode, toggleTheme, currentUser, setCurrentUser, language, setLanguage} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
@@ -256,7 +258,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         {currentUser && (
           <SettingItem
             icon="person-circle"
-            title="Profile"
+            title={t('settings.profile')}
             subtitle={currentUser.name}
             onPress={() => {
               // Navigate to Profile screen
@@ -266,20 +268,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         )}
         <SettingItem
           icon="log-out-outline"
-          title="Logout"
-          subtitle="Sign out of your account"
+          title={t('auth.logout')}
+          subtitle={t('auth.logout')}
           onPress={handleLogout}
         />
       </View>
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          APPEARANCE
+          {t('settings.theme').toUpperCase()}
         </Text>
         <SettingItem
           icon="moon"
-          title="Dark Mode"
-          subtitle={isDarkMode ? 'Enabled' : 'Disabled'}
+          title={t('settings.darkMode')}
+          subtitle={isDarkMode ? t('settings.darkMode') : t('settings.lightMode')}
           rightComponent={
             <Switch
               value={isDarkMode}
@@ -288,6 +290,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               thumbColor="#FFFFFF"
             />
           }
+        />
+        <SettingItem
+          icon="language"
+          title={t('settings.language')}
+          subtitle={language === 'en' ? t('settings.english') : t('settings.hindi')}
+          onPress={async () => {
+            const newLanguage = language === 'en' ? 'hi' : 'en';
+            await setLanguage(newLanguage);
+            setSuccessMessage(t('settings.languageChanged'));
+            setShowSuccessModal(true);
+          }}
         />
       </View>
 
@@ -301,6 +314,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           subtitle="Contact us for assistance"
           onPress={handleHelpSupport}
         />
+        {__DEV__ && (
+          <SettingItem
+            icon="notifications"
+            title="Test Notification"
+            subtitle="Send a test push notification"
+            onPress={async () => {
+              try {
+                const sendTest = require('../utils/sendTestNotification').default;
+                await sendTest('Test notification from HomeServices app');
+                setSuccessMessage('Test notification sent! Check your notifications.');
+                setShowSuccessModal(true);
+              } catch (error: any) {
+                setAlertModal({
+                  visible: true,
+                  title: 'Error',
+                  message: error?.message || error?.code || 'Failed to send test notification',
+                  type: 'error',
+                });
+              }
+            }}
+          />
+        )}
       </View>
 
       <View style={styles.section}>

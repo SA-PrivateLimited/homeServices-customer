@@ -1,0 +1,20 @@
+{
+  "title": "कार्य विवरण",
+  "jobDetails": "कार्य विवरण",
+  "customerDetails": "ग्राहक विवरण",
+  "serviceDetails": "सेवा विवरण",
+  "serviceAddress": "सेवा पता",
+  "startTask": "कार्य शुरू करें",
+  "completeTask": "कार्य पूर्ण करें",
+  "cancelTask": "कार्य रद्द करें",
+  "enterPIN": "PIN दर्ज करें",
+  "taskStarted": "कार्य सफलतापूर्वक शुरू किया गया",
+  "taskCompleted": "कार्य सफलतापूर्वक पूर्ण किया गया",
+  "taskCancelled": "कार्य रद्द किया गया",
+  "invalidPIN": "अमान्य PIN",
+  "verificationPIN": "सत्यापन PIN",
+  "yourVerificationPIN": "आपका सत्यापन PIN:",
+  "sharePIN": "प्रदाता द्वारा सेवा पूर्ण होने पर यह PIN साझा करें",
+  "viewDetails": "विवरण देखें",
+  "review": "समीक्षा"
+}

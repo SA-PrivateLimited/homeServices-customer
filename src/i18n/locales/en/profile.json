@@ -1,0 +1,12 @@
+{
+  "title": "Profile",
+  "editProfile": "Edit Profile",
+  "name": "Name",
+  "email": "Email",
+  "phone": "Phone",
+  "address": "Address",
+  "updateProfile": "Update Profile",
+  "profileUpdated": "Profile updated successfully",
+  "uploadPhoto": "Upload Photo",
+  "changePhoto": "Change Photo"
+}

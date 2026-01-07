@@ -89,6 +89,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import WebSocketService from '../services/websocketService';
+import useTranslation from '../hooks/useTranslation';
 
 interface ActiveServiceScreenProps {
   navigation: any;
@@ -108,6 +109,7 @@ export default function ActiveServiceScreen({
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const currentUser = auth().currentUser;
+  const {t} = useTranslation();
 
   const [serviceRequest, setServiceRequest] = useState<any>(null);
   const [jobCard, setJobCard] = useState<any>(null);
@@ -221,8 +223,8 @@ export default function ActiveServiceScreen({
         setLocationPermissionGranted(false);
         if (permission === 'never_ask_again') {
           setAlertModalConfig({
-            title: 'Location Permission Required',
-            message: 'Location permission is required to show your live location on the map. Please enable it in device settings.',
+            title: t('activeService.locationPermissionRequired'),
+            message: t('activeService.locationPermissionMessage'),
             type: 'warning',
           });
           setShowAlertModal(true);
@@ -501,8 +503,8 @@ export default function ActiveServiceScreen({
             // User is neither customer nor provider - permission denied
             console.warn('Permission denied: User does not have access to this consultation');
             setAlertModalConfig({
-              title: 'Access Denied',
-              message: 'You do not have permission to view this service request.',
+              title: t('activeService.accessDenied'),
+              message: t('activeService.accessDeniedMessage'),
               type: 'error',
             });
             setShowAlertModal(true);
@@ -746,15 +748,15 @@ export default function ActiveServiceScreen({
       // Handle permission denied errors gracefully
       if (error?.code === 'permission-denied' || error?.code === 'permissions-denied') {
         setAlertModalConfig({
-          title: 'Access Denied',
-          message: 'You do not have permission to view this service request. Please ensure you are logged in with the correct account.',
+          title: t('activeService.accessDenied'),
+          message: t('activeService.accessDeniedDetailMessage'),
           type: 'error',
         });
         setShowAlertModal(true);
       } else {
         setAlertModalConfig({
-          title: 'Error',
-          message: errorMessage || 'Failed to load service data. Please try again.',
+          title: t('common.error'),
+          message: errorMessage || t('errors.generic'),
           type: 'error',
         });
         setShowAlertModal(true);
@@ -881,8 +883,8 @@ export default function ActiveServiceScreen({
       Linking.openURL(`tel:${formattedPhone}`);
     } else {
       setAlertModalConfig({
-        title: 'Phone Not Available',
-        message: 'Phone number is not available for this provider.',
+        title: t('activeService.phoneNotAvailable'),
+        message: t('activeService.phoneNotAvailableMessage'),
         type: 'info',
       });
       setShowAlertModal(true);
@@ -904,8 +906,8 @@ export default function ActiveServiceScreen({
 
       if (!serviceRequest) {
         setAlertModalConfig({
-          title: 'Error',
-          message: 'Service request data not found.',
+          title: t('common.error'),
+          message: t('activeService.serviceRequestNotFound'),
           type: 'error',
         });
         setShowAlertModal(true);
@@ -917,8 +919,8 @@ export default function ActiveServiceScreen({
       const authUser = auth().currentUser;
       if (!authUser) {
         setAlertModalConfig({
-          title: 'Error',
-          message: 'Please login to re-request service',
+          title: t('common.error'),
+          message: t('activeService.pleaseLoginToReRequest'),
           type: 'error',
         });
         setShowAlertModal(true);
@@ -1019,8 +1021,8 @@ export default function ActiveServiceScreen({
 
       // Update the current screen with new request ID
       setAlertModalConfig({
-        title: 'Success',
-        message: 'Service request has been re-submitted. Providers will be notified.',
+        title: t('common.success'),
+        message: t('activeService.serviceReRequestedSuccess'),
         type: 'success',
       });
       setShowAlertModal(true);
@@ -1034,8 +1036,8 @@ export default function ActiveServiceScreen({
     } catch (error: any) {
       const errorMessage = error?.message || String(error || 'Unknown error');
       setAlertModalConfig({
-        title: 'Error',
-        message: errorMessage || 'Failed to re-request service. Please try again.',
+        title: t('common.error'),
+        message: errorMessage || t('activeService.failedToReRequest'),
         type: 'error',
       });
       setShowAlertModal(true);
@@ -1087,16 +1089,16 @@ export default function ActiveServiceScreen({
       
       if (cancelled) {
         setAlertModalConfig({
-          title: 'Success',
-          message: 'Service request cancelled successfully. Provider has been notified.',
+          title: t('common.success'),
+          message: t('activeService.serviceCancelledSuccess'),
           type: 'success',
         });
         setShowAlertModal(true);
       } else {
         // If neither document exists, show a different message
         setAlertModalConfig({
-          title: 'Info',
-          message: 'Service request not found. It may have already been cancelled or removed.',
+          title: t('common.info'),
+          message: t('activeService.serviceRequestNotFoundInfo'),
           type: 'info',
         });
         setShowAlertModal(true);
@@ -1104,8 +1106,8 @@ export default function ActiveServiceScreen({
     } catch (error: any) {
       console.error('Error cancelling service:', error);
       setAlertModalConfig({
-        title: 'Error',
-        message: error.message || 'Failed to cancel service. Please try again.',
+        title: t('common.error'),
+        message: error.message || t('activeService.failedToCancelService'),
         type: 'error',
       });
       setShowAlertModal(true);
@@ -1122,8 +1124,8 @@ export default function ActiveServiceScreen({
     setShowVerifyModal(false);
     if (!jobCardId) {
       setAlertModalConfig({
-        title: 'Error',
-        message: 'Job card ID not found',
+        title: t('common.error'),
+        message: t('activeService.jobCardIdNotFound'),
         type: 'error',
       });
       setShowAlertModal(true);
@@ -1144,8 +1146,8 @@ export default function ActiveServiceScreen({
       }, 1000);
     } catch (error: any) {
       setAlertModalConfig({
-        title: 'Error',
-        message: error.message || 'Failed to verify task completion',
+        title: t('common.error'),
+        message: error.message || t('activeService.failedToVerifyCompletion'),
         type: 'error',
       });
       setShowAlertModal(true);
@@ -1174,15 +1176,15 @@ export default function ActiveServiceScreen({
   const getStatusText = (statusValue: string) => {
     switch (statusValue) {
       case 'pending':
-        return 'Waiting for provider...';
+        return t('activeService.waitingForProvider');
       case 'accepted':
-        return 'Provider assigned';
+        return t('activeService.providerAssigned');
       case 'in-progress':
-        return 'Service in progress';
+        return t('activeService.serviceInProgress');
       case 'completed':
-        return 'Service completed';
+        return t('activeService.serviceCompleted');
       case 'cancelled':
-        return 'Cancelled';
+        return t('activeService.cancelled');
       default:
         return statusValue;
     }
@@ -1193,14 +1195,14 @@ export default function ActiveServiceScreen({
       <View style={[styles.container, {backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center'}]}>
         <ActivityIndicator size="large" color={theme.primary} />
         <Text style={[styles.loadingText, {color: theme.textSecondary, marginTop: 16}]}>
-          Loading service details...
+          {t('activeService.loadingServiceDetails')}
         </Text>
         {isImmediateService && !locationPermissionGranted && (
           <TouchableOpacity
             style={[styles.requestLocationButton, {backgroundColor: theme.primary, marginTop: 20}]}
             onPress={requestLocationAndGetCurrentLocation}>
             <Icon name="location-on" size={20} color="#fff" />
-            <Text style={styles.requestLocationText}>Request Location Access</Text>
+            <Text style={styles.requestLocationText}>{t('activeService.requestLocationAccess')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1347,8 +1349,8 @@ export default function ActiveServiceScreen({
                   latitude: customerAddress.latitude,
                   longitude: customerAddress.longitude,
                 }}
-                title="Service Location"
-                description="Service address"
+                title={t('jobCard.serviceAddress')}
+                description={t('services.address')}
                 pinColor="#007AFF">
                 <View style={styles.customerMarker}>
                   <Icon name="home" size={24} color="#007AFF" />
@@ -1422,14 +1424,14 @@ export default function ActiveServiceScreen({
             <Icon name="map" size={48} color="#8E8E93" />
             <Text style={styles.mapPlaceholderText}>
               {status === 'completed'
-                ? 'Service Completed'
+                ? t('activeService.serviceCompleted')
                 : providerLocation
-                ? 'Provider is on the way'
-                : 'Waiting for provider...'}
+                ? t('activeService.providerIsOnTheWay')
+                : t('activeService.waitingForProvider')}
             </Text>
             {distance ? (
               <Text style={styles.mapPlaceholderDistance}>
-                {distance} away • ETA: ~{eta} min
+                {t('activeService.providerIsAway').replace('{0}', distance).replace('{1}', String(eta))}
               </Text>
             ) : null}
           </View>
@@ -1467,36 +1469,36 @@ export default function ActiveServiceScreen({
                       color: isImmediateService ? '#FF9500' : '#007AFF',
                     },
                   ]}>
-                  {isImmediateService ? 'Immediate' : 'Scheduled'}
+                  {isImmediateService ? t('services.immediate') : t('services.scheduled')}
                 </Text>
               </View>
             </View>
             {status === 'accepted' && providerLocation && distance ? (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                Provider is {distance} away • ETA: ~{eta} min
+                {t('activeService.providerIsAway').replace('{0}', distance).replace('{1}', String(eta))}
               </Text>
             ) : null}
             {status === 'accepted' && !providerLocation && (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                Provider location will appear here
+                {t('activeService.providerLocationWillAppear')}
               </Text>
             )}
             {status === 'in-progress' && (
               <View style={styles.pinContainer}>
                 <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                  Service in progress
+                  {t('activeService.serviceInProgress')}
                 </Text>
                 {jobCard?.taskPIN ? (
                   <View style={[styles.pinDisplay, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
                     <Icon name="lock" size={16} color={theme.primary} />
                     <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                      Your Verification PIN:
+                      {t('jobCard.yourVerificationPIN')}
                     </Text>
                     <Text style={[styles.pinValue, {color: theme.primary}]}>
                       {jobCard.taskPIN}
                     </Text>
                     <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                      Share this PIN when provider completes the service
+                      {t('jobCard.sharePIN')}
                     </Text>
                   </View>
                 ) : null}
@@ -1504,7 +1506,7 @@ export default function ActiveServiceScreen({
             )}
             {status === 'pending' && (
               <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                Waiting for provider to accept
+                {t('activeService.waitingForProviderToAccept')}
               </Text>
             )}
           </View>
@@ -1518,7 +1520,7 @@ export default function ActiveServiceScreen({
           showsVerticalScrollIndicator={false}>
           <View style={[styles.card, {backgroundColor: theme.card}]}>
             <Text style={[styles.cardTitle, {color: theme.text}]}>
-              Provider Details
+              {t('activeService.providerDetails')}
             </Text>
             <View style={styles.providerInfo}>
               {(providerProfile?.profileImage || serviceRequest?.providerImage) ? (
@@ -1554,7 +1556,7 @@ export default function ActiveServiceScreen({
                     </Text>
                     {providerProfile?.totalConsultations ? (
                       <Text style={[styles.reviewsCount, {color: theme.textSecondary}]}>
-                        ({providerProfile.totalConsultations} reviews)
+                        ({providerProfile.totalConsultations} {t('activeService.reviews')})
                       </Text>
                     ) : null}
                   </View>
@@ -1596,7 +1598,7 @@ export default function ActiveServiceScreen({
                   <View style={styles.infoRow}>
                     <Icon name="work" size={18} color={theme.textSecondary} />
                     <Text style={[styles.infoText, {color: theme.text}]}>
-                      {providerProfile.experience} years of experience
+                      {providerProfile.experience} {t('activeService.yearsOfExperience')}
                     </Text>
                   </View>
                 ) : null}
@@ -1619,7 +1621,7 @@ export default function ActiveServiceScreen({
                           const addr = jobCard.providerAddress;
                           return `${addr.address || ''}${addr.city ? `, ${addr.city}` : ''}${addr.pincode ? ` - ${addr.pincode}` : ''}`;
                         }
-                        return 'Address not available';
+                        return t('activeService.addressNotAvailable');
                       })()}
                     </Text>
                   </View>
@@ -1631,12 +1633,12 @@ export default function ActiveServiceScreen({
           {/* Service Details */}
           <View style={[styles.card, {backgroundColor: theme.card}]}>
             <Text style={[styles.cardTitle, {color: theme.text}]}>
-              Service Details
+              {t('jobCard.serviceDetails')}
             </Text>
             <View style={styles.detailRow}>
               <Icon name="build" size={20} color={theme.primary} />
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Service Type:
+                {t('services.serviceType')}:
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
                 {provider?.serviceType || serviceRequest?.serviceType || jobCard?.serviceType || 'N/A'}
@@ -1646,7 +1648,7 @@ export default function ActiveServiceScreen({
               <View style={styles.detailRow}>
                 <Icon name="description" size={20} color={theme.primary} />
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Problem:
+                  {t('services.problem')}:
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
                   {serviceRequest?.problem || jobCard?.problem || ''}
@@ -1657,7 +1659,7 @@ export default function ActiveServiceScreen({
               <View style={styles.detailRow}>
                 <Icon name="location-on" size={20} color={theme.primary} />
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Address:
+                  {t('services.address')}:
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
                   {customerAddress.address || 'Address not available'}
@@ -1675,13 +1677,13 @@ export default function ActiveServiceScreen({
                   style={[styles.actionButton, {backgroundColor: '#34C759'}]}
                   onPress={handleVerifyCompletion}>
                   <Icon name="check-circle" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Verify Task Completed</Text>
+                  <Text style={styles.actionButtonText}>{t('activeService.verifyTaskCompleted')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionButton, {backgroundColor: theme.primary}]}
                   onPress={handleCallProvider}>
                   <Icon name="phone" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Call Provider</Text>
+                  <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1697,7 +1699,7 @@ export default function ActiveServiceScreen({
                     onPress={handleReRequest}
                     disabled={loading}>
                     <Icon name="refresh" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Re-Request Service</Text>
+                    <Text style={styles.actionButtonText}>{t('activeService.reRequestService')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1708,7 +1710,7 @@ export default function ActiveServiceScreen({
                   onPress={handleCancelService}
                   disabled={loading}>
                   <Icon name="cancel" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Cancel Service</Text>
+                  <Text style={styles.actionButtonText}>{t('activeService.cancelService')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1719,7 +1721,7 @@ export default function ActiveServiceScreen({
                   style={[styles.actionButton, {backgroundColor: theme.primary}]}
                   onPress={handleCallProvider}>
                   <Icon name="phone" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Call Provider</Text>
+                  <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1730,7 +1732,7 @@ export default function ActiveServiceScreen({
                   onPress={handleCancelService}
                   disabled={loading}>
                   <Icon name="cancel" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Cancel Service</Text>
+                  <Text style={styles.actionButtonText}>{t('activeService.cancelService')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1740,7 +1742,7 @@ export default function ActiveServiceScreen({
                 style={[styles.actionButton, {backgroundColor: theme.primary}]}
                 onPress={() => navigation.navigate('ServiceHistory')}>
                 <Icon name="history" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>View History</Text>
+                <Text style={styles.actionButtonText}>{t('activeService.viewHistory')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1760,8 +1762,8 @@ export default function ActiveServiceScreen({
             // Reload data to show updated status
             loadServiceData();
             setAlertModalConfig({
-              title: 'Thank You!',
-              message: 'Your review has been submitted successfully.',
+              title: t('messages.thankYou'),
+              message: t('activeService.thankYouReviewSubmitted'),
               type: 'success',
             });
             setShowAlertModal(true);
@@ -1783,10 +1785,10 @@ export default function ActiveServiceScreen({
       {/* Verify Completion Confirmation Modal */}
       <ConfirmationModal
         visible={showVerifyModal}
-        title="Verify Task Completion"
-        message="Have you verified that the service has been completed to your satisfaction?"
-        confirmText="Yes, Verify"
-        cancelText="No"
+        title={t('activeService.verifyTaskCompletionTitle')}
+        message={t('activeService.verifyTaskCompletionMessage')}
+        confirmText={t('activeService.yesVerify')}
+        cancelText={t('common.no')}
         type="info"
         icon="checkmark-circle"
         onConfirm={confirmVerifyCompletion}
@@ -1796,10 +1798,10 @@ export default function ActiveServiceScreen({
       {/* Re-Request Confirmation Modal */}
       <ConfirmationModal
         visible={showReRequestModal}
-        title="Re-Request Service"
-        message="No provider has accepted your request in the last 10 minutes. Would you like to re-submit your service request? This will cancel the current request and create a new one to notify providers again."
-        confirmText="Yes, Re-Request"
-        cancelText="Cancel"
+        title={t('activeService.reRequestTitle')}
+        message={t('activeService.reRequestMessage')}
+        confirmText={t('activeService.yesReRequest')}
+        cancelText={t('common.cancel')}
         type="info"
         icon="refresh"
         onConfirm={confirmReRequest}

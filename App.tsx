@@ -26,6 +26,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
 import GeolocationService from './src/services/geolocationService';
+import './src/i18n'; // Initialize i18n
 // OneSignal removed - using Firebase FCM
 
 const App = () => {
@@ -86,6 +87,7 @@ const App = () => {
     hydrate();
     
     // Initialize notification service and save FCM token (for local notifications)
+    // Note: Token will be saved when user logs in via AppNavigator
     NotificationService.initializeAndSaveToken().catch(error => {
       console.error('Error initializing notifications:', error);
     });

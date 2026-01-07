@@ -1,0 +1,10 @@
+{
+  "title": "My Services",
+  "filterByService": "Filter by Service",
+  "filterByDate": "Filter by Date",
+  "allTime": "All Time",
+  "today": "Today",
+  "thisWeek": "This Week",
+  "thisMonth": "This Month",
+  "clear": "Clear"
+}

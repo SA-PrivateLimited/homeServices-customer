@@ -27,6 +27,7 @@ import {getJobCardReview, getProviderReviews, Review} from '../services/reviewSe
 import ReviewModal from '../components/ReviewModal';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import firestore from '@react-native-firebase/firestore';
+import useTranslation from '../hooks/useTranslation';
 
 type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed';
 type DateFilterType = 'all' | 'today' | 'week' | 'month';
@@ -34,6 +35,7 @@ type DateFilterType = 'all' | 'today' | 'week' | 'month';
 export default function ServiceHistoryScreen({navigation}: any) {
   const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [jobCards, setJobCards] = useState<JobCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -593,13 +595,13 @@ export default function ServiceHistoryScreen({navigation}: any) {
               <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
                 <Icon name="lock" size={16} color={theme.primary} />
                 <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                  Your Verification PIN:
+                  {t('jobCard.yourVerificationPIN')}
                 </Text>
                 <Text style={[styles.pinValue, {color: theme.primary}]}>
                   {(jobCard as any).taskPIN}
                 </Text>
                 <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                  Share this PIN when provider completes the service
+                  {t('jobCard.sharePIN')}
                 </Text>
               </View>
             )}
@@ -626,7 +628,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
               return (
                 <View style={[styles.serviceTypeChip, {backgroundColor: '#FF9500' + '20'}]}>
                   <Text style={[styles.serviceTypeChipText, {color: '#FF9500'}]}>
-                    Immediate
+                    {t('services.immediate')}
                   </Text>
                 </View>
               );
@@ -635,7 +637,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
               return (
                 <View style={[styles.serviceTypeChip, {backgroundColor: '#007AFF' + '20'}]}>
                   <Text style={[styles.serviceTypeChipText, {color: '#007AFF'}]}>
-                    Scheduled
+                    {t('services.scheduled')}
                   </Text>
                 </View>
               );
@@ -645,7 +647,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
             return (
               <View style={[styles.serviceTypeChip, {backgroundColor: isImmediate ? '#FF9500' + '20' : '#007AFF' + '20'}]}>
                 <Text style={[styles.serviceTypeChipText, {color: isImmediate ? '#FF9500' : '#007AFF'}]}>
-                  {isImmediate ? 'Immediate' : 'Scheduled'}
+                  {isImmediate ? t('services.immediate') : t('services.scheduled')}
                 </Text>
               </View>
             );
@@ -689,12 +691,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
               handleReview(jobCard);
             }}>
             <Icon name="star" size={16} color="#FFD700" />
-            <Text style={styles.reviewButtonText}>Review</Text>
+            <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.viewButton}>
           <Text style={[styles.viewButtonText, {color: theme.primary}]}>
-            View Details
+            {t('jobCard.viewDetails')}
           </Text>
           <Icon name="chevron-right" size={20} color={theme.primary} />
         </TouchableOpacity>
@@ -706,7 +708,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       {/* Header */}
       <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
-        <Text style={[styles.headerTitle, {color: theme.text}]}>My Services</Text>
+        <Text style={[styles.headerTitle, {color: theme.text}]}>{t('services.myServices')}</Text>
       </View>
 
       {/* Filter Buttons */}
@@ -727,7 +729,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 styles.filterButtonText,
                 {color: filter === 'all' ? '#fff' : theme.text},
               ]}>
-              All ({allCount})
+              {t('common.all')} ({allCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -742,7 +744,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 styles.filterButtonText,
                 {color: filter === 'pending' ? '#fff' : theme.text},
               ]}>
-              Pending ({pendingCount})
+              {t('services.pending')} ({pendingCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -757,7 +759,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 styles.filterButtonText,
                 {color: filter === 'accepted' ? '#fff' : theme.text},
               ]}>
-              Accepted ({acceptedCount})
+              {t('services.accepted')} ({acceptedCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -772,7 +774,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 styles.filterButtonText,
                 {color: filter === 'in-progress' ? '#fff' : theme.text},
               ]}>
-              In Progress ({inProgressCount})
+              {t('services.inProgress')} ({inProgressCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -787,7 +789,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 styles.filterButtonText,
                 {color: filter === 'completed' ? '#fff' : theme.text},
               ]}>
-              Completed ({completedCount})
+              {t('services.completed')} ({completedCount})
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -824,7 +826,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
             }}>
             <Icon name="clear" size={18} color={theme.textSecondary} />
             <Text style={[styles.clearFiltersText, {color: theme.textSecondary}]}>
-              Clear
+              {t('filters.clear')}
             </Text>
           </TouchableOpacity>
         )}
@@ -840,21 +842,21 @@ export default function ServiceHistoryScreen({navigation}: any) {
           />
           <Text style={[styles.emptyText, {color: theme.text}]}>
             {filter === 'pending'
-              ? 'No pending services'
+              ? t('services.noPendingServices')
               : filter === 'accepted'
-              ? 'No accepted services'
+              ? t('services.noAcceptedServices')
               : filter === 'completed'
-              ? 'No completed services'
-              : 'No service requests'}
+              ? t('services.noCompletedServices')
+              : t('services.noServices')}
           </Text>
           <Text style={[styles.emptySubtext, {color: theme.textSecondary}]}>
             {filter === 'pending'
-              ? 'Your pending service requests will appear here'
+              ? t('services.noPendingServices')
               : filter === 'accepted'
-              ? 'Your accepted service requests will appear here'
+              ? t('services.noAcceptedServices')
               : filter === 'completed'
-              ? 'Your completed services will appear here'
-              : 'Your service history will appear here'}
+              ? t('services.noCompletedServices')
+              : t('services.noServices')}
           </Text>
         </View>
       ) : (

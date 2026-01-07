@@ -1,0 +1,20 @@
+{
+  "title": "Job Details",
+  "jobDetails": "Job Details",
+  "customerDetails": "Customer Details",
+  "serviceDetails": "Service Details",
+  "serviceAddress": "Service Address",
+  "startTask": "Start Task",
+  "completeTask": "Complete Task",
+  "cancelTask": "Cancel Task",
+  "enterPIN": "Enter PIN",
+  "taskStarted": "Task started successfully",
+  "taskCompleted": "Task completed successfully",
+  "taskCancelled": "Task cancelled",
+  "invalidPIN": "Invalid PIN",
+  "verificationPIN": "Verification PIN",
+  "yourVerificationPIN": "Your Verification PIN:",
+  "sharePIN": "Share this PIN when provider completes the service",
+  "viewDetails": "View Details",
+  "review": "Review"
+}

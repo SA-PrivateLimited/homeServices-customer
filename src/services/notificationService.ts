@@ -107,16 +107,24 @@ class NotificationService {
     // Prevent duplicate initialization unless forced
     if (this.fcmInitialized && !force) {
       if (__DEV__) {
-        console.log('ℹ️ FCM: Already initialized, skipping');
+        console.log('ℹ️ FCM: Already initialized, but still checking token...');
       }
-      // Still try to get and save token even if already initialized
+      // Always try to get and save token even if already initialized
+      // This ensures token is refreshed and saved after login
       try {
         const token = await messaging().getToken();
         if (token) {
+          console.log('🔄 FCM: Token refresh check - saving token');
           await this.updateFCMTokenInFirestore(token);
+        } else {
+          console.warn('⚠️ FCM: No token available during refresh check');
         }
-      } catch (error) {
-        // Silent fail - token might not be available
+      } catch (error: any) {
+        console.warn('⚠️ FCM: Error getting token during refresh check:', error?.message);
+      }
+      // Still ensure handlers are set up even if already initialized
+      if (!this.handlersSetup) {
+        this.setupMessageHandlers();
       }
       return;
     }
@@ -141,28 +149,9 @@ class NotificationService {
           console.warn('⚠️ FCM: No token available');
         }
 
-        // Listen for token refresh (only set up once)
-        // Note: React Native Firebase handlers replace previous ones, but we only want to set up once
+        // Set up message handlers (only once)
         if (!this.handlersSetup) {
-          messaging().onTokenRefresh(async refreshedToken => {
-            console.log('🔄 FCM: Token refreshed:', refreshedToken.substring(0, 20) + '...');
-            // Update token in Firestore user document
-            await this.updateFCMTokenInFirestore(refreshedToken);
-          });
-
-          // Handle foreground messages (only set up once)
-          messaging().onMessage(async remoteMessage => {
-            console.log('📱 FCM: Foreground message received:', {
-              title: remoteMessage.notification?.title,
-              body: remoteMessage.notification?.body,
-              data: remoteMessage.data,
-            });
-            this.handleFCMMessage(remoteMessage);
-          });
-
-          // Mark handlers as set up
-          this.handlersSetup = true;
-          console.log('✅ FCM: Message handlers set up');
+          this.setupMessageHandlers();
         }
 
         // Mark as initialized
@@ -185,7 +174,49 @@ class NotificationService {
         this.fcmInitialized = false;
         this.handlersSetup = false; // Reset handlers flag to allow retry
       }
+      // Still try to get and save token even if initialization failed
+      try {
+        const token = await messaging().getToken();
+        if (token) {
+          console.log('✅ FCM: Token retrieved after error:', token.substring(0, 20) + '...');
+          await this.updateFCMTokenInFirestore(token);
+        }
+      } catch (tokenError) {
+        console.warn('⚠️ FCM: Could not get token after error:', tokenError);
+      }
       // Don't throw - allow app to continue without notifications
+    }
+  }
+
+  /**
+   * Set up FCM message handlers (token refresh and foreground messages)
+   * This is called once during initialization
+   */
+  private setupMessageHandlers(): void {
+    try {
+      // Listen for token refresh
+      messaging().onTokenRefresh(async refreshedToken => {
+        console.log('🔄 FCM: Token refreshed:', refreshedToken.substring(0, 20) + '...');
+        // Update token in Firestore user document
+        await this.updateFCMTokenInFirestore(refreshedToken);
+      });
+
+      // Handle foreground messages
+      messaging().onMessage(async remoteMessage => {
+        console.log('📱 FCM: Foreground message received:', {
+          title: remoteMessage.notification?.title,
+          body: remoteMessage.notification?.body,
+          data: remoteMessage.data,
+        });
+        this.handleFCMMessage(remoteMessage);
+      });
+
+      // Mark handlers as set up
+      this.handlersSetup = true;
+      console.log('✅ FCM: Message handlers set up');
+    } catch (error: any) {
+      console.error('❌ FCM: Error setting up message handlers:', error?.message);
+      this.handlersSetup = false; // Allow retry
     }
   }
 
@@ -220,8 +251,10 @@ class NotificationService {
         title: notification.title || 'HomeServices',
         message: notification.body || '',
         playSound: true,
-        soundName: 'default',
+        soundName: channelId === 'service_requests' ? 'hooter.wav' : 'default',
         userInfo: data || {},
+        priority: 'high',
+        importance: 'high',
       });
     } else {
       console.warn('⚠️ FCM: Message received but no notification payload');
@@ -423,15 +456,13 @@ class NotificationService {
       
       const currentUser = auth().currentUser;
       if (!currentUser) {
-        if (__DEV__) {
-          console.log('ℹ️ FCM: No user logged in, skipping token save');
-        }
+        console.log('ℹ️ FCM: No user logged in, skipping token save');
         return;
       }
 
-      if (__DEV__) {
-        console.log('💾 FCM: Saving token for user:', currentUser.uid);
-      }
+      console.log('💾 FCM: Saving token for user:', currentUser.uid);
+      console.log('📱 FCM Token (first 30 chars):', token.substring(0, 30) + '...');
+      console.log('📱 FCM Token (full length):', token.length);
 
       // Use set with merge: true to create document if it doesn't exist
       await firestore()
@@ -442,8 +473,17 @@ class NotificationService {
           updatedAt: firestore.FieldValue.serverTimestamp(),
         }, {merge: true});
 
-      if (__DEV__) {
-        console.log('✅ FCM: Token saved to Firestore for user:', currentUser.uid);
+      // Verify token was saved
+      const verifyDoc = await firestore()
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+      
+      const savedToken = verifyDoc.data()?.fcmToken;
+      if (savedToken === token) {
+        console.log('✅ FCM: Token verified and saved to Firestore for user:', currentUser.uid);
+      } else {
+        console.warn('⚠️ FCM: Token save verification failed. Expected:', token.substring(0, 20), 'Got:', savedToken?.substring(0, 20));
       }
 
       // Also check if user is a doctor and update doctors collection
@@ -477,21 +517,41 @@ class NotificationService {
         }
       } catch (roleError: any) {
         // Silently ignore role check errors - not critical
-        if (__DEV__) {
-          console.warn('⚠️ FCM: Error updating provider token:', roleError?.message);
-        }
-      }
-
-      if (__DEV__) {
-        console.log('✅ FCM: Token also saved to providers collection');
+        console.warn('⚠️ FCM: Error updating provider token:', roleError?.message);
       }
     } catch (error: any) {
-      // Only log error, don't crash the app
+      // Log all errors - this is critical for notifications
       const errorCode = error?.code || '';
-      if (errorCode !== 'firestore/not-found') {
-        console.error('❌ FCM: Error saving token to Firestore:', error?.message || error);
-      } else if (__DEV__) {
-        console.log('ℹ️ FCM: User document not found (will be created on next save)');
+      const auth = require('@react-native-firebase/auth').default;
+      const currentUser = auth().currentUser;
+      console.error('❌ FCM: Error saving token to Firestore:', {
+        code: errorCode,
+        message: error?.message || error,
+        userId: currentUser?.uid,
+      });
+      
+      // Retry once after a short delay
+      if (errorCode !== 'permission-denied') {
+        const retryAuth = require('@react-native-firebase/auth').default;
+        const retryCurrentUser = retryAuth().currentUser;
+        const retryFirestore = require('@react-native-firebase/firestore').default;
+        if (retryCurrentUser) {
+          setTimeout(async () => {
+            try {
+              console.log('🔄 FCM: Retrying token save...');
+              await retryFirestore()
+                .collection('users')
+                .doc(retryCurrentUser.uid)
+                .set({
+                  fcmToken: token,
+                  updatedAt: retryFirestore.FieldValue.serverTimestamp(),
+                }, {merge: true});
+              console.log('✅ FCM: Token saved on retry');
+            } catch (retryError: any) {
+              console.error('❌ FCM: Retry also failed:', retryError?.message);
+            }
+          }, 2000);
+        }
       }
     }
   }
@@ -529,20 +589,38 @@ class NotificationService {
    */
   async initializeAndSaveToken(forceReinit: boolean = false): Promise<string | null> {
     try {
+      console.log('🔄 FCM: Starting initializeAndSaveToken, forceReinit:', forceReinit);
+      
+      // If forcing reinit, reset flags first
+      if (forceReinit) {
+        console.log('🔄 FCM: Force reinit requested - resetting flags');
+        this.fcmInitialized = false;
+        this.handlersSetup = false;
+      }
+      
       // Initialize FCM handlers (force reinit if requested, e.g., after login)
       await this.initializeFCM(forceReinit);
       
       // Get and save token (always try to get fresh token)
       const token = await this.getFCMToken();
       if (token) {
+        console.log('✅ FCM: Token retrieved, saving to Firestore...');
         await this.updateFCMTokenInFirestore(token);
-        if (__DEV__) {
-          console.log('✅ FCM: Token initialized and saved');
-        }
+        console.log('✅ FCM: Token initialized and saved');
       } else {
-        if (__DEV__) {
-          console.warn('⚠️ FCM: No token available to save');
-        }
+        console.warn('⚠️ FCM: No token available to save');
+        // Retry after a short delay
+        setTimeout(async () => {
+          try {
+            const retryToken = await this.getFCMToken();
+            if (retryToken) {
+              console.log('✅ FCM: Token retrieved on retry, saving...');
+              await this.updateFCMTokenInFirestore(retryToken);
+            }
+          } catch (retryError) {
+            console.error('❌ FCM: Retry failed:', retryError);
+          }
+        }, 3000);
       }
       return token;
     } catch (error: any) {

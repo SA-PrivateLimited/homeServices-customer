@@ -1,0 +1,18 @@
+{
+  "title": "सेटिंग्स",
+  "profile": "प्रोफ़ाइल",
+  "notifications": "सूचनाएं",
+  "language": "भाषा",
+  "theme": "थीम",
+  "darkMode": "डार्क मोड",
+  "lightMode": "लाइट मोड",
+  "help": "सहायता और समर्थन",
+  "about": "के बारे में",
+  "privacy": "गोपनीयता नीति",
+  "terms": "सेवा की शर्तें",
+  "version": "संस्करण",
+  "selectLanguage": "भाषा चुनें",
+  "english": "English",
+  "hindi": "हिंदी",
+  "languageChanged": "भाषा सफलतापूर्वक बदली गई"
+}

@@ -1,0 +1,9 @@
+{
+  "title": "Home",
+  "welcome": "Welcome",
+  "selectService": "Select a Service",
+  "popularServices": "Popular Services",
+  "recentServices": "Recent Services",
+  "findServices": "Find Services",
+  "searchPlaceholder": "Search for services..."
+}

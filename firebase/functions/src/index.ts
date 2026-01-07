@@ -386,7 +386,7 @@ export const onJobCardCreated = functions.firestore
           priority: "high" as const,
           notification: {
             channelId: "service_requests",
-            sound: "default",
+            sound: "hooter.wav",
             priority: "high" as const,
           },
         },
@@ -420,13 +420,22 @@ export const onJobCardUpdated = functions.firestore
     const after = change.after.data();
     const {customerId, providerName, serviceType, consultationId} = after;
 
+    console.log(`🔄 onJobCardUpdated triggered for jobCard ${context.params.jobCardId}:`, {
+      beforeStatus: before.status,
+      afterStatus: after.status,
+      customerId,
+      providerName,
+      serviceType,
+    });
+
     // Only send notification if status changed
     if (before.status === after.status) {
+      console.log(`ℹ️ Status unchanged (${after.status}), skipping notification`);
       return null;
     }
 
     if (!customerId) {
-      console.log("No customerId in job card");
+      console.log(`❌ No customerId in job card ${context.params.jobCardId}`);
       return null;
     }
 
@@ -437,21 +446,42 @@ export const onJobCardUpdated = functions.firestore
         .doc(customerId)
         .get();
 
-      const fcmToken = userDoc.data()?.fcmToken;
-
-      if (!fcmToken) {
-        console.log(`No FCM token for customer ${customerId}`);
+      if (!userDoc.exists) {
+        console.log(`❌ User document not found for customer ${customerId}`);
         return null;
       }
+
+      const userData = userDoc.data();
+      const fcmToken = userData?.fcmToken;
+
+      if (!fcmToken) {
+        console.log(`❌ No FCM token for customer ${customerId}`);
+        console.log(`User data keys: ${Object.keys(userData || {}).join(', ')}`);
+        console.log(`💡 Customer needs to log in to HomeServices app to receive notifications`);
+        return null;
+      }
+
+      console.log(`✅ Found FCM token for customer ${customerId}, token: ${fcmToken.substring(0, 30)}...`);
 
       // Determine notification message based on status
       let title = "Service Update";
       let body = "";
+      const notificationData: any = {
+        jobCardId: context.params.jobCardId,
+        consultationId: consultationId || "",
+        type: "service",
+        status: after.status,
+      };
       
       switch (after.status) {
         case "in-progress":
           title = "Service Started";
           body = `${providerName} has started your ${serviceType || "service"}`;
+          // Include PIN if available
+          if (after.taskPIN) {
+            notificationData.pin = after.taskPIN;
+            body += `. Your verification PIN: ${after.taskPIN}`;
+          }
           break;
         case "completed":
           title = "Service Completed";
@@ -467,24 +497,25 @@ export const onJobCardUpdated = functions.firestore
           return null;
       }
 
+      // Convert all data values to strings (FCM requirement)
+      const stringifiedData: {[key: string]: string} = {};
+      for (const [key, value] of Object.entries(notificationData)) {
+        stringifiedData[key] = String(value || '');
+      }
+
       // Send status update notification
       const message = {
         notification: {
           title,
           body,
         },
-        data: {
-          jobCardId: context.params.jobCardId,
-          consultationId: consultationId || "",
-          type: "service",
-          status: after.status,
-        },
+        data: stringifiedData,
         token: fcmToken,
         android: {
           priority: "high" as const,
           notification: {
             channelId: "service_requests",
-            sound: "default",
+            sound: "hooter.wav",
             priority: "high" as const,
           },
         },
@@ -498,15 +529,140 @@ export const onJobCardUpdated = functions.firestore
         },
       };
 
-      await admin.messaging().send(message);
-      console.log(`Sent job card status update notification to customer ${customerId}: ${after.status}`);
+      console.log(`📤 Sending notification:`, {
+        customerId,
+        status: after.status,
+        title,
+        body,
+        hasPIN: !!after.taskPIN,
+        token: fcmToken.substring(0, 30) + '...',
+      });
+
+      const response = await admin.messaging().send(message);
+      console.log(`✅ Successfully sent job card status update notification to customer ${customerId}: ${after.status}`);
+      console.log(`📱 FCM Message ID: ${response}`);
 
       return null;
-    } catch (error) {
-      console.error("Error sending job card status update notification:", error);
+    } catch (error: any) {
+      console.error("❌ Error sending job card status update notification:", {
+        error: error.message || error,
+        code: error.code,
+        customerId,
+        status: after.status,
+        stack: error.stack,
+      });
+      
+      // If it's an invalid token error, log it and optionally remove invalid token
+      if (error.code === 'messaging/invalid-registration-token' || 
+          error.code === 'messaging/registration-token-not-registered') {
+        console.log(`⚠️ Invalid or unregistered FCM token for customer ${customerId}. Token may need to be refreshed.`);
+        // Optionally: Remove invalid token from Firestore
+        try {
+          await admin.firestore()
+            .collection("users")
+            .doc(customerId)
+            .update({
+              fcmToken: admin.firestore.FieldValue.delete(),
+            });
+          console.log(`🗑️ Removed invalid FCM token from user ${customerId}`);
+        } catch (deleteError) {
+          console.error(`Failed to remove invalid token:`, deleteError);
+        }
+      }
+      
       return null;
     }
   });
+
+/**
+ * Send test notification to current user (Callable Function)
+ * Useful for testing FCM setup
+ * 
+ * Call this function from your React Native app:
+ * const sendTest = functions().httpsCallable('sendTestNotification');
+ * await sendTest({ message: 'Test notification message' });
+ */
+export const sendTestNotification = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  const userId = context.auth.uid;
+  const testMessage = data?.message || "This is a test notification from HomeServices";
+
+  try {
+    // Get user's FCM token
+    const userDoc = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .get();
+
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "User document not found"
+      );
+    }
+
+    const fcmToken = userDoc.data()?.fcmToken;
+
+    if (!fcmToken) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "No FCM token found. Please ensure notifications are enabled in the app."
+      );
+    }
+
+    // Send test notification
+    const message = {
+      notification: {
+        title: "Test Notification",
+        body: testMessage,
+      },
+      data: {
+        type: "test",
+        timestamp: new Date().toISOString(),
+      },
+      token: fcmToken,
+      android: {
+        priority: "high" as const,
+        notification: {
+          channelId: "service_requests",
+          sound: "hooter.wav",
+          priority: "high" as const,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log(`✅ Test notification sent to user ${userId}, message ID: ${response}`);
+
+    return {
+      success: true,
+      messageId: response,
+      message: "Test notification sent successfully",
+    };
+  } catch (error: any) {
+    console.error("Error sending test notification:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to send test notification",
+      error
+    );
+  }
+});
 
 /**
  * Send push notification via FCM (Callable Function)
