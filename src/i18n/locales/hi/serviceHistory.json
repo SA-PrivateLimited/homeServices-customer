@@ -1,10 +1,23 @@
 {
   "title": "मेरी सेवाएं",
   "filterByService": "सेवा के अनुसार फ़िल्टर करें",
+  "filterByServiceType": "सेवा प्रकार के अनुसार फ़िल्टर करें",
   "filterByDate": "तारीख के अनुसार फ़िल्टर करें",
   "allTime": "सभी समय",
   "today": "आज",
   "thisWeek": "इस सप्ताह",
   "thisMonth": "इस महीने",
-  "clear": "साफ़ करें"
+  "clear": "साफ़ करें",
+  "allServices": "सभी सेवाएं",
+  "failedToLoad": "सेवा अनुरोध लोड करने में विफल। कृपया पुनः प्रयास करें।",
+  "phoneNotAvailable": "फ़ोन उपलब्ध नहीं",
+  "phoneNotAvailableMessage": "प्रदाता फ़ोन नंबर उपलब्ध नहीं है।",
+  "unableToCall": "इस डिवाइस पर फ़ोन कॉल करने में असमर्थ।",
+  "failedToOpenDialer": "फ़ोन डायलर खोलने में विफल।",
+  "alreadyReviewed": "पहले से समीक्षा की गई",
+  "alreadyReviewedMessage": "आपने पहले से ही इस सेवा की समीक्षा की है।",
+  "dateNotAvailable": "तारीख उपलब्ध नहीं",
+  "waitingForProvider": "प्रदाता की प्रतीक्षा कर रहे हैं...",
+  "loading": "सेवा इतिहास लोड हो रहा है...",
+  "yourReview": "आपकी समीक्षा"
 }

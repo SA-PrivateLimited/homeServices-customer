@@ -12,7 +12,6 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   Image,
   Linking,
@@ -24,6 +23,8 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import EmptyState from '../components/EmptyState';
 import {getDistanceToCustomer} from '../services/providerLocationService';
+import useTranslation from '../hooks/useTranslation';
+import AlertModal from '../components/AlertModal';
 
 interface ProviderWithStatus {
   id: string;
@@ -53,13 +54,26 @@ interface ProviderWithStatus {
 export default function ProvidersListScreen({navigation}: any) {
   const {isDarkMode, currentUser, currentPincode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
 
   const [providers, setProviders] = useState<ProviderWithStatus[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ProviderWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedServiceType, setSelectedServiceType] = useState('All');
+  const [selectedServiceType, setSelectedServiceType] = useState(t('common.all'));
 
   useEffect(() => {
     loadOnlineProviders();
@@ -224,7 +238,7 @@ export default function ProvidersListScreen({navigation}: any) {
   const filterProviders = () => {
     let list = providers;
 
-    if (selectedServiceType !== 'All') {
+    if (selectedServiceType !== t('common.all')) {
       list = list.filter(
         p =>
           p.specialization === selectedServiceType ||
@@ -253,7 +267,12 @@ export default function ProvidersListScreen({navigation}: any) {
   const handleCallProvider = (provider: ProviderWithStatus) => {
     const phone = provider.phoneNumber || provider.phone;
     if (!phone) {
-      Alert.alert('No Phone Number');
+      setAlertModal({
+        visible: true,
+        title: t('providers.noPhoneNumber'),
+        message: t('providers.noPhoneNumberMessage'),
+        type: 'warning',
+      });
       return;
     }
     Linking.openURL(`tel:${phone}`);
@@ -286,14 +305,14 @@ export default function ProvidersListScreen({navigation}: any) {
           </Text>
           {item.isOnline && (
             <View style={styles.onlineBadge}>
-              <Text style={styles.onlineBadgeText}>Online</Text>
+              <Text style={styles.onlineBadgeText}>{t('providers.online')}</Text>
             </View>
           )}
         </View>
 
         {/* Specialization */}
         <Text style={[styles.specialization, {color: theme.textSecondary}]} numberOfLines={1}>
-          {item.specialization || item.specialty || 'Service Provider'}
+          {item.specialization || item.specialty || t('providers.serviceProvider')}
         </Text>
 
         {/* Rating and Reviews */}
@@ -305,7 +324,7 @@ export default function ProvidersListScreen({navigation}: any) {
             </Text>
             {item.totalConsultations !== undefined && item.totalConsultations > 0 && (
               <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                ({item.totalConsultations} {item.totalConsultations === 1 ? 'review' : 'reviews'})
+                ({item.totalConsultations} {item.totalConsultations === 1 ? t('providers.review') : t('providers.reviews')})
               </Text>
             )}
           </View>
@@ -314,7 +333,7 @@ export default function ProvidersListScreen({navigation}: any) {
         {/* Experience */}
         {item.experience !== undefined && item.experience > 0 && (
           <Text style={[styles.experience, {color: theme.textSecondary}]}>
-            {item.experience} {item.experience === 1 ? 'year' : 'years'} experience
+            {t('providers.experienceWithYears', {years: item.experience, count: item.experience})}
           </Text>
         )}
 
@@ -357,14 +376,14 @@ export default function ProvidersListScreen({navigation}: any) {
     return (
       <View style={[styles.center, {backgroundColor: theme.background}]}>
         <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={{marginTop: 10}}>Loading providers…</Text>
+        <Text style={{marginTop: 10}}>{t('providers.loading')}</Text>
       </View>
     );
   }
 
   // Get unique service types from providers
   const serviceTypes = [
-    'All',
+    t('common.all'),
     ...new Set(
       providers
         .map(p => p.specialization || p.specialty)
@@ -375,7 +394,7 @@ export default function ProvidersListScreen({navigation}: any) {
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       <TextInput
-        placeholder="Search providers"
+        placeholder={t('providers.searchProviders')}
         value={searchQuery}
         onChangeText={setSearchQuery}
         style={[styles.search, {backgroundColor: theme.card, borderColor: theme.border, color: theme.text}]}
@@ -422,9 +441,9 @@ export default function ProvidersListScreen({navigation}: any) {
           icon="person-remove-outline"
           title="No Providers Found"
           message={
-            searchQuery || selectedServiceType !== 'All'
-              ? 'Try adjusting your filters'
-              : 'No providers found. Check back later!'
+            searchQuery || selectedServiceType !== t('common.all')
+              ? t('providers.tryAdjustingFilters')
+              : t('providers.noProvidersFoundMessage')
           }
         />
       ) : (
@@ -437,6 +456,14 @@ export default function ProvidersListScreen({navigation}: any) {
           }
         />
       )}
+      
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({visible: false, title: '', message: '', type: 'info'})}
+      />
     </View>
   );
 }

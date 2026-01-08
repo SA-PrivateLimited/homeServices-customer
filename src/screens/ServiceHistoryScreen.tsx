@@ -246,8 +246,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
       console.error('❌ Error loading job cards:', error);
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to load service requests. Please try again.',
+        title: t('common.error'),
+        message: error.message || t('serviceHistory.failedToLoad'),
         type: 'error',
       });
       setJobCards([]);
@@ -297,8 +297,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
     if (!phoneNumber) {
       setAlertModal({
         visible: true,
-        title: 'Phone Not Available',
-        message: 'Provider phone number is not available.',
+        title: t('serviceHistory.phoneNotAvailable'),
+        message: t('serviceHistory.phoneNotAvailableMessage'),
         type: 'warning',
       });
       return;
@@ -314,8 +314,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
         } else {
           setAlertModal({
             visible: true,
-            title: 'Error',
-            message: 'Unable to make phone call on this device.',
+            title: t('common.error'),
+            message: t('serviceHistory.unableToCall'),
             type: 'error',
           });
         }
@@ -324,8 +324,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
         console.error('Error opening phone dialer:', err);
         setAlertModal({
           visible: true,
-          title: 'Error',
-          message: 'Failed to open phone dialer.',
+          title: t('common.error'),
+          message: t('serviceHistory.failedToOpenDialer'),
           type: 'error',
         });
       });
@@ -337,8 +337,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
     if (existingReview) {
       setAlertModal({
         visible: true,
-        title: 'Already Reviewed',
-        message: 'You have already reviewed this service.',
+        title: t('serviceHistory.alreadyReviewed'),
+        message: t('serviceHistory.alreadyReviewedMessage'),
         type: 'info',
       });
       return;
@@ -393,15 +393,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
     const normalizedStatus = normalizeStatus(status);
     switch (normalizedStatus) {
       case 'completed':
-        return 'Completed';
+        return t('services.completed');
       case 'in-progress':
-        return 'In Progress';
+        return t('services.inProgress');
       case 'accepted':
-        return 'Accepted';
+        return t('services.accepted');
       case 'pending':
-        return 'Pending';
+        return t('services.pending');
       default:
-        return 'Pending';
+        return t('services.pending');
     }
   };
 
@@ -409,7 +409,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
     try {
       // Return early if date is null, undefined, or empty
       if (!date) {
-        return 'Date not available';
+        return t('serviceHistory.dateNotAvailable');
       }
       
       let dateObj: Date;
@@ -421,12 +421,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
       } else if (typeof date === 'string' || typeof date === 'number') {
         dateObj = new Date(date);
       } else {
-        return 'Date not available';
+        return t('serviceHistory.dateNotAvailable');
       }
       
       // Check if date is valid
       if (isNaN(dateObj.getTime())) {
-        return 'Date not available';
+        return t('serviceHistory.dateNotAvailable');
       }
       
       return dateObj.toLocaleDateString('en-IN', {
@@ -517,7 +517,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       <View style={[styles.container, styles.centerContent, {backgroundColor: theme.background}]}>
         <ActivityIndicator size="large" color={theme.primary} />
         <Text style={[styles.loadingText, {color: theme.textSecondary, marginTop: 16}]}>
-          Loading service history...
+          {t('serviceHistory.loading')}
         </Text>
       </View>
     );
@@ -531,16 +531,16 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const filteredCount = filteredCards.length;
 
   const getSelectedServiceTypeName = () => {
-    if (serviceTypeFilter === 'all') return 'All Services';
+    if (serviceTypeFilter === 'all') return t('serviceHistory.allServices');
     return serviceCategories.find(cat => cat.name === serviceTypeFilter)?.name || serviceTypeFilter;
   };
 
   const getDateFilterLabel = () => {
     switch (dateFilter) {
-      case 'today': return 'Today';
-      case 'week': return 'This Week';
-      case 'month': return 'This Month';
-      default: return 'All Time';
+      case 'today': return t('serviceHistory.today');
+      case 'week': return t('serviceHistory.thisWeek');
+      case 'month': return t('serviceHistory.thisMonth');
+      default: return t('serviceHistory.allTime');
     }
   };
 
@@ -568,7 +568,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
               {jobCard.serviceType}
             </Text>
             <Text style={[styles.providerName, {color: theme.textSecondary}]}>
-              {jobCard.providerName || 'Waiting for provider...'}
+              {jobCard.providerName || t('serviceHistory.waitingForProvider')}
             </Text>
 
             {/* Show provider phone for accepted and in-progress status */}
@@ -826,7 +826,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
             }}>
             <Icon name="clear" size={18} color={theme.textSecondary} />
             <Text style={[styles.clearFiltersText, {color: theme.textSecondary}]}>
-              {t('filters.clear')}
+              {t('serviceHistory.clear')}
             </Text>
           </TouchableOpacity>
         )}
@@ -881,7 +881,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.text}]}>
-                Filter by Service Type
+                {t('serviceHistory.filterByServiceType')}
               </Text>
               <TouchableOpacity onPress={() => setShowServiceTypeModal(false)}>
                 <Icon name="close" size={24} color={theme.text} />
@@ -946,7 +946,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.text}]}>
-                Filter by Date
+                {t('serviceHistory.filterByDate')}
               </Text>
               <TouchableOpacity 
                 onPress={() => setShowDateFilterModal(false)}

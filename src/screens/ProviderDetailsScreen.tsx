@@ -18,6 +18,7 @@ import {serializeDoctorForNavigation} from '../utils/helpers';
 import ReviewsList from '../components/ReviewsList';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import useTranslation from '../hooks/useTranslation';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -35,6 +36,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const {provider} = route.params || {provider: route.params?.doctor}; // Support both provider and doctor for backward compatibility
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
   const [imageError, setImageError] = React.useState(false);
   const [isOnline, setIsOnline] = useState<boolean>((provider as any).isOnline || false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
@@ -98,8 +100,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     if (!isApproved) {
       setAlertModal({
         visible: true,
-        title: 'Provider Not Available',
-        message: 'This provider is not currently available for service requests. Please select another provider.',
+        title: t('providers.providerNotAvailable'),
+        message: t('providers.providerNotAvailableMessage'),
         type: 'warning',
         onClose: () => {
           setAlertModal({...alertModal, visible: false});
@@ -113,8 +115,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     if (!isOnline || !isAvailable) {
       setAlertModal({
         visible: true,
-        title: 'Provider Not Available',
-        message: 'This provider is not currently online or available for service requests. Please select another provider.',
+        title: t('providers.providerNotAvailable'),
+        message: t('providers.providerNotAvailableOnlineMessage'),
         type: 'warning',
         onClose: () => {
           setAlertModal({...alertModal, visible: false});
@@ -198,7 +200,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 ]} />
               </View>
               <Text style={[styles.statusText, {color: theme.textSecondary}]}>
-                {isOnline && isAvailable ? 'Online - Available' : 'Offline - Not Available'}
+                {isOnline && isAvailable ? t('providers.onlineAvailable') : t('providers.offlineNotAvailable')}
               </Text>
             </View>
 
@@ -206,14 +208,14 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               <StarRating rating={provider.rating || 0} size={18} />
               <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
                 {provider.rating?.toFixed(1) || '0.0'} ({provider.totalConsultations || 0}{' '}
-                {provider.totalConsultations === 1 ? 'service' : 'services'})
+                {provider.totalConsultations === 1 ? t('providers.service') : t('providers.services')})
               </Text>
             </View>
 
             <View style={styles.contactRow}>
               <Icon name="mail-outline" size={16} color={theme.textSecondary} />
               <Text style={[styles.contactText, {color: theme.textSecondary}]}>
-                {provider.email || 'Not provided'}
+                {provider.email || t('providers.notProvided')}
               </Text>
             </View>
 
@@ -225,8 +227,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                   Linking.openURL(`tel:${phoneNumber}`).catch(() => {
                     setAlertModal({
                       visible: true,
-                      title: 'Error',
-                      message: 'Unable to make phone call',
+                      title: t('common.error'),
+                      message: t('providers.unableToCall'),
                       type: 'error',
                     });
                   });
@@ -250,7 +252,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             commonStyles.shadowSmall,
           ]}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            About Provider
+            {t('providers.aboutProvider')}
           </Text>
 
           {/* Address */}
@@ -259,7 +261,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               <Icon name="location-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Address
+                  {t('profile.address')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
                   {(provider as any).address.address || ''}
@@ -277,10 +279,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               <Icon name="time-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Experience
+                  {t('providers.experience')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {provider.experience} {provider.experience === 1 ? 'year' : 'years'}
+                  {t('providers.experienceWithYears', {years: provider.experience, count: provider.experience})}
                 </Text>
               </View>
             </View>
@@ -292,7 +294,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               <Icon name="language-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Languages
+                  {t('providers.languages')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
                   {provider.languages.join(', ')}
@@ -307,7 +309,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               <Icon name="school-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
                 <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  Qualifications
+                  {t('providers.qualifications')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
                   {Array.isArray(provider.qualifications) 
@@ -323,7 +325,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             <Icon name="build-outline" size={20} color={theme.primary} />
             <View style={styles.detailInfo}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                Service Type
+                {t('providers.serviceType')}
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
                 {provider.specialization || provider.specialty || 'Service Provider'}
@@ -340,7 +342,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             commonStyles.shadowSmall,
           ]}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            Customer Reviews
+            {t('providers.customerReviews')}
           </Text>
           <ReviewsList 
             providerId={(provider as any).id || (provider as any).uid || ''} 
@@ -354,7 +356,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         <TouchableOpacity
           style={[styles.bookButton, {backgroundColor: theme.primary}]}
           onPress={handleBookConsultation}>
-          <Text style={styles.bookButtonText}>Request Service</Text>
+          <Text style={styles.bookButtonText}>{t('providers.requestService')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -376,10 +378,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       {/* Login Confirmation Modal */}
       <ConfirmationModal
         visible={showLoginModal}
-        title="Login Required"
-        message="Please login to request a service"
-        confirmText="Login"
-        cancelText="Cancel"
+        title={t('auth.loginRequired') || 'Login Required'}
+        message={t('providers.pleaseLoginToRequest')}
+        confirmText={t('auth.login')}
+        cancelText={t('common.cancel')}
         onConfirm={() => {
           setShowLoginModal(false);
           const serializableProvider = serializeDoctorForNavigation(provider);

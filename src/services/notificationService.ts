@@ -199,17 +199,17 @@ class NotificationService {
         console.log('🔄 FCM: Token refreshed:', refreshedToken.substring(0, 20) + '...');
         // Update token in Firestore user document
         await this.updateFCMTokenInFirestore(refreshedToken);
-      });
-
-      // Handle foreground messages
-      messaging().onMessage(async remoteMessage => {
-        console.log('📱 FCM: Foreground message received:', {
-          title: remoteMessage.notification?.title,
-          body: remoteMessage.notification?.body,
-          data: remoteMessage.data,
         });
-        this.handleFCMMessage(remoteMessage);
-      });
+
+        // Handle foreground messages
+        messaging().onMessage(async remoteMessage => {
+          console.log('📱 FCM: Foreground message received:', {
+            title: remoteMessage.notification?.title,
+            body: remoteMessage.notification?.body,
+            data: remoteMessage.data,
+          });
+          this.handleFCMMessage(remoteMessage);
+        });
 
       // Mark handlers as set up
       this.handlersSetup = true;

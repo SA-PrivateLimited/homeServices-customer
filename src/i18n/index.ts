@@ -16,6 +16,7 @@ import enJobCard from './locales/en/jobCard.json';
 import enErrors from './locales/en/errors.json';
 import enMessages from './locales/en/messages.json';
 import enNotifications from './locales/en/notifications.json';
+import enProviders from './locales/en/providers.json';
 
 // Hindi translations
 import hiCommon from './locales/hi/common.json';
@@ -31,6 +32,7 @@ import hiJobCard from './locales/hi/jobCard.json';
 import hiErrors from './locales/hi/errors.json';
 import hiMessages from './locales/hi/messages.json';
 import hiNotifications from './locales/hi/notifications.json';
+import hiProviders from './locales/hi/providers.json';
 
 // Merge all translations
 const en = {
@@ -47,6 +49,7 @@ const en = {
   errors: enErrors,
   messages: enMessages,
   notifications: enNotifications,
+  providers: enProviders,
 };
 
 const hi = {
@@ -63,6 +66,7 @@ const hi = {
   errors: hiErrors,
   messages: hiMessages,
   notifications: hiNotifications,
+  providers: hiProviders,
 };
 
 const LANGUAGE_KEY = '@app_language';

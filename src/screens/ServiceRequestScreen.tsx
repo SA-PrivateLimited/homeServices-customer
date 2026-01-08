@@ -12,7 +12,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
   Modal,
   FlatList,
@@ -39,6 +38,9 @@ import {
 import type {UserLocation} from '../types/consultation';
 import WebSocketService from '../services/websocketService';
 import Toast from '../components/Toast';
+import useTranslation from '../hooks/useTranslation';
+import AlertModal from '../components/AlertModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -55,6 +57,7 @@ export default function ServiceRequestScreen({
 }: ServiceRequestScreenProps) {
   const {isDarkMode, currentUser, currentPincode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [selectedServiceType, setSelectedServiceType] = useState<string>(
@@ -95,6 +98,30 @@ export default function ServiceRequestScreen({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [tempScheduledDate, setTempScheduledDate] = useState<Date>(new Date());
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'info',
+  });
 
   useEffect(() => {
     loadServiceCategories();
@@ -147,7 +174,12 @@ export default function ServiceRequestScreen({
       // Set empty array on error to prevent infinite loading
       setServiceCategories([]);
       if (error.message !== 'Timeout loading service categories') {
-        Alert.alert('Error', 'Failed to load service categories. Please try again.');
+        setAlertModal({
+          visible: true,
+          title: t('common.error'),
+          message: t('services.loadCategoriesError'),
+          type: 'error',
+        });
       }
     } finally {
       setLoadingCategories(false);
@@ -294,7 +326,12 @@ export default function ServiceRequestScreen({
       console.error('Error loading current address:', error);
       // Don't show alert for timeout, just log it
       if (error.message !== 'Timeout getting location') {
-        Alert.alert('Error', 'Failed to get current location');
+        setAlertModal({
+          visible: true,
+          title: t('common.error'),
+          message: t('services.locationError'),
+          type: 'error',
+        });
       }
     }
   };
@@ -326,10 +363,12 @@ export default function ServiceRequestScreen({
     try {
       const hasPermission = await GeolocationService.requestLocationPermission();
       if (hasPermission !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Location permission is required to detect your address automatically.',
-        );
+        setAlertModal({
+          visible: true,
+          title: t('common.warning') || 'Permission Required',
+          message: t('services.locationPermissionRequired') || 'Location permission is required to detect your address automatically.',
+          type: 'warning',
+        });
         setIsDetectingLocation(false);
         return;
       }
@@ -344,7 +383,12 @@ export default function ServiceRequestScreen({
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to detect location');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error.message || t('services.locationError'),
+        type: 'error',
+      });
     } finally {
       setIsDetectingLocation(false);
     }
@@ -360,17 +404,32 @@ export default function ServiceRequestScreen({
   // Save edited address
   const handleSaveEditedAddress = async () => {
     if (!editPincode.trim() || editPincode.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit pincode');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('services.invalidPincode'),
+        type: 'error',
+      });
       return;
     }
 
     if (!editAddress.trim()) {
-      Alert.alert('Error', 'Please enter your address');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('services.addressRequired'),
+        type: 'error',
+      });
       return;
     }
 
     if (editLabel === 'other' && !editCustomLabel.trim()) {
-      Alert.alert('Error', 'Please enter a custom label');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('services.customLabelRequired'),
+        type: 'error',
+      });
       return;
     }
 
@@ -414,19 +473,34 @@ export default function ServiceRequestScreen({
         if (selectedAddress?.id === existingAddress) {
           setSelectedAddress(cleanAddressObject({...addressToSave, id: existingAddress}) as SavedAddress);
         }
-        Alert.alert('Success', 'Address updated successfully');
+        setAlertModal({
+          visible: true,
+          title: t('common.success'),
+          message: t('services.addressUpdated'),
+          type: 'success',
+        });
       } else {
         // Create new address
         await saveAddress(addressToSave);
         await loadSavedAddresses();
         setSelectedAddress(cleanAddressObject(addressToSave) as SavedAddress);
-        Alert.alert('Success', 'Address saved successfully');
+        setAlertModal({
+          visible: true,
+          title: t('common.success'),
+          message: t('services.addressSaved'),
+          type: 'success',
+        });
       }
 
       setShowEditAddressModal(false);
       setEditingAddress(null);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save address');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error.message || t('services.addressSaveError'),
+        type: 'error',
+      });
     }
   };
 
@@ -441,7 +515,12 @@ export default function ServiceRequestScreen({
 
   const handleSaveCurrentAsAddress = async () => {
     if (!selectedAddress) {
-      Alert.alert('Error', 'No address selected');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('services.noAddressSelected'),
+        type: 'error',
+      });
       return;
     }
 
@@ -469,41 +548,63 @@ export default function ServiceRequestScreen({
       setShowAddAddressModal(false);
       setNewAddressLabel('home');
       setNewAddressCustomLabel('');
-      Alert.alert('Success', 'Address saved successfully');
+      setAlertModal({
+        visible: true,
+        title: t('common.success'),
+        message: t('services.addressSaved'),
+        type: 'success',
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save address');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error.message || t('services.addressSaveError'),
+        type: 'error',
+      });
     }
   };
 
   const handleDeleteAddress = async (addressId: string) => {
-    Alert.alert(
-      'Delete Address',
-      'Are you sure you want to delete this address?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteAddress(addressId);
-              await loadSavedAddresses();
-              if (selectedAddress?.id === addressId) {
-                setSelectedAddress(null);
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete address');
-            }
-          },
-        },
-      ],
-    );
+    setConfirmationModal({
+      visible: true,
+      title: t('services.deleteAddress'),
+      message: t('services.deleteAddressConfirm'),
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteAddress(addressId);
+          await loadSavedAddresses();
+          if (selectedAddress?.id === addressId) {
+            setSelectedAddress(null);
+          }
+          setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+        } catch (error: any) {
+          setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+          setAlertModal({
+            visible: true,
+            title: t('common.error'),
+            message: error.message || t('services.addressDeleteError'),
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const getAddressLabelText = (address: SavedAddress): string => {
-    if (address.label === 'home') return 'Home';
-    if (address.label === 'office') return 'Office';
-    return address.customLabel || 'Other';
+    if (address.label === 'home') {
+      const translated = t('services.home');
+      return typeof translated === 'string' ? translated : 'Home';
+    }
+    if (address.label === 'office' || address.label === 'work') {
+      const translated = t('services.work');
+      return typeof translated === 'string' ? translated : 'Work';
+    }
+    if (address.customLabel) {
+      return address.customLabel;
+    }
+    const translated = t('services.other');
+    return typeof translated === 'string' ? translated : 'Other';
   };
 
   const getAddressLabelIcon = (label: string): string => {
@@ -529,7 +630,12 @@ export default function ServiceRequestScreen({
         .map(asset => asset.uri!);
       setPhotos([...photos, ...newPhotos]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to select photo');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('services.selectPhotoError'),
+        type: 'error',
+      });
     }
   };
 
@@ -539,7 +645,12 @@ export default function ServiceRequestScreen({
 
   const handleSubmit = async () => {
     if (!currentUser) {
-      Alert.alert('Login Required', 'Please login to request a service');
+      setAlertModal({
+        visible: true,
+        title: t('auth.login'),
+        message: t('services.loginRequired'),
+        type: 'warning',
+      });
       navigation.navigate('Login');
       return;
     }
@@ -548,7 +659,12 @@ export default function ServiceRequestScreen({
     // First check from store (fast), then verify/update in Firestore if needed
     const authUser = auth().currentUser;
     if (!authUser) {
-      Alert.alert('Login Required', 'Please login to request a service');
+      setAlertModal({
+        visible: true,
+        title: t('auth.login'),
+        message: t('services.loginRequired'),
+        type: 'warning',
+      });
       navigation.navigate('Login');
       return;
     }
@@ -574,17 +690,16 @@ export default function ServiceRequestScreen({
           // Continue with request after update
         } else {
           // No phone number - require verification
-          Alert.alert(
-            'Phone Verification Required',
-            'Please verify your phone number to request services. You can verify it in your profile settings.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {
-                text: 'Go to Profile',
-                onPress: () => navigation.navigate('Settings'),
-              },
-            ],
-          );
+          setConfirmationModal({
+            visible: true,
+            title: t('common.phoneVerificationRequired'),
+            message: t('common.phoneVerificationMessage'),
+            type: 'warning',
+            onConfirm: () => {
+              setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+              navigation.navigate('Settings');
+            },
+          });
           return;
         }
       } catch (error: any) {
@@ -622,53 +737,60 @@ export default function ServiceRequestScreen({
             console.error('Error creating user document:', createError);
             // If creation fails due to permission, user needs to re-login
             if (createError.code === 'permission-denied') {
-              Alert.alert(
-                'Authentication Error',
-                'Please log out and sign in again to refresh your session.',
-                [
-                  {text: 'Cancel', style: 'cancel'},
-                  {
-                    text: 'OK',
-                    onPress: () => navigation.navigate('Login'),
-                  },
-                ],
-              );
+              setConfirmationModal({
+                visible: true,
+                title: t('common.authenticationError'),
+                message: t('common.authenticationErrorMessage'),
+                type: 'danger',
+                onConfirm: () => {
+                  setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+                  navigation.navigate('Login');
+                },
+              });
             } else {
-              Alert.alert(
-                'Account Error',
-                'Unable to create your account. Please try again or contact support.',
-              );
+              setAlertModal({
+                visible: true,
+                title: t('common.accountError'),
+                message: t('common.accountErrorMessage'),
+                type: 'error',
+              });
             }
             return;
           }
         } else if (error.code === 'permission-denied') {
           // Permission denied - user might not be authenticated properly
-          Alert.alert(
-            'Authentication Error',
-            'Please log out and sign in again to refresh your session.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {
-                text: 'OK',
-                onPress: () => navigation.navigate('Login'),
-              },
-            ],
-          );
+          setConfirmationModal({
+            visible: true,
+            title: t('common.authenticationError'),
+            message: t('common.authenticationErrorMessage'),
+            type: 'error',
+            onConfirm: () => {
+              setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+              navigation.navigate('Login');
+            },
+          });
           return;
         } else {
           // Other error - show generic message
           console.error('Error updating phone verification:', error);
-          Alert.alert(
-            'Verification Error',
-            'Unable to verify your phone number status. Please try again or contact support.',
-          );
+          setAlertModal({
+            visible: true,
+            title: t('common.verificationError'),
+            message: t('common.verificationErrorMessage'),
+            type: 'error',
+          });
           return;
         }
       }
     }
 
     if (!selectedServiceType) {
-      Alert.alert('Service Type Required', 'Please select a service type');
+      setAlertModal({
+        visible: true,
+        title: t('common.serviceTypeRequired'),
+        message: t('common.serviceTypeRequiredMessage'),
+        type: 'warning',
+      });
       return;
     }
 
@@ -688,27 +810,44 @@ export default function ServiceRequestScreen({
         });
 
       if (missingAnswers.length > 0) {
-        Alert.alert(
-          'Required Questions',
-          `Please answer all required questions:\n\n${missingAnswers.map(q => `• ${q.question}`).join('\n')}`,
-        );
+        setAlertModal({
+          visible: true,
+          title: t('common.requiredQuestions'),
+          message: `${t('common.requiredQuestions')}:\n\n${missingAnswers.map(q => `• ${q.question}`).join('\n')}`,
+          type: 'warning',
+        });
         return;
       }
     }
 
     // If no questionnaire, problem description is required
     if ((!questionnaire || questionnaire.length === 0) && !problem.trim()) {
-      Alert.alert('Problem Description Required', 'Please describe the problem');
+      setAlertModal({
+        visible: true,
+        title: t('common.problemDescriptionRequired'),
+        message: t('common.problemDescriptionRequiredMessage'),
+        type: 'warning',
+      });
       return;
     }
 
     if (!selectedAddress || !selectedAddress.pincode) {
-      Alert.alert('Address Required', 'Please select or add your address');
+      setAlertModal({
+        visible: true,
+        title: t('common.addressRequired'),
+        message: t('common.addressRequiredMessage'),
+        type: 'warning',
+      });
       return;
     }
 
     if (urgency === 'scheduled' && !scheduledDate) {
-      Alert.alert('Scheduled Date Required', 'Please select a date for scheduled service');
+      setAlertModal({
+        visible: true,
+        title: t('common.scheduledDateRequired'),
+        message: t('common.scheduledDateRequiredMessage'),
+        type: 'warning',
+      });
       return;
     }
 
@@ -718,7 +857,12 @@ export default function ServiceRequestScreen({
       // This is required by Firestore rules which check phoneVerified and role
       const authUser = auth().currentUser;
       if (!authUser) {
-        Alert.alert('Login Required', 'Please login to request a service');
+        setAlertModal({
+          visible: true,
+          title: t('auth.login'),
+          message: t('services.loginRequired'),
+          type: 'warning',
+        });
         navigation.navigate('Login');
         setLoading(false);
         return;
@@ -764,23 +908,25 @@ export default function ServiceRequestScreen({
           }
         } catch (createError: any) {
           console.error('Error creating user document:', createError);
-          Alert.alert(
-            'Account Error',
-            createError.code === 'permission-denied' 
-              ? 'Permission denied. Please log out and sign in again.'
-              : 'Unable to create your account. Please try again or contact support.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {
-                text: 'OK',
-                onPress: () => {
-                  if (createError.code === 'permission-denied') {
-                    navigation.navigate('Login');
-                  }
-                },
+          if (createError.code === 'permission-denied') {
+            setConfirmationModal({
+              visible: true,
+              title: t('common.authenticationError'),
+              message: t('common.authenticationErrorMessage'),
+              type: 'error',
+              onConfirm: () => {
+                setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+                navigation.navigate('Login');
               },
-            ],
-          );
+            });
+          } else {
+            setAlertModal({
+              visible: true,
+              title: t('common.accountError'),
+              message: t('common.accountErrorMessage'),
+              type: 'error',
+            });
+          }
           setLoading(false);
           return;
         }
@@ -804,17 +950,16 @@ export default function ServiceRequestScreen({
           } catch (updateError: any) {
             console.error('Error updating user document:', updateError);
             if (updateError.code === 'permission-denied') {
-              Alert.alert(
-                'Permission Error',
-                'Unable to update your account. Please log out and sign in again.',
-                [
-                  {text: 'Cancel', style: 'cancel'},
-                  {
-                    text: 'OK',
-                    onPress: () => navigation.navigate('Login'),
-                  },
-                ],
-              );
+              setConfirmationModal({
+                visible: true,
+                title: t('common.permissionError'),
+                message: t('common.permissionErrorMessage'),
+                type: 'danger',
+                onConfirm: () => {
+                  setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+                  navigation.navigate('Login');
+                },
+              });
               setLoading(false);
               return;
             }
@@ -831,7 +976,12 @@ export default function ServiceRequestScreen({
       const cleanAddress = cleanAddressObject(selectedAddress);
       
       if (!cleanAddress || !cleanAddress.pincode || !cleanAddress.address) {
-        Alert.alert('Invalid Address', 'Please select a valid address with pincode and address');
+        setAlertModal({
+          visible: true,
+          title: t('common.invalidAddress'),
+          message: t('common.invalidAddressMessage'),
+          type: 'error',
+        });
         setLoading(false);
         return;
       }
@@ -978,7 +1128,12 @@ export default function ServiceRequestScreen({
         }
       }, 2000);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit service request');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error.message || t('services.submitError'),
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -991,17 +1146,17 @@ export default function ServiceRequestScreen({
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, {color: theme.text}]}>
-          Request a Service
+          {t('services.requestAService')}
         </Text>
         <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-          Describe your problem and we'll find a provider
+          {t('services.describeProblemSubtitle')}
         </Text>
       </View>
 
       {/* Service Type Selection */}
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
-          Service Type *
+          {t('services.serviceType')} *
         </Text>
         <TouchableOpacity
           style={[
@@ -1022,7 +1177,7 @@ export default function ServiceRequestScreen({
             </View>
           ) : (
             <Text style={[styles.placeholderText, {color: theme.textSecondary}]}>
-              Select service type
+              {t('services.selectServiceType')}
             </Text>
           )}
           <Icon name="chevron-right" size={24} color={theme.textSecondary} />
@@ -1054,7 +1209,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={questionnaireAnswers[question.id] || ''}
                   onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={question.placeholder || 'Enter your answer...'}
+                  placeholder={question.placeholder || t('services.enterYourAnswer')}
                   placeholderTextColor={theme.textSecondary}
                   multiline
                 />
@@ -1069,7 +1224,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={questionnaireAnswers[question.id] || ''}
                   onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={question.placeholder || 'Enter a number...'}
+                  placeholder={question.placeholder || t('services.enterANumber')}
                   placeholderTextColor={theme.textSecondary}
                   keyboardType="numeric"
                 />
@@ -1090,7 +1245,7 @@ export default function ServiceRequestScreen({
                       styles.booleanButtonText,
                       {color: questionnaireAnswers[question.id] === true ? '#fff' : theme.text},
                     ]}>
-                      Yes
+                      {t('common.yes')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1105,7 +1260,7 @@ export default function ServiceRequestScreen({
                       styles.booleanButtonText,
                       {color: questionnaireAnswers[question.id] === false ? '#fff' : theme.text},
                     ]}>
-                      No
+                      {t('common.no')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1183,10 +1338,10 @@ export default function ServiceRequestScreen({
       {questionnaire && questionnaire.length > 0 ? (
         <View style={styles.section}>
           <Text style={[styles.label, {color: theme.text}]}>
-           Problem in brief *
+           {t('services.problemInBrief')} *
           </Text>
           <Text style={[styles.sectionSubheader, {color: theme.textSecondary, marginBottom: 8}]}>
-            Add any additional information that wasn't covered in the questions above. This will be used to help the provider understand your problem better.
+            {t('services.additionalInfoDescription')}
           </Text>
           <TextInput
             style={[
@@ -1199,7 +1354,7 @@ export default function ServiceRequestScreen({
             ]}
             value={problem}
             onChangeText={setProblem}
-            placeholder="E.g., Any specific instructions or additional details..."
+            placeholder={t('services.additionalInfoPlaceholder')}
             placeholderTextColor={theme.textSecondary}
             multiline
             numberOfLines={4}
@@ -1212,7 +1367,7 @@ export default function ServiceRequestScreen({
       ) : (
         <View style={styles.section}>
           <Text style={[styles.label, {color: theme.text}]}>
-            Describe the Problem *
+            {t('services.describeProblem')} *
           </Text>
           <TextInput
             style={[
@@ -1225,7 +1380,7 @@ export default function ServiceRequestScreen({
             ]}
             value={problem}
             onChangeText={setProblem}
-            placeholder="E.g., Leaking pipe in kitchen, need immediate repair"
+            placeholder={t('services.problemPlaceholder')}
             placeholderTextColor={theme.textSecondary}
             multiline
             numberOfLines={4}
@@ -1240,7 +1395,7 @@ export default function ServiceRequestScreen({
       {/* Photos */}
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
-          Add Photos (Optional)
+          {t('services.addPhotosOptional')}
         </Text>
         {photos.length < 3 && (
           <TouchableOpacity
@@ -1251,7 +1406,7 @@ export default function ServiceRequestScreen({
             onPress={handleAddPhoto}>
             <Icon name="add-photo-alternate" size={24} color={theme.primary} />
             <Text style={[styles.addPhotoText, {color: theme.primary}]}>
-              Add Photo ({photos.length}/3)
+              {t('services.addPhoto', {count: photos.length, max: 3})}
             </Text>
           </TouchableOpacity>
         )}
@@ -1322,7 +1477,7 @@ export default function ServiceRequestScreen({
 
       {/* Urgency Selection */}
       <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>When do you need it? *</Text>
+        <Text style={[styles.label, {color: theme.text}]}>{t('services.whenDoYouNeedIt')} *</Text>
         <View style={styles.urgencyContainer}>
           <TouchableOpacity
             style={[
@@ -1346,7 +1501,7 @@ export default function ServiceRequestScreen({
                   color: urgency === 'immediate' ? '#fff' : theme.text,
                 },
               ]}>
-              Immediate
+              {t('services.immediate')}
             </Text>
           </TouchableOpacity>
 
@@ -1372,7 +1527,7 @@ export default function ServiceRequestScreen({
                   color: urgency === 'scheduled' ? '#fff' : theme.text,
                 },
               ]}>
-              Scheduled
+              {t('services.scheduled')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1430,7 +1585,7 @@ export default function ServiceRequestScreen({
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Text style={styles.submitButtonText}>Request Service</Text>
+            <Text style={styles.submitButtonText}>{t('services.requestService')}</Text>
             <Icon name="arrow-forward" size={20} color="#fff" />
           </>
         )}
@@ -1446,7 +1601,7 @@ export default function ServiceRequestScreen({
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.text}]}>
-                Select Service Type
+                {t('services.selectServiceType')}
               </Text>
               <TouchableOpacity onPress={() => setShowServiceTypeModal(false)}>
                 <Icon name="close" size={24} color={theme.text} />
@@ -1640,7 +1795,7 @@ export default function ServiceRequestScreen({
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.text}]}>
-                Save Address
+                {t('services.saveAddress')}
               </Text>
               <TouchableOpacity onPress={() => setShowAddAddressModal(false)}>
                 <Icon name="close" size={24} color={theme.text} />
@@ -1663,7 +1818,7 @@ export default function ServiceRequestScreen({
             )}
 
             <View style={styles.labelSection}>
-              <Text style={[styles.label, {color: theme.text}]}>Address Label</Text>
+              <Text style={[styles.label, {color: theme.text}]}>{t('services.addressLabel')}</Text>
               <View style={styles.labelOptions}>
                 {(['home', 'office', 'other'] as const).map(label => (
                   <TouchableOpacity
@@ -1720,7 +1875,7 @@ export default function ServiceRequestScreen({
               <TouchableOpacity
                 style={[styles.cancelButton, {borderColor: theme.border}]}
                 onPress={() => setShowAddAddressModal(false)}>
-                <Text style={[styles.cancelButtonText, {color: theme.text}]}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, {color: theme.text}]}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -1736,7 +1891,7 @@ export default function ServiceRequestScreen({
                 ]}
                 onPress={handleSaveCurrentAsAddress}
                 disabled={newAddressLabel === 'other' && !newAddressCustomLabel.trim()}>
-                <Text style={styles.saveButtonText}>Save Address</Text>
+                <Text style={styles.saveButtonText}>{t('services.saveAddress')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1753,7 +1908,7 @@ export default function ServiceRequestScreen({
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, {color: theme.text}]}>
-                Edit Address
+                {t('services.editAddress')}
               </Text>
               <TouchableOpacity onPress={() => setShowEditAddressModal(false)}>
                 <Icon name="close" size={24} color={theme.text} />
@@ -1762,7 +1917,7 @@ export default function ServiceRequestScreen({
 
             <ScrollView style={styles.editAddressScrollView} showsVerticalScrollIndicator={false}>
               <View style={styles.labelSection}>
-                <Text style={[styles.label, {color: theme.text}]}>Address Type *</Text>
+                <Text style={[styles.label, {color: theme.text}]}>{t('services.addressType')} *</Text>
                 <View style={styles.labelOptions}>
                   {(['home', 'office', 'other'] as const).map(label => (
                     <TouchableOpacity
@@ -1788,7 +1943,7 @@ export default function ServiceRequestScreen({
                             color: editLabel === label ? '#fff' : theme.text,
                           },
                         ]}>
-                        {label === 'home' ? 'Home' : label === 'office' ? 'Office' : 'Other'}
+                        {label === 'home' ? t('services.home') : label === 'office' || label === 'work' ? t('services.work') : t('services.other')}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1797,7 +1952,7 @@ export default function ServiceRequestScreen({
 
               {editLabel === 'other' && (
                 <View style={styles.section}>
-                  <Text style={[styles.label, {color: theme.text}]}>Custom Label</Text>
+                  <Text style={[styles.label, {color: theme.text}]}>{t('services.customLabel')}</Text>
                   <TextInput
                     style={[
                       styles.customLabelInput,
@@ -1809,14 +1964,14 @@ export default function ServiceRequestScreen({
                     ]}
                     value={editCustomLabel}
                     onChangeText={setEditCustomLabel}
-                    placeholder="E.g., Mom's House, Warehouse"
+                    placeholder={t('services.customLabelPlaceholder')}
                     placeholderTextColor={theme.textSecondary}
                   />
                 </View>
               )}
 
               <View style={styles.section}>
-                <Text style={[styles.label, {color: theme.text}]}>Pincode *</Text>
+                <Text style={[styles.label, {color: theme.text}]}>{t('services.pincode')} *</Text>
                 <View style={styles.pincodeContainer}>
                   <TextInput
                     style={[
@@ -1829,7 +1984,7 @@ export default function ServiceRequestScreen({
                     ]}
                     value={editPincode}
                     onChangeText={setEditPincode}
-                    placeholder="Enter 6-digit pincode"
+                    placeholder={t('services.enterPincode')}
                     placeholderTextColor={theme.textSecondary}
                     keyboardType="numeric"
                     maxLength={6}
@@ -1851,7 +2006,7 @@ export default function ServiceRequestScreen({
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color={theme.primary} />
                   <Text style={[styles.loadingText, {color: theme.textSecondary}]}>
-                    Fetching address...
+                    {t('services.fetchingAddress')}
                   </Text>
                 </View>
               )}
@@ -1869,7 +2024,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={editAddress}
                   onChangeText={setEditAddress}
-                  placeholder="Street address, area, landmark"
+                  placeholder={t('services.addressPlaceholder')}
                   placeholderTextColor={theme.textSecondary}
                   multiline
                   numberOfLines={3}
@@ -1878,7 +2033,7 @@ export default function ServiceRequestScreen({
               </View>
 
               <View style={styles.section}>
-                <Text style={[styles.label, {color: theme.text}]}>City</Text>
+                <Text style={[styles.label, {color: theme.text}]}>{t('services.city')}</Text>
                 <TextInput
                   style={[
                     styles.inputField,
@@ -1890,14 +2045,14 @@ export default function ServiceRequestScreen({
                   ]}
                   value={editCity}
                   onChangeText={setEditCity}
-                  placeholder="City"
+                  placeholder={t('services.city')}
                   placeholderTextColor={theme.textSecondary}
                   editable={!isFetchingAddress}
                 />
               </View>
 
               <View style={styles.section}>
-                <Text style={[styles.label, {color: theme.text}]}>State</Text>
+                <Text style={[styles.label, {color: theme.text}]}>{t('services.state')}</Text>
                 <TextInput
                   style={[
                     styles.inputField,
@@ -1909,7 +2064,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={editState}
                   onChangeText={setEditState}
-                  placeholder="State"
+                  placeholder={t('services.state')}
                   placeholderTextColor={theme.textSecondary}
                   editable={!isFetchingAddress}
                 />
@@ -1923,7 +2078,7 @@ export default function ServiceRequestScreen({
                   setShowEditAddressModal(false);
                   setEditingAddress(null);
                 }}>
-                <Text style={[styles.cancelButtonText, {color: theme.text}]}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, {color: theme.text}]}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -1939,7 +2094,7 @@ export default function ServiceRequestScreen({
                 ]}
                 onPress={handleSaveEditedAddress}
                 disabled={editLabel === 'other' && !editCustomLabel.trim()}>
-                <Text style={styles.saveButtonText}>Save Address</Text>
+                <Text style={styles.saveButtonText}>{t('services.saveAddress')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2065,10 +2220,12 @@ export default function ServiceRequestScreen({
                     // Validate that selected date/time is in the future
                     const now = new Date();
                     if (tempScheduledDate <= now) {
-                      Alert.alert(
-                        'Invalid Date/Time',
-                        'Please select a future date and time for scheduled service.',
-                      );
+                      setAlertModal({
+                        visible: true,
+                        title: t('common.invalidDateTime') || 'Invalid Date/Time',
+                        message: t('common.invalidDateTimeMessage') || 'Please select a future date and time for scheduled service.',
+                        type: 'warning',
+                      });
                       return;
                     }
                     setScheduledDate(tempScheduledDate);
@@ -2089,6 +2246,27 @@ export default function ServiceRequestScreen({
         type="success"
         duration={3000}
         onHide={() => setShowToast(false)}
+      />
+      
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({visible: false, title: '', message: '', type: 'info'})}
+      />
+      
+      <ConfirmationModal
+        visible={confirmationModal.visible}
+        title={confirmationModal.title}
+        message={confirmationModal.message}
+        type={confirmationModal.type || 'info'}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          confirmationModal.onConfirm();
+        }}
+        onCancel={() => setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}})}
       />
     </ScrollView>
   );

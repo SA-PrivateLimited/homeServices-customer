@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
-  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
@@ -20,6 +19,8 @@ import ragService from '../services/ragService';
 import consultationService from '../services/consultationService';
 import {OPEN_AI_API_KEY} from '@env';
 import FormattedText from '../components/FormattedText';
+import useTranslation from '../hooks/useTranslation';
+import AlertModal from '../components/AlertModal';
 
 interface ChatMessage {
   id: string;
@@ -33,6 +34,19 @@ interface ChatMessage {
 const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
   const {isDarkMode, currentUser, consultations} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -125,19 +139,21 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
         if (supported) {
           return Linking.openURL(mailtoLink);
         } else {
-          Alert.alert(
-            'Email Not Available',
-            `Please send an email to ${supportEmail} with your query.`,
-            [{text: 'OK'}]
-          );
+          setAlertModal({
+            visible: true,
+            title: t('helpSupport.emailNotAvailable'),
+            message: t('helpSupport.emailNotAvailableMessage', {email: supportEmail}),
+            type: 'info',
+          });
         }
       })
       .catch(err => {
-        Alert.alert(
-          'Email Not Available',
-          `Please send an email to ${supportEmail} with your query.`,
-          [{text: 'OK'}]
-        );
+        setAlertModal({
+          visible: true,
+          title: t('helpSupport.emailNotAvailable'),
+          message: t('helpSupport.emailNotAvailableMessage', {email: supportEmail}),
+          type: 'error',
+        });
       });
   };
 
@@ -216,7 +232,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
       return (
         <View style={[styles.messageContainer, styles.assistantMessage]}>
           <ActivityIndicator size="small" color={theme.primary} />
-          <Text style={[styles.loadingText, {color: theme.textSecondary}]}>Thinking...</Text>
+          <Text style={[styles.loadingText, {color: theme.textSecondary}]}>{t('helpSupport.thinking')}</Text>
         </View>
       );
     }
@@ -260,7 +276,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
             onPress={handleContactSupport}
             activeOpacity={0.8}>
             <Icon name="mail-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.escalationButtonText}>Contact Support</Text>
+            <Text style={styles.escalationButtonText}>{t('helpSupport.contactSupport')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -280,18 +296,18 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           <Icon name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={[styles.headerTitle, {color: theme.text}]}>Help & Support</Text>
+          <Text style={[styles.headerTitle, {color: theme.text}]}>{t('helpSupport.title')}</Text>
           {isIndexing ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              Indexing consultations...
+              {t('helpSupport.indexingConsultations')}
             </Text>
           ) : indexStats.count > 0 ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              {indexStats.count} consultation{indexStats.count !== 1 ? 's' : ''} indexed
+              {t('helpSupport.consultationsIndexed', {count: indexStats.count})}
             </Text>
           ) : (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              AI Assistant
+              {t('helpSupport.aiAssistant')}
             </Text>
           )}
         </View>
@@ -321,7 +337,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           <View style={styles.emptyContainer}>
             <Icon name="chatbubbles-outline" size={64} color={theme.textSecondary} />
             <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
-              Start a conversation
+              {t('helpSupport.startConversation')}
             </Text>
           </View>
         }
@@ -333,7 +349,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           <View style={[styles.warningBanner, {backgroundColor: '#FFF3CD', borderLeftColor: '#FFC107'}]}>
             <Icon name="warning" size={20} color="#856404" />
             <Text style={[styles.warningText, {color: '#856404'}]}>
-              OpenAI API key not configured
+              {t('helpSupport.apiKeyNotConfigured')}
             </Text>
           </View>
         )}
@@ -347,7 +363,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
                 borderColor: theme.border,
               },
             ]}
-            placeholder="Ask about your consultations..."
+            placeholder={t('helpSupport.askAboutConsultations')}
             placeholderTextColor={theme.textSecondary}
             value={inputText}
             onChangeText={setInputText}
@@ -374,6 +390,14 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           </TouchableOpacity>
         </View>
       </View>
+      
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({visible: false, title: '', message: '', type: 'info'})}
+      />
     </KeyboardAvoidingView>
   );
 };

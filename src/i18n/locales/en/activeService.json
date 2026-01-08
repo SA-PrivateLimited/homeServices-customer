@@ -41,5 +41,8 @@
   "failedToVerifyCompletion": "Failed to verify task completion",
   "thankYouReviewSubmitted": "Your review has been submitted successfully.",
   "locationPermissionRequired": "Location Permission Required",
-  "locationPermissionMessage": "Location permission is required to show your live location on the map. Please enable it in device settings."
+  "locationPermissionMessage": "Location permission is required to show your live location on the map. Please enable it in device settings.",
+  "yourCurrentLocation": "Your Current Location",
+  "providerLocation": "Provider Location",
+  "liveLocation": "Live location"
 }

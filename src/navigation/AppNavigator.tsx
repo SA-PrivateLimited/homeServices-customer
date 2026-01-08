@@ -11,23 +11,12 @@ import NotificationService from '../services/notificationService';
 // Screens
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
-import RoleSelectionScreen from '../screens/RoleSelectionScreen';
-import AdminLoginScreen from '../screens/AdminLoginScreen';
 import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
 
 // Tab Navigators
-import MainTabs from './MainTabs'; // Customer tabs (existing)
-import DoctorTabNavigator from './DoctorTabNavigator'; // Provider tabs (new)
-import AdminTabNavigator from './AdminTabNavigator'; // Admin tabs (new)
+import MainTabs from './MainTabs'; // Customer tabs
 
 // Shared screens
-import AdminConsultationDetailScreen from '../screens/AdminConsultationDetailScreen';
-import AdminAddDoctorScreen from '../screens/AdminAddDoctorScreen';
-import AdminEditDoctorScreen from '../screens/AdminEditDoctorScreen';
-import AdminUsersManagementScreen from '../screens/AdminUsersManagementScreen';
-import AdminDoctorApprovalsScreen from '../screens/AdminDoctorApprovalsScreen';
-import DoctorProfileSetupScreen from '../screens/DoctorProfileSetupScreen';
-import PaymentScreen from '../components/PaymentScreen';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
@@ -53,7 +42,7 @@ export default function AppNavigator() {
             console.log('🔄 FCM: Initializing FCM for customer:', authUser.uid);
             const token = await NotificationService.initializeAndSaveToken(true);
             if (token) {
-              console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
+            console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
               console.log('📱 FCM Token:', token.substring(0, 30) + '...');
             } else {
               console.warn('⚠️ FCM: No token received after initialization');
@@ -142,8 +131,6 @@ export default function AppNavigator() {
         {/* Authentication */}
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen name="AdminLogin" component={AdminLoginScreen} options={{headerShown: true, title: 'Admin Login'}} />
-        <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
         <Stack.Screen 
           name="PhoneVerification" 
           component={PhoneVerificationScreen}
@@ -155,12 +142,6 @@ export default function AppNavigator() {
 
         {/* Customer Navigation */}
         <Stack.Screen name="Main" component={MainTabs} />
-
-        {/* Provider Navigation */}
-        <Stack.Screen name="DoctorMain" component={DoctorTabNavigator} />
-
-        {/* Admin Navigation */}
-        <Stack.Screen name="AdminMain" component={AdminTabNavigator} />
 
         {/* Shared Screens */}
         <Stack.Screen
@@ -189,66 +170,6 @@ export default function AppNavigator() {
           options={{
             headerShown: true,
             title: 'Active Service',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="AdminConsultationDetail"
-          component={AdminConsultationDetailScreen}
-          options={{
-            headerShown: true,
-            title: 'Consultation Details',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="AddDoctor"
-          component={AdminAddDoctorScreen}
-          options={{
-            headerShown: true,
-            title: 'Add Doctor',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="EditDoctor"
-          component={AdminEditDoctorScreen}
-          options={{
-            headerShown: true,
-            title: 'Edit Doctor',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="AdminUsersManagement"
-          component={AdminUsersManagementScreen}
-          options={{
-            headerShown: true,
-            title: 'User Management',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="DoctorProfileSetup"
-          component={DoctorProfileSetupScreen}
-          options={{
-            headerShown: true,
-            title: 'Doctor Profile Setup',
-            headerStyle: {backgroundColor: theme.card},
-            headerTintColor: theme.text,
-          }}
-        />
-        <Stack.Screen
-          name="Payment"
-          component={PaymentScreen}
-          options={{
-            headerShown: true,
-            title: 'Payment',
             headerStyle: {backgroundColor: theme.card},
             headerTintColor: theme.text,
           }}

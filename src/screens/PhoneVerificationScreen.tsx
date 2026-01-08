@@ -25,6 +25,7 @@ import CountryCodePicker from '../components/CountryCodePicker';
 import {DEFAULT_COUNTRY_CODE, CountryCode} from '../utils/countryCodes';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
+import useTranslation from '../hooks/useTranslation';
 
 interface PhoneVerificationScreenProps {
   navigation: any;
@@ -53,6 +54,7 @@ export default function PhoneVerificationScreen({
 
   const {isDarkMode, currentUser, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
@@ -239,27 +241,25 @@ export default function PhoneVerificationScreen({
 
         setCurrentUser(updatedUser);
 
-        Alert.alert(
-          'Success',
-          'Phone number verified successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (mode === 'initial') {
-                  // Navigate to main app for initial verification
-                  navigation.reset({
-                    index: 0,
-                    routes: [{name: 'Main'}],
-                  });
-                } else {
-                  // Go back for change mode
-                  navigation.goBack();
-                }
-              },
-            },
-          ],
-        );
+        setAlertModal({
+          visible: true,
+          title: t('common.success'),
+          message: t('phoneVerification.phoneVerifiedSuccess') || 'Phone number verified successfully!',
+          type: 'success',
+        });
+        
+        // Navigate after a short delay
+        setTimeout(() => {
+          setAlertModal({visible: false, title: '', message: '', type: 'info'});
+          if (mode === 'initial') {
+            navigation.reset({
+              index: 0,
+              routes: [{name: 'Main'}],
+            });
+          } else {
+            navigation.goBack();
+          }
+        }, 2000);
       }
     } catch (error: any) {
       setAlertModal({

@@ -17,6 +17,7 @@ import authService from '../services/authService';
 import CountryCodePicker from '../components/CountryCodePicker';
 import {DEFAULT_COUNTRY_CODE, CountryCode} from '../utils/countryCodes';
 import AlertModal from '../components/AlertModal';
+import useTranslation from '../hooks/useTranslation';
 
 interface LoginScreenProps {
   navigation: any;
@@ -38,6 +39,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
   const {isDarkMode, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
@@ -55,8 +57,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     if (!phoneNumber.trim()) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Please enter your phone number',
+        title: t('common.error'),
+        message: t('auth.pleaseEnterPhone'),
         type: 'error',
       });
       return;
@@ -67,8 +69,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     if (numericPhone.length < 10) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Please enter a valid 10-digit phone number',
+        title: t('common.error'),
+        message: t('auth.pleaseEnterValidPhone'),
         type: 'error',
       });
       return;
@@ -84,16 +86,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setConfirmResult(result);
       setAlertModal({
         visible: true,
-        title: 'Success',
-        message: 'Verification code sent to your phone',
+        title: t('common.success'),
+        message: t('auth.codeSentToPhone'),
         type: 'success',
       });
     } catch (error: any) {
       console.error('Error sending verification code:', error);
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to send verification code. Please try again.',
+        title: t('common.error'),
+        message: error.message || t('auth.failedToSendCode'),
         type: 'error',
       });
     } finally {
@@ -161,7 +163,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       const errorMessage = error.message || 'Failed to verify code. Please try again.';
       setAlertModal({
         visible: true,
-        title: 'Error',
+        title: t('common.error'),
         message: errorMessage,
         type: 'error',
       });
@@ -206,15 +208,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setEmailOTPExpiresAt(result.expiresAt);
       setAlertModal({
         visible: true,
-        title: 'Success',
-        message: 'Verification code sent to your email',
+        title: t('common.success'),
+        message: t('auth.codeSentToEmail'),
         type: 'success',
       });
     } catch (error: any) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to send email verification code',
+        title: t('common.error'),
+        message: error.message || t('auth.failedToSendEmailCode'),
         type: 'error',
       });
     } finally {
@@ -274,8 +276,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     } catch (error: any) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to verify code',
+        title: t('common.error'),
+        message: error.message || t('auth.failedToVerifyCode'),
         type: 'error',
       });
     } finally {
@@ -326,8 +328,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       }
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to sign in with Google',
+        title: t('common.error'),
+        message: error.message || t('auth.failedToSignInWithGoogle'),
         type: 'error',
       });
     } finally {
@@ -347,7 +349,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           <Icon name="home" size={60} color={theme.primary} />
           <Text style={[styles.title, {color: theme.text}]}>HomeServices</Text>
           <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-            Login to book home services
+            {t('auth.loginToBookServices')}
           </Text>
         </View>
 
@@ -374,7 +376,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                 styles.methodToggleText,
                 {color: loginMethod === 'phone' ? '#fff' : theme.textSecondary},
               ]}>
-              Phone
+              {t('auth.phone')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -398,7 +400,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                 styles.methodToggleText,
                 {color: loginMethod === 'email' ? '#fff' : theme.textSecondary},
               ]}>
-              Email
+              {t('auth.email')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -424,7 +426,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                     ]}>
                     <TextInput
                       style={[styles.phoneInput, {color: theme.text}]}
-                      placeholder="9876543210"
+                      placeholder={t('auth.phonePlaceholder')}
                       placeholderTextColor={theme.textSecondary}
                       value={phoneNumber}
                       onChangeText={(text) => {
@@ -449,7 +451,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Send Code</Text>
+                    <Text style={styles.buttonText}>{t('auth.sendCode')}</Text>
                   )}
                 </TouchableOpacity>
               </>
@@ -470,7 +472,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   />
                   <TextInput
                     style={[styles.input, {color: theme.text}]}
-                    placeholder="Verification Code"
+                    placeholder={t('auth.verificationCode')}
                     placeholderTextColor={theme.textSecondary}
                     value={verificationCode}
                     onChangeText={setVerificationCode}
@@ -490,7 +492,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Verify Code</Text>
+                    <Text style={styles.buttonText}>{t('auth.verifyCode')}</Text>
                   )}
                 </TouchableOpacity>
 
@@ -499,7 +501,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   onPress={handleSendPhoneCode}
                   disabled={loading}>
                   <Text style={[styles.resendText, {color: theme.primary}]}>
-                    Resend Code
+                    {t('auth.resendCode')}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -527,7 +529,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   />
                   <TextInput
                     style={[styles.input, {color: theme.text}]}
-                    placeholder="your@email.com"
+                    placeholder={t('auth.emailPlaceholder')}
                     placeholderTextColor={theme.textSecondary}
                     value={email}
                     onChangeText={setEmail}
@@ -548,7 +550,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Send Code</Text>
+                    <Text style={styles.buttonText}>{t('auth.sendCode')}</Text>
                   )}
                 </TouchableOpacity>
               </>
@@ -569,7 +571,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   />
                   <TextInput
                     style={[styles.input, {color: theme.text}]}
-                    placeholder="Verification Code"
+                    placeholder={t('auth.verificationCode')}
                     placeholderTextColor={theme.textSecondary}
                     value={emailOTPCode}
                     onChangeText={setEmailOTPCode}
@@ -589,7 +591,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Verify Code</Text>
+                    <Text style={styles.buttonText}>{t('auth.verifyCode')}</Text>
                   )}
                 </TouchableOpacity>
 
@@ -598,7 +600,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   onPress={handleSendEmailOTP}
                   disabled={loading}>
                   <Text style={[styles.resendText, {color: theme.primary}]}>
-                    Resend Code
+                    {t('auth.resendCode')}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -610,7 +612,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           <View style={styles.dividerContainer}>
             <View style={[styles.divider, {backgroundColor: theme.border}]} />
             <Text style={[styles.dividerText, {color: theme.textSecondary}]}>
-              OR
+              {t('auth.or')}
             </Text>
             <View style={[styles.divider, {backgroundColor: theme.border}]} />
           </View>
@@ -626,7 +628,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
             disabled={loading}>
             <Icon name="logo-google" size={20} color="#DB4437" />
             <Text style={[styles.googleButtonText, {color: theme.text}]}>
-              Continue with Google
+              {t('auth.continueWithGoogle')}
           </Text>
         </TouchableOpacity>
       </ScrollView>

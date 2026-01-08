@@ -1,8 +1,13 @@
 {
   "title": "सूचनाएं",
   "noNotifications": "कोई सूचना नहीं",
+  "markAllAsRead": "सभी को पढ़ा हुआ चिह्नित करें",
   "markAllRead": "सभी को पढ़ा हुआ चिह्नित करें",
   "clearAll": "सभी साफ़ करें",
   "newNotification": "नई सूचना",
-  "notificationRead": "सूचना को पढ़ा हुआ चिह्नित किया गया"
+  "notificationRead": "सूचना को पढ़ा हुआ चिह्नित किया गया",
+  "justNow": "अभी",
+  "minutesAgo": "{{minutes}} मिनट पहले",
+  "hoursAgo": "{{hours}} घंटे पहले",
+  "daysAgo": "{{days}} दिन पहले"
 }

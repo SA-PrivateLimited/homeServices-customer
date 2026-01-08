@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 import type {AppNotification} from '../store';
 
 interface NotificationsScreenProps {
@@ -30,6 +31,7 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     clearAllNotifications,
   } = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   
   // Filter notifications for current user
@@ -156,10 +158,10 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
+    if (minutes < 1) return t('notifications.justNow');
+    if (minutes < 60) return t('notifications.minutesAgo', {minutes});
+    if (hours < 24) return t('notifications.hoursAgo', {hours});
+    if (days < 7) return t('notifications.daysAgo', {days});
     return date.toLocaleDateString();
   };
 
@@ -184,14 +186,14 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
               {opacity: unreadCount === 0 ? 0.5 : 1},
             ]}>
             <Text style={[styles.headerButtonText, {color: theme.primary}]}>
-              Mark all as read
+              {t('notifications.markAllAsRead')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => clearAllNotifications(currentUser?.id)}
             style={styles.headerButton}>
             <Text style={[styles.headerButtonText, {color: theme.error}]}>
-              Clear all
+              {t('notifications.clearAll')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -201,7 +203,7 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         <View style={styles.emptyContainer}>
           <Icon name="notifications-off-outline" size={64} color={theme.textSecondary} />
           <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
-            No notifications
+            {t('notifications.noNotifications')}
           </Text>
         </View>
       ) : (

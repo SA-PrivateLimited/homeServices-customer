@@ -41,5 +41,8 @@
   "failedToVerifyCompletion": "कार्य पूर्णता सत्यापित करने में विफल",
   "thankYouReviewSubmitted": "आपकी समीक्षा सफलतापूर्वक सबमिट की गई है।",
   "locationPermissionRequired": "स्थान अनुमति आवश्यक",
-  "locationPermissionMessage": "मानचित्र पर आपका लाइव स्थान दिखाने के लिए स्थान अनुमति आवश्यक है। कृपया इसे डिवाइस सेटिंग्स में सक्षम करें।"
+  "locationPermissionMessage": "मानचित्र पर आपका लाइव स्थान दिखाने के लिए स्थान अनुमति आवश्यक है। कृपया इसे डिवाइस सेटिंग्स में सक्षम करें।",
+  "yourCurrentLocation": "आपका वर्तमान स्थान",
+  "providerLocation": "प्रदाता स्थान",
+  "liveLocation": "लाइव स्थान"
 }

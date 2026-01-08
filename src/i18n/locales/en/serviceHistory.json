@@ -1,10 +1,23 @@
 {
   "title": "My Services",
   "filterByService": "Filter by Service",
+  "filterByServiceType": "Filter by Service Type",
   "filterByDate": "Filter by Date",
   "allTime": "All Time",
   "today": "Today",
   "thisWeek": "This Week",
   "thisMonth": "This Month",
-  "clear": "Clear"
+  "clear": "Clear",
+  "allServices": "All Services",
+  "failedToLoad": "Failed to load service requests. Please try again.",
+  "phoneNotAvailable": "Phone Not Available",
+  "phoneNotAvailableMessage": "Provider phone number is not available.",
+  "unableToCall": "Unable to make phone call on this device.",
+  "failedToOpenDialer": "Failed to open phone dialer.",
+  "alreadyReviewed": "Already Reviewed",
+  "alreadyReviewedMessage": "You have already reviewed this service.",
+  "dateNotAvailable": "Date not available",
+  "waitingForProvider": "Waiting for provider...",
+  "loading": "Loading service history...",
+  "yourReview": "Your Review"
 }

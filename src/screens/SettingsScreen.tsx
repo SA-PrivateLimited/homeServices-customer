@@ -54,8 +54,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     Linking.openURL(`mailto:${email}`).catch(() => {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Unable to open email client.',
+        title: t('common.error'),
+        message: t('settings.unableToOpenEmail'),
         type: 'error',
       });
     });
@@ -66,8 +66,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     Linking.openURL(`tel:${phoneNumber}`).catch(() => {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Unable to make phone call on this device.',
+        title: t('common.error'),
+        message: t('settings.unableToMakeCall'),
         type: 'error',
       });
     });
@@ -76,8 +76,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const handleAbout = () => {
     setAlertModal({
       visible: true,
-      title: 'About HomeServices',
-      message: `Version: 1.0.0\n\nHomeServices is a home services platform that connects customers with verified service providers for plumbing, electrical work, carpentry, AC repair, and more.\n\n© 2025 ${COPYRIGHT_OWNER || 'SA-PrivateLimited'}. All rights reserved.`,
+      title: t('settings.aboutHomeServices'),
+      message: t('settings.aboutMessage', {version: '1.0.0', copyright: COPYRIGHT_OWNER || 'SA-PrivateLimited'}),
       type: 'info',
     });
   };
@@ -85,8 +85,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const handlePrivacy = () => {
     setAlertModal({
       visible: true,
-      title: 'Privacy Policy',
-      message: 'HomeServices respects your privacy. Your service request data is securely stored and encrypted. We do not share your personal information with third parties without your consent.\n\nAll service transactions and personal information are protected under our privacy policy.',
+      title: t('settings.privacyPolicy'),
+      message: t('settings.privacyPolicyMessage'),
       type: 'info',
     });
   };
@@ -94,8 +94,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const handleTerms = () => {
     setAlertModal({
       visible: true,
-      title: 'Terms of Service',
-      message: 'HomeServices provides home service connections between customers and verified service providers.\n\nBy using this app, you agree to use the services responsibly and understand that service terms are subject to agreement with your service provider.',
+      title: t('settings.termsOfService'),
+      message: t('settings.termsOfServiceMessage'),
       type: 'info',
     });
   };
@@ -119,7 +119,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     } catch (error: any) {
       setAlertModal({
         visible: true,
-        title: 'Error',
+        title: t('common.error'),
         message: error.message,
         type: 'error',
       });
@@ -224,7 +224,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           </Text>
           {currentUser.phone && (
             <Text style={[styles.profileHeaderPhone, {color: theme.textSecondary}]}>
-              Phone: {currentUser.phone}
+              {t('settings.phone')}: {currentUser.phone}
             </Text>
           )}
           {(() => {
@@ -306,30 +306,30 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          SUPPORT
+          {t('settings.support')}
         </Text>
         <SettingItem
           icon="help-circle"
-          title="Help & Support"
-          subtitle="Contact us for assistance"
+          title={t('settings.helpSupport')}
+          subtitle={t('settings.contactUsForAssistance')}
           onPress={handleHelpSupport}
         />
         {__DEV__ && (
           <SettingItem
             icon="notifications"
-            title="Test Notification"
-            subtitle="Send a test push notification"
+            title={t('settings.testNotification')}
+            subtitle={t('settings.sendTestNotification')}
             onPress={async () => {
               try {
                 const sendTest = require('../utils/sendTestNotification').default;
-                await sendTest('Test notification from HomeServices app');
-                setSuccessMessage('Test notification sent! Check your notifications.');
+                await sendTest(t('settings.testNotificationMessage'));
+                setSuccessMessage(t('settings.testNotificationSent'));
                 setShowSuccessModal(true);
               } catch (error: any) {
                 setAlertModal({
                   visible: true,
-                  title: 'Error',
-                  message: error?.message || error?.code || 'Failed to send test notification',
+                  title: t('common.error'),
+                  message: error?.message || error?.code || t('settings.failedToSendTestNotification'),
                   type: 'error',
                 });
               }
@@ -340,22 +340,22 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          INFORMATION
+          {t('settings.information')}
         </Text>
         <SettingItem
           icon="information-circle"
-          title="About"
-          subtitle="App version and information"
+          title={t('settings.about')}
+          subtitle={t('settings.appVersionAndInfo')}
           onPress={handleAbout}
         />
         <SettingItem
           icon="shield-checkmark"
-          title="Privacy Policy"
+          title={t('settings.privacyPolicy')}
           onPress={handlePrivacy}
         />
         <SettingItem
           icon="document-text"
-          title="Terms of Service"
+          title={t('settings.termsOfService')}
           onPress={handleTerms}
         />
       </View>
@@ -370,12 +370,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           © 2025 {COPYRIGHT_OWNER || 'SA-PrivateLimited'}
         </Text>
         <Text style={[styles.copyright, {color: theme.textSecondary}]}>
-          All rights reserved
+          {t('settings.allRightsReserved')}
         </Text>
         <View style={styles.disclaimer}>
           <Icon name="alert-circle-outline" size={16} color={theme.textSecondary} />
           <Text style={[styles.disclaimerText, {color: theme.textSecondary}]}>
-            For quality home services, always verify service providers and read terms before booking.
+            {t('settings.disclaimer')}
           </Text>
         </View>
       </View>
@@ -395,7 +395,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>Help & Support</Text>
+              <Text style={[styles.modalTitle, {color: theme.text}]}>{t('settings.helpSupport')}</Text>
               <TouchableOpacity
                 onPress={() => setShowHelpSupportModal(false)}
                 style={styles.modalCloseButton}>
@@ -407,7 +407,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               <View style={styles.supportItem}>
                 <Icon name="mail-outline" size={24} color={theme.primary} />
                 <View style={styles.supportDetails}>
-                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>Email</Text>
+                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>{t('settings.email')}</Text>
                   <Text style={[styles.supportValue, {color: theme.text}]}>support@sa-privatelimited.com</Text>
                 </View>
               </View>
@@ -415,7 +415,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               <View style={styles.supportItem}>
                 <Icon name="call-outline" size={24} color={theme.primary} />
                 <View style={styles.supportDetails}>
-                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>Phone</Text>
+                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>{t('settings.phone')}</Text>
                   <Text style={[styles.supportValue, {color: theme.text}]}>+91 8210900726</Text>
                 </View>
               </View>
@@ -426,14 +426,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                 style={[styles.actionButton, {backgroundColor: theme.primary}]}
                 onPress={handleEmailSupport}>
                 <Icon name="mail" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>Email Us</Text>
+                <Text style={styles.actionButtonText}>{t('settings.emailUs')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={[styles.actionButton, styles.callButton, {backgroundColor: '#4CAF50'}]}
                 onPress={handleCallSupport}>
                 <Icon name="call" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>Call Us</Text>
+                <Text style={styles.actionButtonText}>{t('settings.callUs')}</Text>
               </TouchableOpacity>
             </View>
           </View>

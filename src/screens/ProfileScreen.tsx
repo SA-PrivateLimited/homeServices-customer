@@ -10,7 +10,6 @@ import {
   Switch,
   Modal,
   Image,
-  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import auth from '@react-native-firebase/auth';
@@ -23,6 +22,7 @@ import authService from '../services/authService';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
+import useTranslation from '../hooks/useTranslation';
 import type {User} from '../types/consultation';
 
 interface ProfileScreenProps {
@@ -32,6 +32,7 @@ interface ProfileScreenProps {
 const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   const {isDarkMode, currentUser, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   
-  const genderOptions = ['Male', 'Female', 'Other'];
+  const genderOptions = [t('profile.male'), t('profile.female'), t('profile.other')];
 
   const pickImage = () => {
     launchImageLibrary({mediaType: 'photo', quality: 0.8}, response => {
@@ -253,8 +254,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     if (!authUser) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'You must be logged in to verify your email',
+        title: t('common.error'),
+        message: t('profile.mustBeLoggedIn'),
         type: 'error',
       });
       return;
@@ -263,8 +264,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     if (!email.trim()) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Please enter your email address',
+        title: t('common.error'),
+        message: t('profile.pleaseEnterEmail'),
         type: 'error',
       });
       return;
@@ -275,8 +276,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     if (!emailRegex.test(email.trim())) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Please enter a valid email address',
+        title: t('common.error'),
+        message: t('profile.pleaseEnterValidEmail'),
         type: 'error',
       });
       return;
@@ -307,8 +308,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         }
         setAlertModal({
           visible: true,
-          title: 'Email Updated',
-          message: 'Your email has been updated. Note: Email verification is not available for phone-authenticated accounts. Your email will be used for account communication.',
+          title: t('profile.emailUpdated'),
+          message: t('profile.emailUpdatedMessage'),
           type: 'info',
         });
         setSendingEmailVerification(false);
@@ -332,8 +333,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           if (updateError.code === 'auth/requires-recent-login') {
             setAlertModal({
               visible: true,
-              title: 'Re-authentication Required',
-              message: 'For security, you need to logout and login again before changing your email address.',
+              title: t('profile.reauthRequired'),
+              message: t('profile.reauthRequiredMessage'),
               type: 'error',
             });
             setSendingEmailVerification(false);
@@ -341,8 +342,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           } else if (updateError.code === 'auth/email-already-in-use') {
             setAlertModal({
               visible: true,
-              title: 'Error',
-              message: 'This email is already in use by another account',
+              title: t('common.error'),
+              message: t('profile.emailAlreadyInUse'),
               type: 'error',
             });
             setSendingEmailVerification(false);
@@ -350,8 +351,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           } else if (updateError.code === 'auth/operation-not-allowed') {
             setAlertModal({
               visible: true,
-              title: 'Operation Not Allowed',
-              message: 'Email updates are not allowed for your account type. Please contact support for assistance.',
+              title: t('profile.operationNotAllowed'),
+              message: t('profile.operationNotAllowedMessage'),
               type: 'error',
             });
             setSendingEmailVerification(false);
@@ -372,8 +373,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         if (verifyError.code === 'auth/operation-not-allowed') {
           setAlertModal({
             visible: true,
-            title: 'Email Verification Unavailable',
-            message: 'Email verification is currently unavailable. Please ensure Email/Password provider is enabled in Firebase Console > Authentication > Sign-in method.',
+            title: t('profile.emailVerificationUnavailable'),
+            message: t('profile.emailVerificationUnavailableMessage'),
             type: 'error',
           });
           setSendingEmailVerification(false);
@@ -384,8 +385,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
 
       setAlertModal({
         visible: true,
-        title: 'Verification Email Sent',
-        message: 'Please check your email inbox and click the verification link. You may need to check your spam folder.',
+        title: t('profile.verificationEmailSent'),
+        message: t('profile.verificationEmailSentMessage'),
         type: 'success',
       });
     } catch (error: any) {
@@ -418,8 +419,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     if (!authUser) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'You must be logged in to update your profile',
+        title: t('common.error'),
+        message: t('profile.mustBeLoggedInToUpdate'),
         type: 'error',
       });
       return;
@@ -428,8 +429,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     if (!name.trim()) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Please enter your name',
+        title: t('common.error'),
+        message: t('profile.pleaseEnterName'),
         type: 'error',
       });
       return;
@@ -466,8 +467,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           console.error('Error uploading profile image:', uploadError);
           setAlertModal({
             visible: true,
-            title: 'Warning',
-            message: 'Failed to upload profile image. Profile will be saved without updating the image.',
+            title: t('common.warning'),
+            message: t('profile.failedToUploadImage'),
             type: 'warning',
           });
           // Continue without image update
@@ -497,10 +498,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           updates.emailVerified = false; // Reset verification status
         } catch (error: any) {
           if (error.code === 'auth/requires-recent-login') {
-            Alert.alert(
-              'Email Update Requires Re-authentication',
-              'Please logout and login again to change your email address.'
-            );
+            setAlertModal({
+              visible: true,
+              title: t('profile.emailUpdateRequiresReauth') || 'Email Update Requires Re-authentication',
+              message: t('profile.emailUpdateRequiresReauthMessage') || 'Please logout and login again to change your email address.',
+              type: 'warning',
+            });
             return;
           }
           throw error;
@@ -546,7 +549,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         routes: [{name: 'Login'}],
       });
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error.message,
+        type: 'error',
+      });
     }
   };
 
@@ -577,12 +585,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         ]}>
         <Icon name="person-circle-outline" size={80} color={theme.textSecondary} />
         <Text style={[styles.notLoggedInText, {color: theme.textSecondary}]}>
-          Please login to view your profile
+          {t('profile.pleaseLoginToView')}
         </Text>
         <TouchableOpacity
           style={[styles.button, {backgroundColor: theme.primary}]}
           onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.buttonText}>Login</Text>
+          <Text style={styles.buttonText}>{t('auth.login')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -652,7 +660,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           {name || authUser?.displayName || authUser?.email || 'User'}
         </Text>
         <Text style={[styles.userEmail, {color: theme.textSecondary}]}>
-          {email || authUser?.email || 'Not available'}
+          {email || authUser?.email || t('profile.notAvailable')}
         </Text>
       </View>
 
@@ -660,7 +668,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            Personal Information
+            {t('profile.personalInformation')}
           </Text>
           <TouchableOpacity
             onPress={() => setIsEditing(!isEditing)}
@@ -678,7 +686,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.infoLabel}>
             <Icon name="person-outline" size={20} color={theme.textSecondary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              Full Name
+              {t('profile.fullName')}
             </Text>
           </View>
           {isEditing ? (
@@ -706,7 +714,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             <Icon name="mail-outline" size={20} color={theme.textSecondary} />
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
               <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-                Email
+                {t('profile.email')}
               </Text>
               {isEmailVerified && (
                 <Icon name="checkmark-circle" size={16} color="#4CAF50" />
@@ -741,7 +749,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     <>
                       <Icon name="mail-outline" size={16} color={theme.primary} />
                       <Text style={[styles.verifyEmailText, {color: theme.primary}]}>
-                        Verify Email
+                        {t('profile.verifyEmail')}
                       </Text>
                     </>
                   )}
@@ -749,7 +757,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
               )}
               {isEmailVerified && (
                 <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                  Verified
+                  {t('profile.verified')}
                 </Text>
               )}
             </View>
@@ -765,11 +773,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
               </View>
               {isEmailVerified ? (
                 <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                  Verified
+                  {t('profile.verified')}
                 </Text>
               ) : (
                 <Text style={[styles.verifiedBadge, {color: theme.textSecondary}]}>
-                  Not Verified
+                  {t('profile.notVerified')}
                 </Text>
               )}
             </View>
@@ -782,7 +790,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             <Icon name="call-outline" size={20} color={theme.textSecondary} />
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
               <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-                Primary Phone
+                {t('profile.primaryPhone')}
               </Text>
               {currentUser?.phoneVerified && (
                 <Icon name="checkmark-circle" size={16} color="#4CAF50" />
@@ -805,10 +813,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             </View>
             {currentUser?.phoneVerified && (
               <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                Verified {(() => {
+                {t('profile.verified')} {(() => {
                   const currentAuthUser = auth().currentUser;
                   const loggedInWithPhone = currentAuthUser?.phoneNumber && currentUser?.phoneVerified;
-                  return loggedInWithPhone ? '(Cannot be changed)' : '';
+                  return loggedInWithPhone ? `(${t('profile.cannotBeChanged')})` : '';
                 })()}
               </Text>
             )}
@@ -826,7 +834,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             <Icon name="call-outline" size={20} color={theme.textSecondary} />
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
               <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-                Secondary Phone
+                {t('profile.secondaryPhone')}
               </Text>
               {currentUser?.secondaryPhoneVerified && (
                 <Icon name="checkmark-circle" size={16} color="#4CAF50" />
@@ -852,7 +860,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                       }}
                       style={{padding: 4}}>
                       <Text style={[styles.verifyLink, {color: theme.primary}]}>
-                        Verify
+                        {t('profile.verify')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -874,12 +882,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                         if (updatedUser) {
                         await setCurrentUser(updatedUser);
                       }
-                      setSuccessMessage('Secondary phone removed');
+                      setSuccessMessage(t('profile.secondaryPhoneRemoved'));
                       setShowSuccessModal(true);
                     } catch (error: any) {
                       setAlertModal({
                         visible: true,
-                        title: 'Error',
+                        title: t('common.error'),
                         message: error.message,
                         type: 'error',
                       });
@@ -917,18 +925,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     <>
                       <Icon name="checkmark-circle" size={16} color="#4CAF50" />
                       <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                        Verified
+                        {t('profile.verified')}
                       </Text>
                     </>
                   ) : (
                     <Text style={[styles.verifiedBadge, {color: theme.textSecondary}]}>
-                      Not Verified
+                      {t('profile.notVerified')}
                     </Text>
                   )}
                 </View>
               ) : (
                 <Text style={[styles.infoValue, {color: theme.textSecondary}]}>
-                  Not set
+                  {t('profile.notSet')}
                 </Text>
               )}
             </View>
@@ -955,7 +963,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 ]}
                 onPress={() => setShowGenderPicker(true)}>
                 <Text style={[styles.pickerText, {color: gender ? theme.text : theme.textSecondary}]}>
-                  {gender || 'Select Gender'}
+                  {gender || t('profile.selectGender')}
                 </Text>
                 <Icon name="chevron-down" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
@@ -972,7 +980,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
                     <View style={[styles.modalHeader, {borderBottomColor: theme.border}]}>
                       <Text style={[styles.modalTitle, {color: theme.text}]}>
-                        Select Gender
+                        {t('profile.selectGender')}
                       </Text>
                       <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
                         <Icon name="close" size={24} color={theme.text} />
@@ -1013,7 +1021,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             </>
           ) : (
             <Text style={[styles.infoValue, {color: theme.text}]}>
-              {gender || 'Not set'}
+              {gender || t('profile.notSet')}
             </Text>
           )}
         </View>
@@ -1023,7 +1031,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.infoLabel}>
             <Icon name="water-outline" size={20} color={theme.textSecondary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              Blood Group
+              {t('profile.bloodGroup')}
             </Text>
           </View>
           {isEditing ? (
@@ -1038,13 +1046,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
               ]}
               value={bloodGroup}
               onChangeText={setBloodGroup}
-              placeholder="A+, B+, O+, etc."
+              placeholder={t('profile.bloodGroupPlaceholder')}
               placeholderTextColor={theme.textSecondary}
               editable={!loading}
             />
           ) : (
             <Text style={[styles.infoValue, {color: theme.text}]}>
-              {bloodGroup || 'Not set'}
+              {bloodGroup || t('profile.notSet')}
             </Text>
           )}
         </View>
@@ -1054,7 +1062,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.infoLabel}>
             <Icon name="home-outline" size={20} color={theme.textSecondary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              Home Address
+              {t('profile.homeAddress')}
             </Text>
           </View>
           {isEditing ? (
@@ -1071,7 +1079,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 ]}
                 value={homeAddress.address}
                 onChangeText={(text) => setHomeAddress({...homeAddress, address: text})}
-                placeholder="Street address"
+                placeholder={t('profile.streetAddress')}
                 placeholderTextColor={theme.textSecondary}
                 editable={!loading}
               />
@@ -1088,7 +1096,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   ]}
                   value={homeAddress.city}
                   onChangeText={(text) => setHomeAddress({...homeAddress, city: text})}
-                  placeholder="City"
+                  placeholder={t('profile.city')}
                   placeholderTextColor={theme.textSecondary}
                   editable={!loading}
                 />
@@ -1104,7 +1112,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   ]}
                   value={homeAddress.state}
                   onChangeText={(text) => setHomeAddress({...homeAddress, state: text})}
-                  placeholder="State"
+                  placeholder={t('profile.state')}
                   placeholderTextColor={theme.textSecondary}
                   editable={!loading}
                 />
@@ -1120,7 +1128,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 ]}
                 value={homeAddress.pincode}
                 onChangeText={(text) => setHomeAddress({...homeAddress, pincode: text})}
-                placeholder="Pincode"
+                placeholder={t('profile.pincode')}
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="numeric"
                 editable={!loading}
@@ -1137,7 +1145,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 </Text>
               ) : (
                 <Text style={[styles.infoValue, {color: theme.textSecondary}]}>
-                  Not set
+                  {t('profile.notSet')}
                 </Text>
               )}
             </View>
@@ -1149,7 +1157,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={styles.infoLabel}>
             <Icon name="business-outline" size={20} color={theme.textSecondary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              Office Address
+              {t('profile.officeAddress')}
             </Text>
           </View>
           {isEditing ? (
@@ -1162,7 +1170,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   thumbColor="#FFFFFF"
                 />
                 <Text style={[styles.checkboxLabel, {color: theme.text}]}>
-                  Same as Home Address
+                  {t('profile.sameAsHomeAddress')}
                 </Text>
               </View>
               {!sameAsHomeAddress && (
@@ -1179,7 +1187,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     ]}
                     value={officeAddress.address}
                     onChangeText={(text) => setOfficeAddress({...officeAddress, address: text})}
-                    placeholder="Street address"
+                    placeholder={t('profile.streetAddress')}
                     placeholderTextColor={theme.textSecondary}
                     editable={!loading}
                   />
@@ -1196,7 +1204,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                       ]}
                       value={officeAddress.city}
                       onChangeText={(text) => setOfficeAddress({...officeAddress, city: text})}
-                      placeholder="City"
+                      placeholder={t('profile.city')}
                       placeholderTextColor={theme.textSecondary}
                       editable={!loading}
                     />
@@ -1212,7 +1220,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                       ]}
                       value={officeAddress.state}
                       onChangeText={(text) => setOfficeAddress({...officeAddress, state: text})}
-                      placeholder="State"
+                      placeholder={t('profile.state')}
                       placeholderTextColor={theme.textSecondary}
                       editable={!loading}
                     />
@@ -1228,7 +1236,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     ]}
                     value={officeAddress.pincode}
                     onChangeText={(text) => setOfficeAddress({...officeAddress, pincode: text})}
-                    placeholder="Pincode"
+                    placeholder={t('profile.pincode')}
                     placeholderTextColor={theme.textSecondary}
                     keyboardType="numeric"
                     editable={!loading}
@@ -1247,7 +1255,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 </Text>
               ) : (
                 <Text style={[styles.infoValue, {color: theme.textSecondary}]}>
-                  Not set
+                  {t('profile.notSet')}
                 </Text>
               )}
             </View>
@@ -1267,7 +1275,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Save Changes</Text>
+              <Text style={styles.buttonText}>{t('profile.saveChanges')}</Text>
             )}
           </TouchableOpacity>
         )}
@@ -1276,7 +1284,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       {/* Account Actions */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: theme.text}]}>
-          Account
+          {t('profile.account')}
         </Text>
 
         <TouchableOpacity
@@ -1284,7 +1292,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           onPress={handleLogout}>
           <Icon name="log-out-outline" size={20} color="#ff4444" />
           <Text style={[styles.actionButtonText, {color: '#ff4444'}]}>
-            Logout
+            {t('auth.logout')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1312,7 +1320,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       {/* Success Modal */}
       <SuccessModal
         visible={showSuccessModal}
-        title="Success"
+        title={t('common.success')}
         message={successMessage}
         onClose={() => setShowSuccessModal(false)}
       />

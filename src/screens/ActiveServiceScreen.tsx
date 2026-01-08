@@ -1365,8 +1365,8 @@ export default function ActiveServiceScreen({
                   latitude: customerLocation.latitude,
                   longitude: customerLocation.longitude,
                 }}
-                title="Your Current Location"
-                description="Live location"
+                title={t('activeService.yourCurrentLocation')}
+                description={t('activeService.liveLocation')}
                 pinColor="#FF9500">
                 <View style={styles.liveLocationMarker}>
                   <Icon name="my-location" size={20} color="#FF9500" />
@@ -1385,7 +1385,7 @@ export default function ActiveServiceScreen({
                     latitude: providerLocation.latitude,
                     longitude: providerLocation.longitude,
                   }}
-                  title="Provider Location"
+                  title={t('activeService.providerLocation')}
                   description={`Provider is ${distance || 'on the way'}`}
                   pinColor="#34C759">
                   <View style={styles.providerMarker}>
