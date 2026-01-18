@@ -437,8 +437,9 @@ export default function ActiveServiceScreen({
           console.log('🔍 Checking review status (Realtime DB fallback)');
             checkReviewStatus();
           }
-        // Reload data when status changes to get updated provider info
-        if (newStatus === 'accepted') {
+        // Reload data when status changes to get updated provider info or PIN
+        if (newStatus === 'accepted' || newStatus === 'in-progress') {
+          console.log(`🔄 Status changed to ${newStatus}, reloading service data to get updated info (including PIN if started)...`);
           loadServiceData();
         }
         },

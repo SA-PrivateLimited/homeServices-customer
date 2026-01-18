@@ -348,7 +348,7 @@ export const onJobCardCreated = functions.firestore
   .document("jobCards/{jobCardId}")
   .onCreate(async (snap, context) => {
     const jobCard = snap.data();
-    const {customerId, providerName, serviceType, consultationId} = jobCard;
+    const {customerId, providerName, serviceType, consultationId, customerPhone, problem} = jobCard;
 
     if (!customerId) {
       console.log("No customerId in job card");
@@ -369,11 +369,21 @@ export const onJobCardCreated = functions.firestore
         return null;
       }
 
+      // Build descriptive notification body with phone and problem
+      let body = `${providerName} has accepted your ${serviceType || "service"} request`;
+      if (customerPhone) {
+        body += `. Customer Phone: ${customerPhone}`;
+      }
+      if (problem) {
+        const problemText = problem.length > 100 ? problem.substring(0, 100) + '...' : problem;
+        body += `. Problem: ${problemText}`;
+      }
+
       // Send acceptance notification
       const message = {
         notification: {
           title: "Service Request Accepted",
-          body: `${providerName} has accepted your ${serviceType || "service"} request`,
+          body: body,
         },
         data: {
           jobCardId: context.params.jobCardId,
@@ -418,7 +428,7 @@ export const onJobCardUpdated = functions.firestore
   .onUpdate(async (change, context) => {
     const before = change.before.data();
     const after = change.after.data();
-    const {customerId, providerName, serviceType, consultationId} = after;
+    const {customerId, providerName, serviceType, consultationId, customerPhone, problem} = after;
 
     console.log(`🔄 onJobCardUpdated triggered for jobCard ${context.params.jobCardId}:`, {
       beforeStatus: before.status,
@@ -457,11 +467,36 @@ export const onJobCardUpdated = functions.firestore
       if (!fcmToken) {
         console.log(`❌ No FCM token for customer ${customerId}`);
         console.log(`User data keys: ${Object.keys(userData || {}).join(', ')}`);
+        console.log(`User document exists: ${userDoc.exists}`);
+        console.log(`User data: ${JSON.stringify(userData, null, 2)}`);
         console.log(`💡 Customer needs to log in to HomeServices app to receive notifications`);
+        console.log(`💡 Customer should ensure notifications are enabled in app settings`);
         return null;
       }
 
-      console.log(`✅ Found FCM token for customer ${customerId}, token: ${fcmToken.substring(0, 30)}...`);
+      // Validate token format (FCM tokens are typically long strings)
+      if (typeof fcmToken !== 'string' || fcmToken.length < 50) {
+        console.log(`⚠️ Invalid FCM token format for customer ${customerId}`);
+        console.log(`Token length: ${fcmToken?.length || 0}, Type: ${typeof fcmToken}`);
+        console.log(`Token preview: ${fcmToken?.substring(0, 50) || 'N/A'}...`);
+        return null;
+      }
+
+      console.log(`✅ Found FCM token for customer ${customerId}`);
+      console.log(`Token length: ${fcmToken.length}, Token preview: ${fcmToken.substring(0, 30)}...`);
+
+      // Helper function to append customer phone and problem to notification body
+      const appendDetails = (baseBody: string): string => {
+        let enhancedBody = baseBody;
+        if (customerPhone) {
+          enhancedBody += `. Phone: ${customerPhone}`;
+        }
+        if (problem) {
+          const problemText = problem.length > 80 ? problem.substring(0, 80) + '...' : problem;
+          enhancedBody += `. Problem: ${problemText}`;
+        }
+        return enhancedBody;
+      };
 
       // Determine notification message based on status
       let title = "Service Update";
@@ -482,15 +517,18 @@ export const onJobCardUpdated = functions.firestore
             notificationData.pin = after.taskPIN;
             body += `. Your verification PIN: ${after.taskPIN}`;
           }
+          body = appendDetails(body);
           break;
         case "completed":
           title = "Service Completed";
           body = `${providerName} has completed your ${serviceType || "service"}`;
+          body = appendDetails(body);
           break;
         case "cancelled":
           title = "Service Cancelled";
           const reason = after.cancellationReason || "No reason provided";
           body = `${providerName} has cancelled your ${serviceType || "service"}. Reason: ${reason}`;
+          body = appendDetails(body);
           break;
         default:
           // Don't send notification for other status changes
@@ -504,6 +542,8 @@ export const onJobCardUpdated = functions.firestore
       }
 
       // Send status update notification
+      // Note: For Android, we need both notification and data payloads
+      // The notification payload shows the notification, data payload is for app handling
       const message = {
         notification: {
           title,
@@ -517,6 +557,10 @@ export const onJobCardUpdated = functions.firestore
             channelId: "service_requests",
             sound: "hooter.wav",
             priority: "high" as const,
+            // Ensure notification is shown even when app is in foreground
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            defaultLightSettings: true,
           },
         },
         apns: {
@@ -524,7 +568,16 @@ export const onJobCardUpdated = functions.firestore
             aps: {
               sound: "default",
               badge: 1,
+              contentAvailable: true, // Enable background notification handling
             },
+          },
+        },
+        // Web push configuration (if needed)
+        webpush: {
+          notification: {
+            title,
+            body,
+            icon: "/icon.png",
           },
         },
       };
@@ -541,6 +594,16 @@ export const onJobCardUpdated = functions.firestore
       const response = await admin.messaging().send(message);
       console.log(`✅ Successfully sent job card status update notification to customer ${customerId}: ${after.status}`);
       console.log(`📱 FCM Message ID: ${response}`);
+      console.log(`📋 Notification details:`, {
+        customerId,
+        jobCardId: context.params.jobCardId,
+        status: after.status,
+        title,
+        body,
+        hasPIN: !!after.taskPIN,
+        tokenLength: fcmToken.length,
+        messageId: response,
+      });
 
       return null;
     } catch (error: any) {
@@ -549,6 +612,7 @@ export const onJobCardUpdated = functions.firestore
         code: error.code,
         customerId,
         status: after.status,
+        jobCardId: context.params.jobCardId,
         stack: error.stack,
       });
       
@@ -556,6 +620,7 @@ export const onJobCardUpdated = functions.firestore
       if (error.code === 'messaging/invalid-registration-token' || 
           error.code === 'messaging/registration-token-not-registered') {
         console.log(`⚠️ Invalid or unregistered FCM token for customer ${customerId}. Token may need to be refreshed.`);
+        console.log(`💡 Customer should: 1) Log out and log back in, 2) Ensure notifications are enabled, 3) Check app permissions`);
         // Optionally: Remove invalid token from Firestore
         try {
           await admin.firestore()
@@ -568,6 +633,11 @@ export const onJobCardUpdated = functions.firestore
         } catch (deleteError) {
           console.error(`Failed to remove invalid token:`, deleteError);
         }
+      } else if (error.code === 'messaging/invalid-argument') {
+        console.error(`⚠️ Invalid notification payload. Check message structure.`);
+        console.error(`Message structure:`, JSON.stringify(message, null, 2));
+      } else if (error.code === 'messaging/authentication-error') {
+        console.error(`⚠️ FCM authentication error. Check Firebase project configuration.`);
       }
       
       return null;
