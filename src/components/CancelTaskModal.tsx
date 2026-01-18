@@ -14,6 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 interface CancelTaskModalProps {
   visible: boolean;
@@ -28,27 +29,28 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
   const [reason, setReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
 
   const cancellationReasons = [
-    'No longer needed',
-    'Found another provider',
-    'Address changed',
-    'Service not available',
-    'Personal emergency',
-    'Other',
+    t('common.noLongerNeeded'),
+    t('common.foundAnotherProvider'),
+    t('common.addressChanged'),
+    t('common.serviceNotAvailable'),
+    t('common.personalEmergency'),
+    t('common.otherReason'),
   ];
 
   const handleCancel = async () => {
     if (!reason.trim()) {
-      setError('Please provide a cancellation reason');
+      setError(t('common.provideCancellationReason'));
       return;
     }
 
     if (reason.trim().length < 10) {
-      setError('Please provide a detailed reason (at least 10 characters)');
+      setError(t('common.provideDetailedReason'));
       return;
     }
 
@@ -58,7 +60,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
       await onCancel(reason.trim());
       setReason('');
     } catch (err: any) {
-      setError(err.message || 'Failed to cancel service. Please try again.');
+      setError(err.message || t('activeService.failedToCancelService'));
     } finally {
       setCancelling(false);
     }
@@ -71,7 +73,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
   };
 
   const handleReasonSelect = (selectedReason: string) => {
-    if (selectedReason === 'Other') {
+    if (selectedReason === t('common.otherReason')) {
       setReason('');
     } else {
       setReason(selectedReason);
@@ -106,10 +108,10 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                 <Icon name="close-circle" size={32} color="#FF3B30" />
               </View>
               <Text style={[styles.headerTitle, {color: theme.text}]}>
-                Cancel Service
+                {String(t('activeService.cancelService') || 'Cancel Service')}
               </Text>
               <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-                Please provide a reason for cancelling this service. The provider will be notified.
+                {String(t('common.cancelServiceDescription') || 'Please provide a reason for cancelling this service. The provider will be notified.')}
               </Text>
             </View>
 
@@ -117,7 +119,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
               {/* Quick Reason Selection */}
               <View style={styles.quickReasonsContainer}>
                 <Text style={[styles.sectionLabel, {color: theme.textSecondary}]}>
-                  Quick Select:
+                  {String(t('common.quickSelect') || 'Quick Select:')}
                 </Text>
                 <View style={styles.reasonsGrid}>
                   {cancellationReasons.map((quickReason) => (
@@ -153,7 +155,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
               {/* Custom Reason Input */}
               <View style={styles.inputContainer}>
                 <Text style={[styles.inputLabel, {color: theme.text}]}>
-                  Cancellation Reason {reason && reason !== 'Other' ? '(You can edit)' : ''}
+                  {String(t('common.cancellationReason') || 'Cancellation Reason')} {reason && reason !== t('common.otherReason') ? `(${String(t('common.youCanEdit') || 'You can edit')})` : ''}
                 </Text>
                 <TextInput
                   style={[
@@ -169,7 +171,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                     setReason(text);
                     setError('');
                   }}
-                  placeholder="Enter detailed cancellation reason..."
+                  placeholder={String(t('common.cancellationReasonPlaceholder') || 'Enter detailed cancellation reason...')}
                   placeholderTextColor={theme.textSecondary}
                   multiline={true}
                   numberOfLines={4}
@@ -180,7 +182,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                   <Text style={styles.errorText}>{error}</Text>
                 )}
                 <Text style={[styles.charCount, {color: theme.textSecondary}]}>
-                  {reason.length} / 200 characters
+                  {reason.length} / 200 {String(t('common.characters') || 'characters')}
                 </Text>
               </View>
             </ScrollView>
@@ -202,7 +204,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                     styles.closeButtonText,
                     {color: theme.text},
                   ]}>
-                  Close
+                  {String(t('common.close') || 'Close')}
                 </Text>
               </TouchableOpacity>
 
@@ -217,9 +219,9 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                 onPress={handleCancel}
                 disabled={cancelling || !reason.trim() || reason.trim().length < 10}>
                 {cancelling ? (
-                  <Text style={styles.cancelButtonText}>Cancelling...</Text>
+                  <Text style={styles.cancelButtonText}>{String(t('common.cancelling') || 'Cancelling...')}</Text>
                 ) : (
-                  <Text style={styles.cancelButtonText}>Cancel Service</Text>
+                  <Text style={styles.cancelButtonText}>{String(t('activeService.cancelService') || 'Cancel Service')}</Text>
                 )}
               </TouchableOpacity>
             </View>

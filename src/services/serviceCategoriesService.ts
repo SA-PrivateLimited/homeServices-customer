@@ -1,17 +1,21 @@
 /**
  * Service Categories Service
  * Manages service types/categories for home services
+ * Uses HomeServicesBackend API for all database operations
  */
 
-import firestore from '@react-native-firebase/firestore';
+import {serviceCategoriesApi, type ServiceCategory as ServiceCategoryApi} from './api/serviceCategoriesApi';
 
 export interface QuestionnaireQuestion {
   id: string;
-  question: string;
+  question: string; // English question (backward compatibility)
+  questionHi?: string; // Hindi question (optional)
   type: 'text' | 'number' | 'select' | 'multiselect' | 'boolean';
-  options?: string[]; // For select and multiselect types
+  options?: string[]; // English options for select and multiselect types (backward compatibility)
+  optionsHi?: string[]; // Hindi options for select and multiselect types (optional)
   required: boolean;
-  placeholder?: string;
+  placeholder?: string; // English placeholder (backward compatibility)
+  placeholderHi?: string; // Hindi placeholder (optional)
 }
 
 export interface ServiceCategory {
@@ -19,7 +23,8 @@ export interface ServiceCategory {
   name: string;
   icon: string; // Material icon name
   color: string; // Hex color code
-  description?: string;
+  description?: string; // English description
+  descriptionHi?: string; // Hindi description
   isActive: boolean;
   order: number; // Display order
   questionnaire?: QuestionnaireQuestion[]; // Questions for this service category
@@ -28,19 +33,16 @@ export interface ServiceCategory {
   updatedAt?: Date;
 }
 
-const COLLECTIONS = {
-  SERVICE_CATEGORIES: 'serviceCategories',
-};
-
 /**
- * Default service categories for home services
+ * Default service categories for home services (fallback only)
  */
 export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Plumber',
     icon: 'plumbing',
     color: '#3498db',
-    description: 'Plumbing repairs and installations',
+    description: 'Professional plumbing services for homes and businesses',
+    descriptionHi: 'घरों और व्यवसायों के लिए पेशेवर प्लंबिंग सेवाएं',
     isActive: true,
     order: 1,
   },
@@ -48,7 +50,8 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     name: 'Electrician',
     icon: 'electrical-services',
     color: '#f39c12',
-    description: 'Electrical repairs and installations',
+    description: 'Licensed electrical services and repairs',
+    descriptionHi: 'लाइसेंस प्राप्त विद्युत सेवाएं और मरम्मत',
     isActive: true,
     order: 2,
   },
@@ -56,7 +59,8 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     name: 'Carpenter',
     icon: 'carpenter',
     color: '#95a5a6',
-    description: 'Carpentry and woodwork',
+    description: 'Professional carpentry and woodwork services',
+    descriptionHi: 'पेशेवर बढ़ईगीरी और लकड़ी के काम की सेवाएं',
     isActive: true,
     order: 3,
   },
@@ -64,7 +68,8 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     name: 'AC Repair',
     icon: 'ac-unit',
     color: '#1abc9c',
-    description: 'Air conditioning repair and service',
+    description: 'Air conditioning repair and maintenance',
+    descriptionHi: 'एयर कंडीशनिंग मरम्मत और रखरखाव',
     isActive: true,
     order: 4,
   },
@@ -73,6 +78,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     icon: 'kitchen',
     color: '#9b59b6',
     description: 'Home appliance repairs',
+    descriptionHi: 'घरेलू उपकरण मरम्मत',
     isActive: true,
     order: 5,
   },
@@ -80,7 +86,8 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     name: 'Painter',
     icon: 'format-paint',
     color: '#e74c3c',
-    description: 'Painting services',
+    description: 'Interior and exterior painting services',
+    descriptionHi: 'आंतरिक और बाहरी पेंटिंग सेवाएं',
     isActive: true,
     order: 6,
   },
@@ -88,7 +95,8 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     name: 'Cleaning Service',
     icon: 'cleaning-services',
     color: '#16a085',
-    description: 'Home and office cleaning',
+    description: 'Professional home and office cleaning',
+    descriptionHi: 'पेशेवर घर और कार्यालय सफाई',
     isActive: true,
     order: 7,
   },
@@ -97,6 +105,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     icon: 'bug-report',
     color: '#c0392b',
     description: 'Pest control and extermination',
+    descriptionHi: 'कीट नियंत्रण और उन्मूलन',
     isActive: true,
     order: 8,
   },
@@ -105,6 +114,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     icon: 'construction',
     color: '#7f8c8d',
     description: 'Masonry and construction work',
+    descriptionHi: 'ईंट और निर्माण कार्य',
     isActive: true,
     order: 9,
   },
@@ -113,6 +123,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
     icon: 'build',
     color: '#34495e',
     description: 'Welding services',
+    descriptionHi: 'वेल्डिंग सेवाएं',
     isActive: true,
     order: 10,
   },
@@ -120,17 +131,34 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
 
 /**
  * Fetch all active service categories
+ * Uses backend API
  */
 export const fetchServiceCategories = async (): Promise<ServiceCategory[]> => {
   try {
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.SERVICE_CATEGORIES)
-      .where('isActive', '==', true)
-      .orderBy('order', 'asc')
-      .get();
+    const categories = await serviceCategoriesApi.getAll();
 
-    if (snapshot.empty) {
-      // If no categories exist, return defaults
+    // Convert API response to app format
+    // Filter active categories if needed (backend should handle this)
+    const activeCategories = categories
+      .filter((cat: ServiceCategoryApi) => cat.enabled !== false)
+      .map((cat: ServiceCategoryApi) => {
+        // Map API fields to app format
+        return {
+          id: cat._id || cat.id || '',
+          name: cat.name,
+          icon: cat.icon || 'build',
+          color: cat.color || '#3498db',
+          description: cat.description,
+          descriptionHi: cat.descriptionHindi,
+          isActive: cat.enabled !== false,
+          order: 0, // Backend should provide order if needed
+          createdAt: cat.createdAt ? (cat.createdAt instanceof Date ? cat.createdAt : new Date(cat.createdAt)) : new Date(),
+          updatedAt: cat.updatedAt ? (cat.updatedAt instanceof Date ? cat.updatedAt : new Date(cat.updatedAt)) : undefined,
+        } as ServiceCategory;
+      });
+
+    // If no categories from API, return defaults as fallback
+    if (activeCategories.length === 0) {
       return DEFAULT_SERVICE_CATEGORIES.map((cat, index) => ({
         ...cat,
         id: `default_${index}`,
@@ -139,15 +167,10 @@ export const fetchServiceCategories = async (): Promise<ServiceCategory[]> => {
       }));
     }
 
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate(),
-      updatedAt: doc.data()?.updatedAt?.toDate(),
-    })) as ServiceCategory[];
+    return activeCategories;
   } catch (error) {
     console.error('Error fetching service categories:', error);
-    // Return defaults on error
+    // Return defaults on error as fallback
     return DEFAULT_SERVICE_CATEGORIES.map((cat, index) => ({
       ...cat,
       id: `default_${index}`,
@@ -158,48 +181,30 @@ export const fetchServiceCategories = async (): Promise<ServiceCategory[]> => {
 };
 
 /**
- * Initialize service categories in Firestore (Admin only)
+ * Initialize service categories (Admin only)
+ * Note: This should be handled by the backend admin API
+ * This function is kept for backward compatibility but may not work
  */
 export const initializeServiceCategories = async (): Promise<void> => {
-  try {
-    const batch = firestore().batch();
-    
-    DEFAULT_SERVICE_CATEGORIES.forEach((category, index) => {
-      const docRef = firestore()
-        .collection(COLLECTIONS.SERVICE_CATEGORIES)
-        .doc();
-      
-      batch.set(docRef, {
-        ...category,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
-    });
-
-    await batch.commit();
-    console.log('Service categories initialized successfully');
-  } catch (error) {
-    console.error('Error initializing service categories:', error);
-    throw new Error('Failed to initialize service categories');
-  }
+  console.warn('initializeServiceCategories: Service categories should be initialized via backend admin API');
+  throw new Error('Service categories initialization should be done via backend admin API');
 };
 
 /**
  * Get service category by name
+ * Uses backend API
  */
 export const getServiceCategoryByName = async (
   name: string,
 ): Promise<ServiceCategory | null> => {
   try {
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.SERVICE_CATEGORIES)
-      .where('name', '==', name)
-      .where('isActive', '==', true)
-      .limit(1)
-      .get();
+    // Fetch all categories and filter by name
+    // Note: Backend should ideally provide a search/by-name endpoint
+    const categories = await serviceCategoriesApi.getAll();
+    const category = categories.find((cat: ServiceCategoryApi) => cat.name === name && cat.enabled !== false);
 
-    if (snapshot.empty) {
-      // Check defaults
+    if (!category) {
+      // Check defaults as fallback
       const defaultCat = DEFAULT_SERVICE_CATEGORIES.find(cat => cat.name === name);
       if (defaultCat) {
         return {
@@ -212,12 +217,18 @@ export const getServiceCategoryByName = async (
       return null;
     }
 
-    const doc = snapshot.docs[0];
+    // Convert API response to app format
     return {
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate(),
-      updatedAt: doc.data()?.updatedAt?.toDate(),
+      id: category._id || category.id || '',
+      name: category.name,
+      icon: category.icon || 'build',
+      color: category.color || '#3498db',
+      description: category.description,
+      descriptionHi: category.descriptionHindi,
+      isActive: category.enabled !== false,
+      order: 0,
+      createdAt: category.createdAt ? (category.createdAt instanceof Date ? category.createdAt : new Date(category.createdAt)) : new Date(),
+      updatedAt: category.updatedAt ? (category.updatedAt instanceof Date ? category.updatedAt : new Date(category.updatedAt)) : undefined,
     } as ServiceCategory;
   } catch (error) {
     console.error('Error fetching service category:', error);

@@ -29,6 +29,8 @@
   "serviceType": "सेवा प्रकार",
   "customerReviews": "ग्राहक समीक्षाएं",
   "requestService": "सेवा का अनुरोध करें",
-  "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें"
+  "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें",
+  "browseProviders": "प्रदाता ब्राउज़ करें",
+  "providerDetails": "प्रदाता विवरण"
 }
 

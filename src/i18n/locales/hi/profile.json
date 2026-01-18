@@ -56,5 +56,13 @@
   "verificationEmailSentMessage": "कृपया अपने ईमेल इनबॉक्स की जांच करें और सत्यापन लिंक पर क्लिक करें। आपको अपने स्पैम फ़ोल्डर की जांच करनी पड़ सकती है।",
   "failedToUploadImage": "प्रोफ़ाइल छवि अपलोड करने में विफल। प्रोफ़ाइल छवि अपडेट किए बिना सहेजी जाएगी।",
   "emailUpdateRequiresReauth": "ईमेल अपडेट के लिए पुनः प्रमाणीकरण आवश्यक",
-  "emailUpdateRequiresReauthMessage": "कृपया अपना ईमेल पता बदलने के लिए लॉगआउट करें और फिर से लॉगिन करें।"
+  "emailUpdateRequiresReauthMessage": "कृपया अपना ईमेल पता बदलने के लिए लॉगआउट करें और फिर से लॉगिन करें।",
+  "completeYourProfileTitle": "अपना प्रोफ़ाइल पूरा करें",
+  "completeYourProfileDescription": "सेवा अनुरोध प्राप्त करना शुरू करने के लिए, आपको अपना प्रोफ़ाइल सेटअप पूरा करना होगा।",
+  "setSpecializationQualification": "अपनी विशेषज्ञता और योग्यता निर्धारित करें",
+  "defineAvailabilityFees": "अपनी उपलब्धता और परामर्श शुल्क परिभाषित करें",
+  "startAcceptingRequests": "सेवा अनुरोध स्वीकार करना शुरू करें",
+  "profileReviewNote": "सक्रियण से पहले आपके प्रोफ़ाइल की व्यवस्थापक द्वारा समीक्षा की जाएगी",
+  "setUpProfileNow": "अभी प्रोफ़ाइल सेट करें",
+  "illDoThisLater": "मैं इसे बाद में करूंगा"
 }

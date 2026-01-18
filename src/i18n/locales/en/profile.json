@@ -56,5 +56,13 @@
   "verificationEmailSentMessage": "Please check your email inbox and click the verification link. You may need to check your spam folder.",
   "failedToUploadImage": "Failed to upload profile image. Profile will be saved without updating the image.",
   "emailUpdateRequiresReauth": "Email Update Requires Re-authentication",
-  "emailUpdateRequiresReauthMessage": "Please logout and login again to change your email address."
+  "emailUpdateRequiresReauthMessage": "Please logout and login again to change your email address.",
+  "completeYourProfileTitle": "Complete Your Profile",
+  "completeYourProfileDescription": "To start receiving service requests, you need to complete your profile setup.",
+  "setSpecializationQualification": "Set your specialization & qualifications",
+  "defineAvailabilityFees": "Define your availability & consultation fees",
+  "startAcceptingRequests": "Start accepting service requests",
+  "profileReviewNote": "Your profile will be reviewed by an admin before activation",
+  "setUpProfileNow": "Set Up Profile Now",
+  "illDoThisLater": "I'll Do This Later"
 }

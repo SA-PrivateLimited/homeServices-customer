@@ -1,0 +1,27 @@
+{
+  "title": "How was your service?",
+  "rateExperience": "Rate your experience",
+  "excellent": "Excellent!",
+  "great": "Great!",
+  "good": "Good",
+  "fair": "Fair",
+  "poor": "Poor",
+  "whatMadeItGreat": "What made it great?",
+  "whatMadeItAverage": "What made it average?",
+  "whatMadeItPoor": "What made it poor?",
+  "tellUsMore": "Tell us more (optional)",
+  "shareExperience": "Share your experience...",
+  "addPhoto": "Add Photo",
+  "submitReview": "Submit Review",
+  "skip": "Skip",
+  "skipTitle": "Skip Review?",
+  "skipMessage": "You can review this service later from your history.",
+  "ratingRequired": "Rating Required",
+  "pleaseSelectRating": "Please select a rating",
+  "thankYou": "Thank You!",
+  "reviewSubmitted": "Your review has been submitted.",
+  "error": "Error",
+  "failedToUploadPhoto": "Failed to upload photo. Please try again.",
+  "failedToSubmitReview": "Failed to submit review. Please try again."
+}
+

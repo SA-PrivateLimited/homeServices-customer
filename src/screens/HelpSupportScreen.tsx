@@ -16,7 +16,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import ragService from '../services/ragService';
-import consultationService from '../services/consultationService';
 import {OPEN_AI_API_KEY} from '@env';
 import FormattedText from '../components/FormattedText';
 import useTranslation from '../hooks/useTranslation';

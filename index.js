@@ -39,6 +39,11 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       userInfo: data || {},
       priority: 'high',
       importance: 'high',
+      // Ensure notification is shown even when app is in background/killed
+      ongoing: false,
+      autoCancel: true,
+      largeIcon: 'ic_launcher',
+      smallIcon: 'ic_notification',
     });
   }
 });

@@ -25,7 +25,7 @@ import firestore from '@react-native-firebase/firestore';
 import messaging from '@react-native-firebase/messaging';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion} from '../services/serviceCategoriesService';
+import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
 import GeolocationService from '../services/geolocationService';
 import {
   getSavedAddresses,
@@ -55,9 +55,33 @@ export default function ServiceRequestScreen({
   navigation,
   route,
 }: ServiceRequestScreenProps) {
-  const {isDarkMode, currentUser, currentPincode} = useStore();
+  const {isDarkMode, currentUser, currentPincode, language} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+  
+  // Helper function to get question text based on language preference
+  const getQuestionText = (q: QuestionnaireQuestion): string => {
+    if (language === 'hi' && q.questionHi) {
+      return q.questionHi;
+    }
+    return q.question;
+  };
+
+  // Helper function to get placeholder text based on language preference
+  const getPlaceholderText = (q: QuestionnaireQuestion, defaultPlaceholder: string): string => {
+    if (language === 'hi' && q.placeholderHi) {
+      return q.placeholderHi;
+    }
+    return q.placeholder || defaultPlaceholder;
+  };
+
+  // Helper function to get options based on language preference
+  const getOptions = (q: QuestionnaireQuestion): string[] => {
+    if (language === 'hi' && q.optionsHi && q.optionsHi.length > 0) {
+      return q.optionsHi;
+    }
+    return q.options || [];
+  };
 
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [selectedServiceType, setSelectedServiceType] = useState<string>(
@@ -150,15 +174,27 @@ export default function ServiceRequestScreen({
     try {
       setLoadingCategories(true);
       
-      // Add timeout to prevent hanging
+      // Increase timeout to 20 seconds and add retry logic
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout loading service categories')), 10000);
+        setTimeout(() => reject(new Error('Timeout loading service categories')), 20000);
       });
       
-      const categories = await Promise.race([
-        fetchServiceCategories(),
-        timeoutPromise,
-      ]);
+      let categories;
+      try {
+        categories = await Promise.race([
+          fetchServiceCategories(),
+          timeoutPromise,
+        ]);
+      } catch (timeoutError: any) {
+        // On timeout, try once more with a shorter timeout
+        console.warn('First attempt timed out, retrying...');
+        categories = await Promise.race([
+          fetchServiceCategories(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout loading service categories')), 15000);
+          }),
+        ]);
+      }
       
       setServiceCategories(categories);
 
@@ -171,8 +207,17 @@ export default function ServiceRequestScreen({
       }
     } catch (error: any) {
       console.error('Error loading service categories:', error);
-      // Set empty array on error to prevent infinite loading
-      setServiceCategories([]);
+      // On error or timeout, use default categories to prevent empty screen
+      const defaultCategories = DEFAULT_SERVICE_CATEGORIES.map((cat, index) => ({
+        ...cat,
+        id: `default_${index}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })) as ServiceCategory[];
+      
+      setServiceCategories(defaultCategories);
+      
+      // Only show error if it's not a timeout (timeout means we're using defaults)
       if (error.message !== 'Timeout loading service categories') {
         setAlertModal({
           visible: true,
@@ -813,7 +858,7 @@ export default function ServiceRequestScreen({
         setAlertModal({
           visible: true,
           title: t('common.requiredQuestions'),
-          message: `${t('common.requiredQuestions')}:\n\n${missingAnswers.map(q => `• ${q.question}`).join('\n')}`,
+          message: `${t('common.requiredQuestions')}:\n\n${missingAnswers.map(q => `• ${getQuestionText(q)}`).join('\n')}`,
           type: 'warning',
         });
         return;
@@ -1196,7 +1241,7 @@ export default function ServiceRequestScreen({
           {questionnaire.map((question, index) => (
             <View key={question.id} style={styles.questionContainer}>
               <Text style={[styles.questionText, {color: theme.text}]}>
-                {index + 1}. {question.question}
+                {index + 1}. {getQuestionText(question)}
                 {question.required && <Text style={styles.requiredStar}> *</Text>}
               </Text>
 
@@ -1209,7 +1254,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={questionnaireAnswers[question.id] || ''}
                   onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={question.placeholder || t('services.enterYourAnswer')}
+                  placeholder={getPlaceholderText(question, t('services.enterYourAnswer'))}
                   placeholderTextColor={theme.textSecondary}
                   multiline
                 />
@@ -1224,7 +1269,7 @@ export default function ServiceRequestScreen({
                   ]}
                   value={questionnaireAnswers[question.id] || ''}
                   onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={question.placeholder || t('services.enterANumber')}
+                  placeholder={getPlaceholderText(question, t('services.enterANumber'))}
                   placeholderTextColor={theme.textSecondary}
                   keyboardType="numeric"
                 />
@@ -1267,9 +1312,12 @@ export default function ServiceRequestScreen({
               )}
 
               {/* Select (Single choice) */}
-              {question.type === 'select' && question.options && (
+              {question.type === 'select' && getOptions(question).length > 0 && (
                 <View style={styles.selectOptions}>
-                  {question.options.map((option, optIdx) => (
+                  {getOptions(question).map((option, optIdx) => {
+                    // For Hindi options, use the English option as the value for backward compatibility
+                    const englishOption = question.options?.[optIdx] || option;
+                    return (
                     <TouchableOpacity
                       key={optIdx}
                       style={[
@@ -1280,24 +1328,27 @@ export default function ServiceRequestScreen({
                           borderColor: theme.primary,
                         },
                       ]}
-                      onPress={() => handleQuestionnaireAnswer(question.id, option)}>
+                      onPress={() => handleQuestionnaireAnswer(question.id, englishOption)}>
                       <Icon
-                        name={questionnaireAnswers[question.id] === option ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        name={questionnaireAnswers[question.id] === englishOption ? 'radio-button-checked' : 'radio-button-unchecked'}
                         size={20}
-                        color={questionnaireAnswers[question.id] === option ? theme.primary : theme.textSecondary}
+                        color={questionnaireAnswers[question.id] === englishOption ? theme.primary : theme.textSecondary}
                       />
                       <Text style={[styles.selectOptionText, {color: theme.text}]}>{option}</Text>
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
 
               {/* Multi-select */}
-              {question.type === 'multiselect' && question.options && (
+              {question.type === 'multiselect' && getOptions(question).length > 0 && (
                 <View style={styles.selectOptions}>
-                  {question.options.map((option, optIdx) => {
+                  {getOptions(question).map((option, optIdx) => {
+                    // For Hindi options, use the English option as the value for backward compatibility
+                    const englishOption = question.options?.[optIdx] || option;
                     const selectedOptions = questionnaireAnswers[question.id] || [];
-                    const isSelected = Array.isArray(selectedOptions) && selectedOptions.includes(option);
+                    const isSelected = Array.isArray(selectedOptions) && selectedOptions.includes(englishOption);
                     return (
                       <TouchableOpacity
                         key={optIdx}
@@ -1313,9 +1364,9 @@ export default function ServiceRequestScreen({
                           const current = questionnaireAnswers[question.id] || [];
                           const updated = Array.isArray(current)
                             ? isSelected
-                              ? current.filter(v => v !== option)
-                              : [...current, option]
-                            : [option];
+                              ? current.filter(v => v !== englishOption)
+                              : [...current, englishOption]
+                            : [englishOption];
                           handleQuestionnaireAnswer(question.id, updated);
                         }}>
                         <Icon
@@ -1429,7 +1480,7 @@ export default function ServiceRequestScreen({
       {/* Address Selection */}
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
-          Service Address *
+          {t('services.serviceAddress')} *
         </Text>
         <TouchableOpacity
           style={[
@@ -1545,8 +1596,17 @@ export default function ServiceRequestScreen({
               {backgroundColor: theme.card, borderColor: theme.border},
             ]}
             onPress={() => {
-              // Initialize with current date/time or existing scheduled date
-              setTempScheduledDate(scheduledDate || new Date());
+              // Initialize with existing scheduled date, or set to at least 1 hour from now
+              if (scheduledDate) {
+                setTempScheduledDate(scheduledDate);
+              } else {
+                // Set to 1 hour from now to avoid validation errors
+                const oneHourLater = new Date();
+                oneHourLater.setHours(oneHourLater.getHours() + 1);
+                // Round to next hour for cleaner display
+                oneHourLater.setMinutes(0);
+                setTempScheduledDate(oneHourLater);
+              }
               setShowDateTimeModal(true);
             }}>
             <Icon name="calendar-today" size={24} color={theme.primary} />
@@ -1633,10 +1693,10 @@ export default function ServiceRequestScreen({
                     <Text style={[styles.categoryName, {color: theme.text}]}>
                       {item.name}
                     </Text>
-                    {item.description && (
+                    {(item.description || item.descriptionHi) && (
                       <Text
                         style={[styles.categoryDescription, {color: theme.textSecondary}]}>
-                        {item.description}
+                        {language === 'hi' && item.descriptionHi ? item.descriptionHi : (item.description || '')}
                       </Text>
                     )}
                   </View>
@@ -2155,6 +2215,20 @@ export default function ServiceRequestScreen({
                         const newDate = new Date(selectedDate);
                         newDate.setHours(tempScheduledDate.getHours());
                         newDate.setMinutes(tempScheduledDate.getMinutes());
+                        
+                        // If selected date is today, ensure time is at least 1 hour from now
+                        const now = new Date();
+                        const isToday = newDate.toDateString() === now.toDateString();
+                        if (isToday) {
+                          const oneHourLater = new Date(now);
+                          oneHourLater.setHours(oneHourLater.getHours() + 1);
+                          if (newDate <= oneHourLater) {
+                            // Set time to 1 hour from now if selected time is too close
+                            newDate.setHours(oneHourLater.getHours());
+                            newDate.setMinutes(0);
+                          }
+                        }
+                        
                         setTempScheduledDate(newDate);
                       }
                     }}
@@ -2217,13 +2291,16 @@ export default function ServiceRequestScreen({
                 <TouchableOpacity
                   style={[styles.dateTimeModalConfirmButton, {backgroundColor: theme.primary}]}
                   onPress={() => {
-                    // Validate that selected date/time is in the future
+                    // Validate that selected date/time is at least 1 hour in the future
                     const now = new Date();
-                    if (tempScheduledDate <= now) {
+                    const oneHourLater = new Date(now);
+                    oneHourLater.setHours(oneHourLater.getHours() + 1);
+                    
+                    if (tempScheduledDate <= oneHourLater) {
                       setAlertModal({
                         visible: true,
                         title: t('common.invalidDateTime') || 'Invalid Date/Time',
-                        message: t('common.invalidDateTimeMessage') || 'Please select a future date and time for scheduled service.',
+                        message: t('common.invalidDateTimeMessage') || 'Please select a date and time at least 1 hour in the future for scheduled service.',
                         type: 'warning',
                       });
                       return;

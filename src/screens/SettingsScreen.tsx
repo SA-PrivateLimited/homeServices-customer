@@ -314,28 +314,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           subtitle={t('settings.contactUsForAssistance')}
           onPress={handleHelpSupport}
         />
-        {__DEV__ && (
-          <SettingItem
-            icon="notifications"
-            title={t('settings.testNotification')}
-            subtitle={t('settings.sendTestNotification')}
-            onPress={async () => {
-              try {
-                const sendTest = require('../utils/sendTestNotification').default;
-                await sendTest(t('settings.testNotificationMessage'));
-                setSuccessMessage(t('settings.testNotificationSent'));
-                setShowSuccessModal(true);
-              } catch (error: any) {
-                setAlertModal({
-                  visible: true,
-                  title: t('common.error'),
-                  message: error?.message || error?.code || t('settings.failedToSendTestNotification'),
-                  type: 'error',
-                });
-              }
-            }}
-          />
-        )}
+        <SettingItem
+          icon="notifications"
+          title={t('settings.testNotification')}
+          subtitle={t('settings.sendTestNotification')}
+          onPress={async () => {
+            try {
+              const sendTest = require('../utils/sendTestNotification').default;
+              await sendTest(t('settings.testNotificationMessage'));
+              setSuccessMessage(t('settings.testNotificationSent'));
+              setShowSuccessModal(true);
+            } catch (error: any) {
+              setAlertModal({
+                visible: true,
+                title: t('common.error'),
+                message: error?.message || error?.code || t('settings.failedToSendTestNotification'),
+                type: 'error',
+              });
+            }
+          }}
+        />
       </View>
 
       <View style={styles.section}>

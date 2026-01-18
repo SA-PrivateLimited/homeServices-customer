@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 interface ConfirmationModalProps {
   visible: boolean;
@@ -27,8 +28,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   visible,
   title,
   message,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
   type = 'info',
@@ -36,6 +37,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  
+  const defaultConfirmText = confirmText || t('common.confirm');
+  const defaultCancelText = cancelText || t('common.cancel');
 
   const getIconConfig = () => {
     if (icon) {
@@ -150,7 +155,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   styles.cancelButtonText,
                   {color: buttonColors.cancelText},
                 ]}>
-                {cancelText.toUpperCase()}
+                {defaultCancelText.toUpperCase()}
               </Text>
             </TouchableOpacity>
 
@@ -168,7 +173,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   styles.confirmButtonText,
                   {color: buttonColors.confirmText},
                 ]}>
-                {confirmText.toUpperCase()}
+                {defaultConfirmText.toUpperCase()}
               </Text>
             </TouchableOpacity>
           </View>

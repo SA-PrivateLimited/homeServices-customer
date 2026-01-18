@@ -1,12 +1,14 @@
 /**
  * Review Service
  * Handles customer reviews for completed services
+ * Uses HomeServicesBackend API for all database operations
  * Reviews are visible to both customer and provider
  * Providers cannot edit reviews
  */
 
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import {reviewsApi, type Review as ReviewApi} from './api/reviewsApi';
+import {jobCardsApi} from './api/jobCardsApi';
 
 export interface Review {
   id?: string;
@@ -24,14 +26,10 @@ export interface Review {
   updatedAt?: Date;
 }
 
-const COLLECTIONS = {
-  REVIEWS: 'reviews',
-  JOBCARDS: 'jobCards',
-};
-
 /**
  * Create a review for a completed job
  * Only customers can create reviews
+ * Uses backend API
  */
 export const createReview = async (
   jobCardId: string,
@@ -45,37 +43,25 @@ export const createReview = async (
       throw new Error('User not authenticated');
     }
 
-    // Get job card details
-    const jobCardDoc = await firestore()
-      .collection(COLLECTIONS.JOBCARDS)
-      .doc(jobCardId)
-      .get();
-
-    if (!jobCardDoc.exists) {
+    // Get job card details from API
+    const jobCard = await jobCardsApi.getById(jobCardId);
+    if (!jobCard) {
       throw new Error('Job card not found');
     }
 
-    const jobCard = jobCardDoc.data();
-
     // Verify the job is completed
-    if (jobCard?.status !== 'completed') {
+    if (jobCard.status !== 'completed') {
       throw new Error('Can only review completed jobs');
     }
 
     // Verify the current user is the customer
-    if (jobCard?.customerId !== currentUser.uid) {
+    if (jobCard.customerId !== currentUser.uid) {
       throw new Error('Only the customer can create a review');
     }
 
-    // Check if review already exists
-    const existingReview = await firestore()
-      .collection(COLLECTIONS.REVIEWS)
-      .where('jobCardId', '==', jobCardId)
-      .where('customerId', '==', currentUser.uid)
-      .limit(1)
-      .get();
-
-    if (!existingReview.empty) {
+    // Check if review already exists via API
+    const existingReview = await reviewsApi.getJobCardReview(jobCardId);
+    if (existingReview) {
       throw new Error('Review already exists for this job');
     }
 
@@ -84,26 +70,12 @@ export const createReview = async (
       throw new Error('Rating must be between 1 and 5');
     }
 
-    // Create review
-    const reviewRef = firestore().collection(COLLECTIONS.REVIEWS).doc();
-    
-    // Build review data, filtering out undefined values (Firestore doesn't allow undefined)
+    // Create review via backend API
     const reviewData: any = {
+      providerId: jobCard.providerId,
       jobCardId,
-      customerId: currentUser.uid,
-      customerName: jobCard?.customerName || 'Customer',
-      providerId: jobCard?.providerId || '',
-      providerName: jobCard?.providerName || 'Provider',
-      serviceType: jobCard?.serviceType || 'Service',
       rating,
-      createdAt: firestore.FieldValue.serverTimestamp(),
     };
-
-    // Only add optional fields if they have values
-    const consultationId = jobCard?.consultationId || jobCard?.bookingId;
-    if (consultationId) {
-      reviewData.serviceRequestId = consultationId;
-    }
 
     const trimmedComment = comment?.trim();
     if (trimmedComment && trimmedComment.length > 0) {
@@ -114,12 +86,8 @@ export const createReview = async (
       reviewData.photos = photos;
     }
 
-    await reviewRef.set(reviewData);
-
-    // Update provider's average rating
-    await updateProviderRating(jobCard.providerId);
-
-    return reviewRef.id;
+    const review = await reviewsApi.create(reviewData);
+    return review._id || review.id || '';
   } catch (error: any) {
     console.error('Error creating review:', error);
     throw new Error(error.message || 'Failed to create review');
@@ -128,45 +96,21 @@ export const createReview = async (
 
 /**
  * Get reviews for a provider
+ * Uses backend API
  */
 export const getProviderReviews = async (
   providerId: string,
 ): Promise<Review[]> => {
   try {
-    // Query without orderBy to avoid requiring a composite index
-    // We'll sort client-side instead
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.REVIEWS)
-      .where('providerId', '==', providerId)
-      .get();
+    const reviews = await reviewsApi.getProviderReviews(providerId);
 
-    const reviews = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        jobCardId: data?.jobCardId || '',
-        serviceRequestId: data?.serviceRequestId,
-        customerId: data?.customerId || '',
-        customerName: data?.customerName || 'Customer',
-        providerId: data?.providerId || '',
-        providerName: data?.providerName || 'Provider',
-        serviceType: data?.serviceType || 'Service',
-        rating: data?.rating || 0,
-        comment: data?.comment,
-        photos: Array.isArray(data?.photos) ? data.photos : undefined,
-        createdAt: data?.createdAt?.toDate() || new Date(),
-        updatedAt: data?.updatedAt?.toDate(),
-      } as Review;
-    });
-
-    // Sort by createdAt descending (newest first)
-    reviews.sort((a, b) => {
-      const aTime = a.createdAt?.getTime() || 0;
-      const bTime = b.createdAt?.getTime() || 0;
-      return bTime - aTime;
-    });
-
-    return reviews;
+    // Convert API response to app format
+    return reviews.map((review: ReviewApi) => ({
+      id: review._id || review.id,
+      ...review,
+      createdAt: review.createdAt instanceof Date ? review.createdAt : new Date(review.createdAt),
+      updatedAt: review.updatedAt ? (review.updatedAt instanceof Date ? review.updatedAt : new Date(review.updatedAt)) : undefined,
+    })) as Review[];
   } catch (error: any) {
     console.error('Error fetching provider reviews:', error);
     throw new Error(`Failed to fetch reviews: ${error.message || 'Unknown error'}`);
@@ -175,45 +119,21 @@ export const getProviderReviews = async (
 
 /**
  * Get reviews for a customer
+ * Uses backend API
  */
 export const getCustomerReviews = async (
   customerId: string,
 ): Promise<Review[]> => {
   try {
-    // Query without orderBy to avoid requiring a composite index
-    // We'll sort client-side instead
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.REVIEWS)
-      .where('customerId', '==', customerId)
-      .get();
+    const reviews = await reviewsApi.getCustomerReviews(customerId);
 
-    const reviews = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        jobCardId: data?.jobCardId || '',
-        serviceRequestId: data?.serviceRequestId,
-        customerId: data?.customerId || '',
-        customerName: data?.customerName || 'Customer',
-        providerId: data?.providerId || '',
-        providerName: data?.providerName || 'Provider',
-        serviceType: data?.serviceType || 'Service',
-        rating: data?.rating || 0,
-        comment: data?.comment,
-        photos: Array.isArray(data?.photos) ? data.photos : undefined,
-        createdAt: data?.createdAt?.toDate() || new Date(),
-        updatedAt: data?.updatedAt?.toDate(),
-      } as Review;
-    });
-
-    // Sort by createdAt descending (newest first)
-    reviews.sort((a, b) => {
-      const aTime = a.createdAt?.getTime() || 0;
-      const bTime = b.createdAt?.getTime() || 0;
-      return bTime - aTime;
-    });
-
-    return reviews;
+    // Convert API response to app format
+    return reviews.map((review: ReviewApi) => ({
+      id: review._id || review.id,
+      ...review,
+      createdAt: review.createdAt instanceof Date ? review.createdAt : new Date(review.createdAt),
+      updatedAt: review.updatedAt ? (review.updatedAt instanceof Date ? review.updatedAt : new Date(review.updatedAt)) : undefined,
+    })) as Review[];
   } catch (error: any) {
     console.error('Error fetching customer reviews:', error);
     throw new Error(`Failed to fetch reviews: ${error.message || 'Unknown error'}`);
@@ -222,27 +142,23 @@ export const getCustomerReviews = async (
 
 /**
  * Get review for a specific job card
+ * Uses backend API
  */
 export const getJobCardReview = async (
   jobCardId: string,
 ): Promise<Review | null> => {
   try {
-    const snapshot = await firestore()
-      .collection(COLLECTIONS.REVIEWS)
-      .where('jobCardId', '==', jobCardId)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
+    const review = await reviewsApi.getJobCardReview(jobCardId);
+    if (!review) {
       return null;
     }
 
-    const doc = snapshot.docs[0];
+    // Convert API response to app format
     return {
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data()?.createdAt?.toDate() || new Date(),
-      updatedAt: doc.data()?.updatedAt?.toDate(),
+      id: review._id || review.id,
+      ...review,
+      createdAt: review.createdAt instanceof Date ? review.createdAt : new Date(review.createdAt),
+      updatedAt: review.updatedAt ? (review.updatedAt instanceof Date ? review.updatedAt : new Date(review.updatedAt)) : undefined,
     } as Review;
   } catch (error) {
     console.error('Error fetching job card review:', error);
@@ -250,36 +166,12 @@ export const getJobCardReview = async (
   }
 };
 
-/**
- * Update provider's average rating
- */
-const updateProviderRating = async (providerId: string): Promise<void> => {
-  try {
-    const reviews = await getProviderReviews(providerId);
-    
-    if (reviews.length === 0) {
-      return;
-    }
-
-    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
-    const averageRating = totalRating / reviews.length;
-
-    await firestore()
-      .collection('providers')
-      .doc(providerId)
-      .update({
-        rating: averageRating,
-        totalReviews: reviews.length,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      });
-  } catch (error) {
-    console.error('Error updating provider rating:', error);
-    // Don't throw - rating update failure shouldn't block review creation
-  }
-};
+// Note: Provider rating update is now handled by the backend API
+// when a review is created/updated/deleted
 
 /**
  * Check if customer can review a job
+ * Uses backend API
  */
 export const canCustomerReview = async (
   jobCardId: string,
@@ -290,24 +182,19 @@ export const canCustomerReview = async (
       return false;
     }
 
-    const jobCardDoc = await firestore()
-      .collection(COLLECTIONS.JOBCARDS)
-      .doc(jobCardId)
-      .get();
-
-    if (!jobCardDoc.exists) {
+    // Get job card from API
+    const jobCard = await jobCardsApi.getById(jobCardId);
+    if (!jobCard) {
       return false;
     }
 
-    const jobCard = jobCardDoc.data();
-
     // Check if job is completed
-    if (jobCard?.status !== 'completed') {
+    if (jobCard.status !== 'completed') {
       return false;
     }
 
     // Check if customer matches
-    if (jobCard?.customerId !== currentUser.uid) {
+    if (jobCard.customerId !== currentUser.uid) {
       return false;
     }
 

@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 interface LogoutConfirmationModalProps {
   visible: boolean;
@@ -24,6 +25,7 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   return (
     <Modal
@@ -54,21 +56,21 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
               />
             </View>
             <Text style={[styles.headerTitle, {color: theme.text}]}>
-              Logout
+              {t('common.logoutTitle')}
             </Text>
           </View>
 
           {/* Message */}
           <View style={styles.contentContainer}>
             <Text style={[styles.messageText, {color: theme.textSecondary}]}>
-              Are you sure you want to logout?
+              {t('common.logoutMessage')}
             </Text>
             <Text
               style={[
                 styles.subMessageText,
                 {color: theme.textSecondary},
               ]}>
-              You'll need to sign in again to access your account.
+              {t('common.logoutSubMessage')}
             </Text>
           </View>
 
@@ -89,7 +91,7 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
                   styles.cancelButtonText,
                   {color: theme.text},
                 ]}>
-                Cancel
+                {t('common.cancel')}
               </Text>
             </TouchableOpacity>
 
@@ -100,7 +102,7 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
               ]}
               onPress={onConfirm}
               activeOpacity={0.8}>
-              <Text style={styles.confirmButtonText}>Logout</Text>
+              <Text style={styles.confirmButtonText}>{t('common.logout')}</Text>
             </TouchableOpacity>
           </View>
         </View>

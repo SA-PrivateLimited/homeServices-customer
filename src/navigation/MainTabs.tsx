@@ -5,6 +5,7 @@ import {TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 // Screens - Settings (kept for profile management)
 import SettingsScreen from '../screens/SettingsScreen';
@@ -28,6 +29,7 @@ const Tab = createBottomTabNavigator();
 const ServicesStack = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   return (
     <Stack.Navigator
@@ -45,7 +47,7 @@ const ServicesStack = () => {
         name="ServiceRequest"
         component={ServiceRequestScreen}
         options={({navigation}) => ({
-          title: 'Request Service',
+          title: t('services.requestService'),
           headerRight: () => (
             <NotificationIcon
               onPress={() => navigation.navigate('Notifications')}
@@ -57,7 +59,7 @@ const ServicesStack = () => {
         name="ServiceHistory"
         component={ServiceHistoryScreen}
         options={({navigation}) => ({
-          title: 'Service History',
+          title: t('services.serviceHistory'),
           headerRight: () => (
             <NotificationIcon
               onPress={() => navigation.navigate('Notifications')}
@@ -69,7 +71,7 @@ const ServicesStack = () => {
         name="ActiveService"
         component={ActiveServiceScreen}
         options={({navigation}) => ({
-          title: 'Active Service',
+          title: t('services.activeService'),
           headerRight: () => (
             <NotificationIcon
               onPress={() => navigation.navigate('Notifications')}
@@ -81,7 +83,7 @@ const ServicesStack = () => {
         name="ProvidersList"
         component={ProvidersListScreen}
         options={({navigation}) => ({
-          title: 'Browse Providers',
+          title: t('providers.browseProviders'),
           headerRight: () => (
             <NotificationIcon
               onPress={() => navigation.navigate('Notifications')}
@@ -92,12 +94,12 @@ const ServicesStack = () => {
       <Stack.Screen
         name="ProviderDetails"
         component={ProviderDetailsScreen}
-        options={{title: 'Provider Details'}}
+        options={{title: t('providers.providerDetails')}}
       />
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{title: 'Notifications'}}
+        options={{title: t('notifications.title')}}
       />
     </Stack.Navigator>
   );
@@ -137,6 +139,7 @@ const SettingsStack = React.memo(() => {
 const MainTabs = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   return (
     <Tab.Navigator
@@ -205,22 +208,22 @@ const MainTabs = () => {
       <Tab.Screen 
         name="Services" 
         component={ServicesStack} 
-        options={{title: 'Request'}}
+        options={{title: t('common.request')}}
       />
       <Tab.Screen 
         name="Providers" 
         component={ProvidersListScreen}
-        options={{title: 'Browse'}}
+        options={{title: t('common.browse')}}
       />
       <Tab.Screen 
         name="History" 
         component={ServiceHistoryScreen}
-        options={{title: 'History'}}
+        options={{title: t('common.history')}}
       />
       <Tab.Screen 
         name="Settings" 
         component={SettingsStack}
-        options={{title: 'Settings'}}
+        options={{title: t('common.settings')}}
       />
     </Tab.Navigator>
   );

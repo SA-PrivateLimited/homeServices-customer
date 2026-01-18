@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 interface ProfileSetupModalProps {
   visible: boolean;
@@ -24,6 +25,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   return (
     <Modal
@@ -40,12 +42,12 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
 
           {/* Title */}
           <Text style={[styles.title, {color: theme.text}]}>
-            Complete Your Profile
+            {String(t('profile.completeYourProfileTitle') || 'Complete Your Profile')}
           </Text>
 
           {/* Description */}
           <Text style={[styles.description, {color: theme.textSecondary}]}>
-            To start receiving appointment requests and consultations, you need to complete your doctor profile setup.
+            {String(t('profile.completeYourProfileDescription') || 'To start receiving service requests, you need to complete your profile setup.')}
           </Text>
 
           {/* Features List */}
@@ -53,19 +55,19 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
             <View style={styles.featureItem}>
               <Icon name="check-circle" size={20} color="#34C759" />
               <Text style={[styles.featureText, {color: theme.text}]}>
-                Set your specialization & qualifications
+                {String(t('profile.setSpecializationQualification') || 'Set your specialization & qualifications')}
               </Text>
             </View>
             <View style={styles.featureItem}>
               <Icon name="check-circle" size={20} color="#34C759" />
               <Text style={[styles.featureText, {color: theme.text}]}>
-                Define your availability & consultation fees
+                {String(t('profile.defineAvailabilityFees') || 'Define your availability & consultation fees')}
               </Text>
             </View>
             <View style={styles.featureItem}>
               <Icon name="check-circle" size={20} color="#34C759" />
               <Text style={[styles.featureText, {color: theme.text}]}>
-                Start accepting patient appointments
+                {String(t('profile.startAcceptingRequests') || 'Start accepting service requests')}
               </Text>
             </View>
           </View>
@@ -74,7 +76,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
           <View style={[styles.noteContainer, {backgroundColor: theme.primary + '15'}]}>
             <Icon name="info" size={18} color={theme.primary} />
             <Text style={[styles.noteText, {color: theme.primary}]}>
-              Your profile will be reviewed by an admin before activation
+              {String(t('profile.profileReviewNote') || 'Your profile will be reviewed by an admin before activation')}
             </Text>
           </View>
 
@@ -83,7 +85,9 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
             style={[styles.primaryButton, {backgroundColor: theme.primary}]}
             onPress={onSetupNow}
             activeOpacity={0.8}>
-            <Text style={styles.primaryButtonText}>Set Up Profile Now</Text>
+            <Text style={styles.primaryButtonText}>
+              {String(t('profile.setUpProfileNow') || 'Set Up Profile Now')}
+            </Text>
             <Icon name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
 
@@ -92,7 +96,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
             onPress={onSetupLater}
             activeOpacity={0.7}>
             <Text style={[styles.secondaryButtonText, {color: theme.textSecondary}]}>
-              I'll Do This Later
+              {String(t('profile.illDoThisLater') || "I'll Do This Later")}
             </Text>
           </TouchableOpacity>
         </View>

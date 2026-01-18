@@ -101,6 +101,16 @@ android {
         jniLibs {
             useLegacyPackaging = false
         }
+        // Fix duplicate META-INF files issue
+        resources {
+            pickFirsts += [
+                'META-INF/BC2048KE.SF',
+                'META-INF/BC2048KE.DSA',
+                'META-INF/BC2048KE.RSA',
+                'META-INF/BC1024KE.DSA',
+                'META-INF/com.android.tools/proguard/coroutines.pro'
+            ]
+        }
     }
 
     sourceSets {

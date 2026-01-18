@@ -29,6 +29,8 @@
   "serviceType": "Service Type",
   "customerReviews": "Customer Reviews",
   "requestService": "Request Service",
-  "pleaseLoginToRequest": "Please login to request a service"
+  "pleaseLoginToRequest": "Please login to request a service",
+  "browseProviders": "Browse Providers",
+  "providerDetails": "Provider Details"
 }
 

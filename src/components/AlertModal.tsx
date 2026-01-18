@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
 
 interface AlertModalProps {
   visible: boolean;
@@ -25,13 +26,16 @@ const AlertModal: React.FC<AlertModalProps> = ({
   visible,
   title,
   message,
-  buttonText = 'OK',
+  buttonText,
   onClose,
   type = 'info',
   icon,
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  
+  const defaultButtonText = buttonText || t('common.ok');
 
   const getIconConfig = () => {
     if (icon) {
@@ -119,7 +123,7 @@ const AlertModal: React.FC<AlertModalProps> = ({
             ]}
             onPress={onClose}
             activeOpacity={0.8}>
-            <Text style={styles.buttonText}>{buttonText.toUpperCase()}</Text>
+            <Text style={styles.buttonText}>{defaultButtonText.toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
       </View>
