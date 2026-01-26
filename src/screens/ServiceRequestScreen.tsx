@@ -21,8 +21,8 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import messaging from '@react-native-firebase/messaging';
+import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
@@ -35,12 +35,15 @@ import {
   setDefaultAddress,
   type SavedAddress,
 } from '../services/addressService';
-import type {UserLocation} from '../types/consultation';
+import type {UserLocation} from '../types/common';
 import WebSocketService from '../services/websocketService';
 import Toast from '../components/Toast';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
+import {usersApi} from '../services/api/usersApi';
+import {providersApi} from '../services/api/providersApi';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -84,6 +87,8 @@ export default function ServiceRequestScreen({
   };
 
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [providerCounts, setProviderCounts] = useState<Record<string, number>>({});
+  const [loadingProviderCounts, setLoadingProviderCounts] = useState(false);
   const [selectedServiceType, setSelectedServiceType] = useState<string>(
     route?.params?.serviceType || '',
   );
@@ -153,6 +158,13 @@ export default function ServiceRequestScreen({
   }, []);
 
   useEffect(() => {
+    // Load provider counts when service categories are loaded
+    if (serviceCategories.length > 0) {
+      loadProviderCounts();
+    }
+  }, [serviceCategories]);
+
+  useEffect(() => {
     if (currentPincode && !selectedAddress) {
       // Try to auto-detect address
       // Add a small delay to prevent race conditions
@@ -169,6 +181,39 @@ export default function ServiceRequestScreen({
       loadSavedAddresses();
     }
   }, [showAddressModal]);
+
+  const loadProviderCounts = async () => {
+    try {
+      setLoadingProviderCounts(true);
+      const counts: Record<string, number> = {};
+      
+      // Fetch provider counts for each service category
+      await Promise.all(
+        serviceCategories.map(async (category) => {
+          try {
+            const providers = await providersApi.getAll({
+              serviceType: category.name,
+              // Only count approved providers
+            });
+            // Filter for approved providers only
+            const approvedProviders = providers.filter(
+              (p) => p.approvalStatus === 'approved'
+            );
+            counts[category.name] = approvedProviders.length;
+          } catch (error) {
+            console.error(`Error fetching providers for ${category.name}:`, error);
+            counts[category.name] = 0;
+          }
+        })
+      );
+      
+      setProviderCounts(counts);
+    } catch (error) {
+      console.error('Error loading provider counts:', error);
+    } finally {
+      setLoadingProviderCounts(false);
+    }
+  };
 
   const loadServiceCategories = async () => {
     try {
@@ -232,6 +277,22 @@ export default function ServiceRequestScreen({
   };
 
   const handleSelectServiceType = (category: ServiceCategory) => {
+    const count = providerCounts[category.name] || 0;
+    
+    // Check if provider count is zero
+    if (count === 0) {
+      const serviceName = language === 'hi' && category.nameHi ? category.nameHi : category.name;
+      const messageTemplate = String(t('services.providerNotAvailableMessage'));
+      const message = messageTemplate.replace('{{serviceType}}', serviceName);
+      setAlertModal({
+        visible: true,
+        title: String(t('services.providerNotAvailable')),
+        message: message,
+        type: 'warning',
+      });
+      return;
+    }
+    
     setSelectedServiceType(category.name);
     setSelectedCategory(category);
     setQuestionnaire(category.questionnaire || []);
@@ -641,7 +702,7 @@ export default function ServiceRequestScreen({
       const translated = t('services.home');
       return typeof translated === 'string' ? translated : 'Home';
     }
-    if (address.label === 'office' || address.label === 'work') {
+    if (address.label === 'office') {
       const translated = t('services.work');
       return typeof translated === 'string' ? translated : 'Work';
     }
@@ -701,7 +762,7 @@ export default function ServiceRequestScreen({
     }
 
     // Check phone verification status
-    // First check from store (fast), then verify/update in Firestore if needed
+    // First check from store (fast), then verify via API if needed
     const authUser = auth().currentUser;
     if (!authUser) {
       setAlertModal({
@@ -720,112 +781,37 @@ export default function ServiceRequestScreen({
 
     // If phone is verified in store or user logged in with phone, proceed
     if (!phoneVerifiedFromStore && !isPhoneAuth) {
-      // Phone not verified - try to update Firestore or show error
+      // Phone not verified - require verification
+      if (!currentUser.phone) {
+        setConfirmationModal({
+          visible: true,
+          title: t('common.phoneVerificationRequired'),
+          message: t('common.phoneVerificationMessage'),
+          type: 'warning',
+          onConfirm: () => {
+            setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
+            navigation.navigate('Settings');
+          },
+        });
+        return;
+      }
+      
+      // Try to update phone verification via API
       try {
-        // Try to update the document to set phoneVerified if user has phone
-        if (currentUser.phone) {
-          await firestore()
-            .collection('users')
-            .doc(currentUser.uid)
-            .update({
-              phoneVerified: true,
-              phone: currentUser.phone,
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-            });
-          // Continue with request after update
-        } else {
-          // No phone number - require verification
-          setConfirmationModal({
-            visible: true,
-            title: t('common.phoneVerificationRequired'),
-            message: t('common.phoneVerificationMessage'),
-            type: 'warning',
-            onConfirm: () => {
-              setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-              navigation.navigate('Settings');
-            },
-          });
-          return;
-        }
+        await usersApi.updateMe({
+          phoneVerified: true,
+          phone: currentUser.phone,
+        });
+        // Continue with request after update
       } catch (error: any) {
-        // If update fails, check if it's because document doesn't exist
-        if (error.code === 'not-found' || error.message?.includes('No document')) {
-          // Document doesn't exist - create it
-          try {
-            const userDataToCreate: any = {
-              name: currentUser.name || authUser.displayName || 'User',
-              email: currentUser.email || authUser.email || '',
-              phone: authUser.phoneNumber || currentUser.phone || '',
-              phoneVerified: isPhoneAuth || !!authUser.phoneNumber, // Phone auth means verified
-              createdAt: firestore.FieldValue.serverTimestamp(),
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-              role: 'customer', // HomeServices app is for customers
-            };
-
-            // Get FCM token if available
-            try {
-              const fcmToken = await messaging().getToken();
-              if (fcmToken) {
-                userDataToCreate.fcmToken = fcmToken;
-              }
-            } catch (fcmError) {
-              console.warn('Could not get FCM token:', fcmError);
-            }
-
-            await firestore()
-              .collection('users')
-              .doc(currentUser.uid)
-              .set(userDataToCreate);
-            
-            // Continue with request after creating document
-          } catch (createError: any) {
-            console.error('Error creating user document:', createError);
-            // If creation fails due to permission, user needs to re-login
-            if (createError.code === 'permission-denied') {
-              setConfirmationModal({
-                visible: true,
-                title: t('common.authenticationError'),
-                message: t('common.authenticationErrorMessage'),
-                type: 'danger',
-                onConfirm: () => {
-                  setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-                  navigation.navigate('Login');
-                },
-              });
-            } else {
-              setAlertModal({
-                visible: true,
-                title: t('common.accountError'),
-                message: t('common.accountErrorMessage'),
-                type: 'error',
-              });
-            }
-            return;
-          }
-        } else if (error.code === 'permission-denied') {
-          // Permission denied - user might not be authenticated properly
-          setConfirmationModal({
-            visible: true,
-            title: t('common.authenticationError'),
-            message: t('common.authenticationErrorMessage'),
-            type: 'error',
-            onConfirm: () => {
-              setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-              navigation.navigate('Login');
-            },
-          });
-          return;
-        } else {
-          // Other error - show generic message
-          console.error('Error updating phone verification:', error);
-          setAlertModal({
-            visible: true,
-            title: t('common.verificationError'),
-            message: t('common.verificationErrorMessage'),
-            type: 'error',
-          });
-          return;
-        }
+        console.error('Error updating phone verification:', error);
+        setAlertModal({
+          visible: true,
+          title: t('common.verificationError'),
+          message: t('common.verificationErrorMessage'),
+          type: 'error',
+        });
+        return;
       }
     }
 
@@ -834,6 +820,22 @@ export default function ServiceRequestScreen({
         visible: true,
         title: t('common.serviceTypeRequired'),
         message: t('common.serviceTypeRequiredMessage'),
+        type: 'warning',
+      });
+      return;
+    }
+
+    // Check if selected service type has available providers
+    const providerCount = providerCounts[selectedServiceType] || 0;
+    if (providerCount === 0) {
+      const selectedCategory = serviceCategories.find(cat => cat.name === selectedServiceType);
+      const serviceName = language === 'hi' && selectedCategory?.nameHi ? selectedCategory.nameHi : selectedServiceType;
+      const messageTemplate = String(t('services.providerNotAvailableMessage'));
+      const message = messageTemplate.replace('{{serviceType}}', serviceName);
+      setAlertModal({
+        visible: true,
+        title: String(t('services.providerNotAvailable')),
+        message: message,
         type: 'warning',
       });
       return;
@@ -898,8 +900,7 @@ export default function ServiceRequestScreen({
 
     setLoading(true);
     try {
-      // Ensure user document exists and is properly set up BEFORE creating consultation
-      // This is required by Firestore rules which check phoneVerified and role
+      // Ensure user is authenticated
       const authUser = auth().currentUser;
       if (!authUser) {
         setAlertModal({
@@ -913,108 +914,20 @@ export default function ServiceRequestScreen({
         return;
       }
 
-      // Ensure user document exists with phoneVerified = true
-      // This must happen BEFORE creating the consultation
-      const userDocRef = firestore().collection('users').doc(authUser.uid);
-      
-      // Check if document exists first
-      const userDoc = await userDocRef.get();
-      
-      if (!userDoc.exists) {
-        // Document doesn't exist - create it
-        const userDataToCreate: any = {
-          name: currentUser.name || authUser.displayName || 'User',
-          email: currentUser.email || authUser.email || '',
-          phone: authUser.phoneNumber || currentUser.phone || '',
-          phoneVerified: true, // Phone auth means phone is verified
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-          role: 'customer', // HomeServices app is for customers
-        };
-
-        // Get FCM token if available
-        try {
-          const fcmToken = await messaging().getToken();
-          if (fcmToken) {
-            userDataToCreate.fcmToken = fcmToken;
-          }
-        } catch (fcmError) {
-          console.warn('Could not get FCM token:', fcmError);
+      // Ensure user profile exists with phoneVerified = true via API
+      try {
+        const user = await usersApi.getMe();
+        if (!user || !user.phoneVerified) {
+          // Update user profile to ensure phoneVerified is true
+          await usersApi.updateMe({
+            phoneVerified: true,
+            phone: authUser.phoneNumber || currentUser.phone || '',
+            role: 'customer',
+          });
         }
-
-        try {
-          await userDocRef.set(userDataToCreate);
-          console.log('User document created successfully');
-          
-          // Verify the document was created by reading it back
-          const verifyDoc = await userDocRef.get();
-          if (!verifyDoc.exists || !verifyDoc.data()?.phoneVerified) {
-            throw new Error('User document verification failed');
-          }
-        } catch (createError: any) {
-          console.error('Error creating user document:', createError);
-          if (createError.code === 'permission-denied') {
-            setConfirmationModal({
-              visible: true,
-              title: t('common.authenticationError'),
-              message: t('common.authenticationErrorMessage'),
-              type: 'error',
-              onConfirm: () => {
-                setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-                navigation.navigate('Login');
-              },
-            });
-          } else {
-            setAlertModal({
-              visible: true,
-              title: t('common.accountError'),
-              message: t('common.accountErrorMessage'),
-              type: 'error',
-            });
-          }
-          setLoading(false);
-          return;
-        }
-      } else {
-        // Document exists - ensure phoneVerified is true
-        const userData = userDoc.data();
-        if (!userData?.phoneVerified) {
-          try {
-            await userDocRef.update({
-              phoneVerified: true,
-              phone: authUser.phoneNumber || currentUser.phone || userData?.phone || '',
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-            });
-            console.log('User document updated with phoneVerified: true');
-            
-            // Verify the update was successful
-            const verifyDoc = await userDocRef.get();
-            if (!verifyDoc.exists || !verifyDoc.data()?.phoneVerified) {
-              throw new Error('User document verification failed after update');
-            }
-          } catch (updateError: any) {
-            console.error('Error updating user document:', updateError);
-            if (updateError.code === 'permission-denied') {
-              setConfirmationModal({
-                visible: true,
-                title: t('common.permissionError'),
-                message: t('common.permissionErrorMessage'),
-                type: 'danger',
-                onConfirm: () => {
-                  setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-                  navigation.navigate('Login');
-                },
-              });
-              setLoading(false);
-              return;
-            }
-            // If update fails for other reasons, still try to continue
-            // The Firestore rule will catch it if phoneVerified is not true
-          }
-        } else {
-          // Document exists and phoneVerified is already true - good to go
-          console.log('User document verified: phoneVerified is true');
-        }
+      } catch (userError: any) {
+        console.error('Error ensuring user profile:', userError);
+        // Continue anyway - backend will validate
       }
 
       // Clean address object - remove undefined and null values
@@ -1031,13 +944,10 @@ export default function ServiceRequestScreen({
         return;
       }
 
-      // Create service request
-      // IMPORTANT: Use authUser.uid to match Firestore rule check (request.auth.uid)
-      const serviceRequestRef = firestore().collection('consultations').doc();
-      
+      // Create service request via API
       // Build service request data - ensure no undefined values
       const serviceRequestDataRaw: any = {
-        customerId: authUser.uid, // Must match request.auth.uid for Firestore rule
+        customerId: authUser.uid,
         customerName: currentUser.name || 'Customer',
         customerPhone: currentUser.phone || '',
         customerAddress: cleanAddress,
@@ -1045,15 +955,11 @@ export default function ServiceRequestScreen({
         problem: problem.trim(),
         status: 'pending',
         urgency: urgency,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
       // Handle scheduledTime
       if (urgency === 'scheduled' && scheduledDate) {
-        serviceRequestDataRaw.scheduledTime = firestore.Timestamp.fromDate(scheduledDate);
-      } else {
-        serviceRequestDataRaw.scheduledTime = firestore.FieldValue.serverTimestamp();
+        serviceRequestDataRaw.scheduledTime = scheduledDate.toISOString();
       }
 
       // Only include photos if there are any (filter out undefined/null/empty)
@@ -1072,38 +978,52 @@ export default function ServiceRequestScreen({
       // Remove all undefined values before saving
       const serviceRequestData = removeUndefinedValues(serviceRequestDataRaw);
 
-      await serviceRequestRef.set(serviceRequestData);
+      // Create service request in Firestore (PRIMARY) - ensures provider can always find it
+      const firestoreData = {
+        ...serviceRequestData,
+        customerId: currentUser.id,
+        status: 'pending',
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Create document with auto-generated ID
+      const docRef = await firestore()
+        .collection('serviceRequests')
+        .add(firestoreData);
+
+      const serviceRequestId = docRef.id;
+      console.log('✅ Service request created in Firestore:', serviceRequestId);
+
+      // Also try to sync to MongoDB (optional, for backend consistency)
+      try {
+        await serviceRequestsApi.create({
+          ...serviceRequestData,
+          _id: serviceRequestId, // Use Firestore ID
+          consultationId: serviceRequestId,
+        });
+        console.log('✅ Service request also synced to MongoDB:', serviceRequestId);
+      } catch (apiError: any) {
+        // MongoDB sync is optional - Firestore is primary
+        console.warn('⚠️ MongoDB sync failed (service request is in Firestore):', apiError.message);
+      }
 
       // Notify nearby online providers via WebSocket
       try {
-        // Find online providers for this service type
-        const onlineProvidersSnapshot = await firestore()
-          .collection('providers')
-          .where('isOnline', '==', true)
-          .where('approvalStatus', '==', 'approved')
-          .where('specialization', '==', selectedServiceType)
-          .get();
-
-        // Also check the legacy 'specialty' field
-        const onlineProvidersBySpecialtySnapshot = await firestore()
-          .collection('providers')
-          .where('isOnline', '==', true)
-          .where('approvalStatus', '==', 'approved')
-          .where('specialty', '==', selectedServiceType)
-          .get();
-
-        // Combine results and remove duplicates
-        const allProviderIds = new Set<string>();
-        onlineProvidersSnapshot.docs.forEach(doc => {
-          allProviderIds.add(doc.id);
-          console.log(`📋 Found online provider: ${doc.id}, specialization: ${doc.data()?.specialization}`);
-        });
-        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => {
-          allProviderIds.add(doc.id);
-          console.log(`📋 Found online provider (by specialty): ${doc.id}, specialty: ${doc.data()?.specialty}`);
+        // Find online providers for this service type using API
+        const onlineProviders = await providersApi.getAll({
+          serviceType: selectedServiceType,
+          isOnline: true,
+          limit: 50,
         });
 
-        console.log(`📢 Notifying ${allProviderIds.size} provider(s) about service request: ${serviceRequestRef.id}`);
+        // Filter approved providers
+        const allProviderIds = onlineProviders
+          .filter(p => p.approvalStatus === 'approved')
+          .map(p => p._id || p.id)
+          .filter((id): id is string => !!id);
+
+        console.log(`📢 Notifying ${allProviderIds.length} provider(s) about service request: ${serviceRequestId}`);
 
         // Emit WebSocket notification to each provider
         const notificationPromises = Array.from(allProviderIds).map(providerId => {
@@ -1111,9 +1031,9 @@ export default function ServiceRequestScreen({
           
           // Build WebSocket payload
           const websocketPayload: any = {
-            consultationId: serviceRequestRef.id,
-            id: serviceRequestRef.id,
-            bookingId: serviceRequestRef.id,
+            consultationId: serviceRequestId,
+            id: serviceRequestId,
+            bookingId: serviceRequestId,
             customerName: serviceRequestData.customerName,
             patientName: serviceRequestData.customerName, // For backward compatibility
             customerPhone: serviceRequestData.customerPhone,
@@ -1152,22 +1072,22 @@ export default function ServiceRequestScreen({
         });
 
         await Promise.all(notificationPromises);
-        console.log(`✅ Notified ${allProviderIds.size} online provider(s) about new service request`);
+        console.log(`✅ Notified ${allProviderIds.length} online provider(s) about new service request`);
       } catch (websocketError) {
         console.error('Error notifying providers via WebSocket:', websocketError);
         // Don't fail the request if WebSocket notification fails
       }
 
       // Show toast notification
-      setSubmittedServiceRequestId(serviceRequestRef.id);
+      setSubmittedServiceRequestId(serviceRequestId);
       setToastMessage('Your service request has been submitted. Nearby providers will be notified.');
       setShowToast(true);
       
       // Navigate to ActiveService after a short delay
       setTimeout(() => {
-        if (serviceRequestRef.id) {
+        if (serviceRequestId) {
           navigation.navigate('ActiveService', {
-            serviceRequestId: serviceRequestRef.id,
+            serviceRequestId: serviceRequestId,
           });
           setSubmittedServiceRequestId(null);
         }
@@ -1690,9 +1610,37 @@ export default function ServiceRequestScreen({
                     <Icon name={item.icon} size={24} color={item.color} />
                   </View>
                   <View style={styles.categoryText}>
-                    <Text style={[styles.categoryName, {color: theme.text}]}>
-                      {item.name}
-                    </Text>
+                    <View style={styles.categoryNameRow}>
+                      <Text style={[styles.categoryName, {color: theme.text}]}>
+                        {language === 'hi' && item.nameHi ? item.nameHi : item.name}
+                      </Text>
+                      {loadingProviderCounts ? (
+                        <ActivityIndicator size="small" color={theme.primary} style={styles.countLoader} />
+                      ) : (
+                        <View style={[
+                          styles.providerCountBadge,
+                          {
+                            backgroundColor: (providerCounts[item.name] || 0) === 0 
+                              ? '#e74c3c' 
+                              : theme.primary + '20',
+                          }
+                        ]}>
+                          <Text style={[
+                            styles.providerCountText,
+                            {
+                              color: (providerCounts[item.name] || 0) === 0 
+                                ? '#fff' 
+                                : theme.primary,
+                            }
+                          ]}>
+                            {(providerCounts[item.name] || 0) === 0 
+                              ? String(t('services.noProviders'))
+                              : `${providerCounts[item.name] || 0} ${String(t('services.providersAvailable'))}`
+                            }
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     {(item.description || item.descriptionHi) && (
                       <Text
                         style={[styles.categoryDescription, {color: theme.textSecondary}]}>
@@ -2003,7 +1951,7 @@ export default function ServiceRequestScreen({
                             color: editLabel === label ? '#fff' : theme.text,
                           },
                         ]}>
-                        {label === 'home' ? t('services.home') : label === 'office' || label === 'work' ? t('services.work') : t('services.other')}
+                        {label === 'home' ? t('services.home') : label === 'office' ? t('services.work') : t('services.other')}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -2565,9 +2513,32 @@ const styles = StyleSheet.create({
   categoryText: {
     flex: 1,
   },
+  categoryNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   categoryName: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+  },
+  providerCountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  providerCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  countLoader: {
+    marginLeft: 8,
   },
   categoryDescription: {
     fontSize: 14,

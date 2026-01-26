@@ -41,6 +41,14 @@ export interface JobCard {
   taskPIN?: string;
   pinGeneratedAt?: Date;
   scheduledTime?: Date;
+  jobCardPdfUrl?: string;
+  serviceAmount?: number;
+  materialsUsed?: Array<{
+    description: string;
+    quantity?: number;
+    unitPrice?: number;
+    total?: number;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -79,17 +87,15 @@ export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]
   try {
     const jobCards = await jobCardsApi.getCustomerJobCards(customerId);
 
-    // Convert API response to app format and filter active statuses if needed
-    return jobCards
-      .filter((c: any) => ['pending', 'accepted', 'in-progress'].includes(c.status))
-      .map((jobCard: JobCardApi) => ({
-        id: jobCard._id || jobCard.id,
-        ...jobCard,
-        createdAt: jobCard.createdAt instanceof Date ? jobCard.createdAt : new Date(jobCard.createdAt),
-        updatedAt: jobCard.updatedAt instanceof Date ? jobCard.updatedAt : new Date(jobCard.updatedAt),
-        scheduledTime: jobCard.scheduledTime ? (jobCard.scheduledTime instanceof Date ? jobCard.scheduledTime : new Date(jobCard.scheduledTime)) : undefined,
-        pinGeneratedAt: jobCard.pinGeneratedAt ? (jobCard.pinGeneratedAt instanceof Date ? jobCard.pinGeneratedAt : new Date(jobCard.pinGeneratedAt)) : undefined,
-      })) as JobCard[];
+    // Convert API response to app format - include all statuses (including completed)
+    return jobCards.map((jobCard: JobCardApi) => ({
+      id: jobCard._id || jobCard.id,
+      ...jobCard,
+      createdAt: jobCard.createdAt instanceof Date ? jobCard.createdAt : new Date(jobCard.createdAt),
+      updatedAt: jobCard.updatedAt instanceof Date ? jobCard.updatedAt : new Date(jobCard.updatedAt),
+      scheduledTime: jobCard.scheduledTime ? (jobCard.scheduledTime instanceof Date ? jobCard.scheduledTime : new Date(jobCard.scheduledTime)) : undefined,
+      pinGeneratedAt: jobCard.pinGeneratedAt ? (jobCard.pinGeneratedAt instanceof Date ? jobCard.pinGeneratedAt : new Date(jobCard.pinGeneratedAt)) : undefined,
+    })) as JobCard[];
   } catch (error: any) {
     console.error('Error fetching customer job cards:', error);
     throw new Error(`Failed to fetch job cards: ${error.message || 'Unknown error'}`);

@@ -122,5 +122,6 @@
   "invalidAddress": "Invalid Address",
   "invalidAddressMessage": "Please select a valid address with pincode and address",
   "invalidDateTime": "Invalid Date/Time",
-  "invalidDateTimeMessage": "Please select a date and time at least 1 hour in the future for scheduled service."
+  "invalidDateTimeMessage": "Please select a date and time at least 1 hour in the future for scheduled service.",
+  "optional": "Optional"
 }

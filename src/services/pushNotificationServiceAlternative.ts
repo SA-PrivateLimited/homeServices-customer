@@ -10,7 +10,11 @@
  * 3. Replace pushNotificationService imports with this file
  */
 
-import type {Consultation, UserRole} from '../types/consultation';
+import type {ServiceRequest} from './api/serviceRequestsApi';
+import type {UserRole} from '../types/common';
+
+// Alias for backward compatibility
+type Consultation = ServiceRequest;
 
 const COLLECTIONS = {
   USERS: 'users',

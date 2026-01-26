@@ -28,66 +28,45 @@ let Polyline: any = null;
 try {
   // Try direct import first (for older versions)
   const maps = require('react-native-maps');
-  
+
   // Handle both default export and named exports
   if (maps.default) {
-  MapView = maps.default;
+    MapView = maps.default;
     Marker = maps.default.Marker || maps.Marker;
     Polyline = maps.default.Polyline || maps.Polyline;
   } else {
     MapView = maps.MapView;
-  Marker = maps.Marker;
-  Polyline = maps.Polyline;
+    Marker = maps.Marker;
+    Polyline = maps.Polyline;
   }
-  
+
   // Verify components are functions/components
   if (!MapView || typeof MapView !== 'function') {
     throw new Error('MapView is not a valid component');
   }
-  
-  console.log('✅ react-native-maps loaded successfully', {
-    MapView: typeof MapView,
-    Marker: typeof Marker,
-    Polyline: typeof Polyline,
-    MapViewExists: !!MapView,
-    MarkerExists: !!Marker,
-    PolylineExists: !!Polyline,
-  });
+
+  console.log('✅ react-native-maps loaded successfully');
 } catch (e: any) {
-  const errorMessage = e?.message || String(e || 'Unknown error');
-  console.error('❌ react-native-maps not available:', errorMessage);
-  console.log('Using simplified view');
+  console.log('Using simplified distance view - maps not available');
   MapView = null;
   Marker = null;
   Polyline = null;
 }
-
-// Debug: Log map components (only log once on module load)
-if (typeof MapView === 'function') {
-  console.log('MAP DEBUG - Components loaded:', {
-    MapView: 'function',
-    Marker: typeof Marker,
-    Polyline: typeof Polyline,
-  });
-} else {
-  console.log('MAP DEBUG - Components NOT loaded:', {
-    MapView: MapView,
-    Marker: Marker,
-    Polyline: Polyline,
-  });
-}
-import firestore from '@react-native-firebase/firestore';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason} from '../services/jobCardService';
+import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason, getJobCardById} from '../services/jobCardService';
+import {jobCardsApi} from '../services/api/jobCardsApi';
+import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import CancelTaskModal from '../components/CancelTaskModal';
 import {getDistanceToCustomer, formatDistance} from '../services/providerLocationService';
 import ReviewModal from '../components/ReviewModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
+import {providersApi, Provider} from '../services/api/providersApi';
 import WebSocketService from '../services/websocketService';
 import useTranslation from '../hooks/useTranslation';
 
@@ -128,7 +107,9 @@ export default function ActiveServiceScreen({
   const [requestCreatedAt, setRequestCreatedAt] = useState<Date | null>(null);
   const [canReRequest, setCanReRequest] = useState<boolean>(false);
   const [showReRequestModal, setShowReRequestModal] = useState(false);
-  
+  const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
+
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
@@ -330,8 +311,8 @@ export default function ActiveServiceScreen({
           }
           setTimeout(joinRoom, 1000);
         } else {
-          console.warn('⚠️ [CUSTOMER] Failed to connect WebSocket after', maxRetries, 'attempts. This is non-critical - Firestore will handle updates.');
-          // Don't show error - WebSocket is optional, Firestore triggers will handle notifications
+          console.warn('⚠️ [CUSTOMER] Failed to connect WebSocket after', maxRetries, 'attempts. This is non-critical - API polling will handle updates.');
+          // Don't show error - WebSocket is optional, API polling will handle notifications
         }
       };
       
@@ -375,51 +356,41 @@ export default function ActiveServiceScreen({
     return () => clearInterval(locationInterval);
   }, [isImmediateService]);
 
-  // Subscribe to consultation/service request updates to detect when provider accepts
+  // Poll for service request updates to detect when provider accepts
   useEffect(() => {
     if (!serviceRequestId || !currentUser) return;
 
-    // Set up real-time listener for consultation updates
-    const unsubscribe = firestore()
-      .collection('consultations')
-      .doc(serviceRequestId)
-      .onSnapshot(
-        snapshot => {
-          if (snapshot.exists) {
-            const data = snapshot.data();
-            const newStatus = data?.status || 'pending';
-            const newProviderId = data?.providerId || data?.doctorId;
+    // Poll every 5 seconds for status updates
+    const pollInterval = setInterval(async () => {
+      try {
+        const request = await serviceRequestsApi.getById(serviceRequestId);
+        if (request) {
+          const newStatus = request.status || 'pending';
+          const newProviderId = request.providerId;
 
-            // If status changed to accepted and we have a provider, reload data
-            if (newStatus === 'accepted' && newProviderId && status !== 'accepted') {
-              console.log('✅ Provider accepted, reloading service data...', newProviderId);
-              loadServiceData();
-            }
-
-            setStatus(newStatus);
-            
-            if (newStatus === 'completed') {
-              // Reset dismissed state when status changes to completed
-              setReviewDismissed(false);
-              setTimeout(() => {
-                checkReviewStatus();
-              }, 1000);
-            }
+          // If status changed to accepted and we have a provider, reload data
+          if (newStatus === 'accepted' && newProviderId && status !== 'accepted') {
+            console.log('✅ Provider accepted, reloading service data...', newProviderId);
+            loadServiceData();
           }
-        },
-        error => {
-          console.error('Error listening to consultation updates:', error);
-          // Handle permission errors gracefully - don't show alert, just log
-          const errorCode = (error as any)?.code;
-          if (errorCode === 'permission-denied' || errorCode === 'permissions-denied') {
-            console.warn('Permission denied for consultation updates. User may not have access.');
-            // Don't show alert here as loadServiceData will handle it
+
+          setStatus(newStatus);
+          
+          if (newStatus === 'completed') {
+            // Reset dismissed state when status changes to completed
+            setReviewDismissed(false);
+            setTimeout(() => {
+              checkReviewStatus();
+            }, 1000);
           }
         }
-      );
+      } catch (error) {
+        console.error('Error polling service request updates:', error);
+      }
+    }, 5000);
 
-    return () => unsubscribe();
-  }, [serviceRequestId]);
+    return () => clearInterval(pollInterval);
+  }, [serviceRequestId, status]);
     
     // Subscribe to job card status updates
   useEffect(() => {
@@ -449,8 +420,9 @@ export default function ActiveServiceScreen({
   }, [jobCardId]);
 
   // Subscribe to provider location updates when provider is assigned
+  // Initial fetch from backend API, then subscribe to Firebase Realtime DB for real-time updates
   useEffect(() => {
-    const providerId = jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId;
+    const providerId = jobCard?.providerId || serviceRequest?.providerId;
     
     if (!providerId) {
       // Clear location if no provider
@@ -458,48 +430,165 @@ export default function ActiveServiceScreen({
       return;
     }
 
-    console.log('Subscribing to provider location:', providerId);
-      const locationRef = database().ref(`providers/${providerId}/location`);
+    console.log('Setting up provider location tracking for:', providerId);
     
-      const unsubscribe = locationRef.on('value', snapshot => {
-        if (snapshot.exists()) {
-          const location = snapshot.val();
-        console.log('Provider location updated:', location);
-          setProviderLocation(location);
-          calculateDistanceAndETA(location);
-      } else {
-        console.log('Provider location not available yet');
-        setProviderLocation(null);
+    // Initial fetch from backend API (which reads from Firebase Realtime DB)
+    const fetchInitialLocation = async () => {
+      try {
+        const provider = await providersApi.getById(providerId);
+        if (provider) {
+          // Backend returns location in currentLocation field (from Firebase Realtime DB)
+          const locationData = (provider as any).currentLocation || provider.location;
+          if (locationData && locationData.latitude && locationData.longitude) {
+            const location = {
+              latitude: locationData.latitude,
+              longitude: locationData.longitude,
+              address: locationData.address || provider.location?.address,
+              city: locationData.city || provider.location?.city,
+              state: locationData.state || provider.location?.state,
+              pincode: locationData.pincode || provider.location?.pincode,
+              updatedAt: locationData.updatedAt || Date.now(),
+            };
+            console.log('Provider location fetched from backend API (via Firebase Realtime DB):', location);
+            setProviderLocation(location);
+            calculateDistanceAndETA(location);
+          }
         }
-      });
+      } catch (error) {
+        console.error('Error fetching initial provider location from backend API:', error);
+      }
+    };
+
+    // Fetch initial location from backend
+    fetchInitialLocation();
+
+    // Subscribe to Firebase Realtime Database for real-time updates
+    // Location is stored in Firebase Realtime DB, so we subscribe directly for efficiency
+    const locationRef = database().ref(`providers/${providerId}/location`);
+    
+    const unsubscribe = locationRef.on('value', snapshot => {
+      if (snapshot.exists()) {
+        const location = snapshot.val();
+        console.log('Provider location updated from Firebase Realtime DB:', location);
+        setProviderLocation(location);
+        calculateDistanceAndETA(location);
+      } else {
+        console.log('Provider location not available in Firebase Realtime DB');
+      }
+    });
 
     return () => {
       console.log('Unsubscribing from provider location');
       locationRef.off('value', unsubscribe);
     };
-  }, [jobCard?.providerId, serviceRequest?.providerId, serviceRequest?.doctorId]);
+  }, [jobCard?.providerId, serviceRequest?.providerId]);
+
+  // Check if re-request is allowed (10 minutes after creation and status is pending)
+  useEffect(() => {
+    const checkCanReRequest = () => {
+      // Only allow re-request if status is pending
+      if (status !== 'pending') {
+        setCanReRequest(false);
+        return;
+      }
+
+      // Check if request creation time is available
+      if (!requestCreatedAt) {
+        setCanReRequest(false);
+        return;
+      }
+
+      // Calculate time difference in milliseconds
+      const now = new Date();
+      const createdAt = requestCreatedAt instanceof Date 
+        ? requestCreatedAt 
+        : new Date(requestCreatedAt);
+      const timeDiff = now.getTime() - createdAt.getTime();
+      
+      // 10 minutes = 10 * 60 * 1000 milliseconds
+      const tenMinutesInMs = 10 * 60 * 1000;
+      
+      // Allow re-request only if 10 minutes have passed
+      setCanReRequest(timeDiff >= tenMinutesInMs);
+    };
+
+    checkCanReRequest();
+
+    // Check every minute to update the re-request button availability
+    const interval = setInterval(checkCanReRequest, 60000); // Check every 60 seconds
+
+    return () => clearInterval(interval);
+  }, [status, requestCreatedAt]);
+
+  // Fetch available providers when status is pending
+  useEffect(() => {
+    const fetchAvailableProviders = async () => {
+      if (status === 'pending' && serviceRequest?.serviceType) {
+        try {
+          setLoadingProviders(true);
+          console.log('Fetching available providers for service type:', serviceRequest.serviceType);
+          const providers = await providersApi.getAll({
+            serviceType: serviceRequest.serviceType,
+            isOnline: true, // Only fetch online providers
+            limit: 10
+          });
+          
+          // Fetch full provider details including phone numbers for each provider
+          const providersWithDetails = await Promise.all(
+            providers.map(async (provider) => {
+              try {
+                // Get full provider details to ensure we have phone number
+                const fullProvider = await providersApi.getById(provider._id || provider.id || '');
+                if (fullProvider) {
+                  return {
+                    ...provider,
+                    phoneNumber: fullProvider.phoneNumber || fullProvider.phone || (fullProvider as any)?.primaryPhone || (fullProvider as any)?.mobile || provider.phoneNumber || provider.phone,
+                    phone: fullProvider.phoneNumber || fullProvider.phone || (fullProvider as any)?.primaryPhone || (fullProvider as any)?.mobile || provider.phone || provider.phoneNumber,
+                  };
+                }
+                return provider;
+              } catch (error) {
+                console.warn('Failed to fetch full details for provider:', provider._id || provider.id, error);
+                return provider;
+              }
+            })
+          );
+          
+          setAvailableProviders(providersWithDetails);
+          console.log('Available providers fetched with details:', providersWithDetails.length);
+          providersWithDetails.forEach(p => {
+            console.log('Provider:', p.name, 'Phone:', p.phoneNumber || p.phone);
+          });
+        } catch (error) {
+          console.error('Error fetching available providers:', error);
+          setAvailableProviders([]);
+        } finally {
+          setLoadingProviders(false);
+        }
+      } else if (status !== 'pending') {
+        // Clear providers list when status changes from pending
+        setAvailableProviders([]);
+      }
+    };
+
+    fetchAvailableProviders();
+  }, [status, serviceRequest?.serviceType]);
 
   const loadServiceData = async () => {
     try {
       setLoading(true);
 
-      // Load service request
-      const requestDoc = await firestore()
-        .collection('consultations')
-        .doc(serviceRequestId)
-        .get();
+      // Load service request from API
+      const requestData = await serviceRequestsApi.getById(serviceRequestId);
 
-      let requestData: any = null;
-      if (requestDoc.exists) {
-        requestData = requestDoc.data();
-        
+      if (requestData) {
         // Verify user has permission to view this consultation
         const userId = currentUser?.uid;
-        const customerId = requestData?.customerId || requestData?.patientId;
+        const customerId = requestData?.customerId;
         
         if (userId && customerId !== userId) {
           // Check if user is the provider
-          const providerId = requestData?.providerId || requestData?.doctorId;
+          const providerId = requestData?.providerId;
           if (providerId !== userId) {
             // User is neither customer nor provider - permission denied
             console.warn('Permission denied: User does not have access to this consultation');
@@ -515,14 +604,16 @@ export default function ActiveServiceScreen({
         }
         
         setServiceRequest({
-          id: requestDoc.id,
+          id: requestData._id || requestData.id,
           ...requestData,
         });
         setStatus(requestData?.status || 'pending');
         
         // Track when the request was created for re-request feature
         if (requestData?.createdAt) {
-          const createdAt = requestData.createdAt.toDate ? requestData.createdAt.toDate() : new Date(requestData.createdAt);
+          const createdAt = requestData.createdAt instanceof Date 
+            ? requestData.createdAt 
+            : new Date(requestData.createdAt);
           setRequestCreatedAt(createdAt);
         }
         
@@ -539,14 +630,12 @@ export default function ActiveServiceScreen({
           });
         }
 
-        // If provider details are stored in the consultation document, use them
-        if (requestData.providerId || requestData.doctorId) {
-          const providerId = requestData.providerId || requestData.doctorId;
-          
+        // If provider details are stored in the service request document, use them
+        if (requestData.providerId) {
           // Check if provider details are already in the document
           if (requestData.providerName || requestData.providerPhone) {
             setProviderProfile({
-              id: providerId,
+              id: requestData.providerId,
               name: requestData.providerName,
               phoneNumber: requestData.providerPhone,
               phone: requestData.providerPhone,
@@ -557,27 +646,48 @@ export default function ActiveServiceScreen({
               profileImage: requestData.providerImage,
               address: requestData.providerAddress,
             });
+          } else {
+            // Fetch provider profile from API
+            try {
+              const provider = await providersApi.getById(requestData.providerId);
+              if (provider) {
+                setProviderProfile({
+                  id: provider._id || provider.id,
+                  ...provider,
+                });
+              }
+            } catch (providerError) {
+              console.warn('Could not fetch provider profile:', providerError);
+            }
           }
         }
       }
 
       // Load job card if ID provided
       if (jobCardId) {
-        const jobCardDoc = await firestore()
-          .collection('jobCards')
-          .doc(jobCardId)
-          .get();
+        const jobCardData = await jobCardsApi.getById(jobCardId);
 
-        if (jobCardDoc.exists) {
-          const jobCardData = jobCardDoc.data();
+        if (jobCardData) {
           const jobCardWithPIN = {
-            id: jobCardDoc.id,
+            id: jobCardData._id || jobCardData.id,
             ...jobCardData,
-            createdAt: jobCardData?.createdAt?.toDate() || new Date(),
-            updatedAt: jobCardData?.updatedAt?.toDate() || new Date(),
-            scheduledTime: jobCardData?.scheduledTime?.toDate(),
-            pinGeneratedAt: jobCardData?.pinGeneratedAt?.toDate(),
-            taskPIN: jobCardData?.taskPIN,
+            createdAt: jobCardData.createdAt instanceof Date 
+              ? jobCardData.createdAt 
+              : new Date(jobCardData.createdAt),
+            updatedAt: jobCardData.updatedAt instanceof Date 
+              ? jobCardData.updatedAt 
+              : new Date(jobCardData.updatedAt),
+            scheduledTime: jobCardData.scheduledTime 
+              ? (jobCardData.scheduledTime instanceof Date 
+                  ? jobCardData.scheduledTime 
+                  : new Date(jobCardData.scheduledTime))
+              : undefined,
+            pinGeneratedAt: jobCardData.pinGeneratedAt 
+              ? (jobCardData.pinGeneratedAt instanceof Date 
+                  ? jobCardData.pinGeneratedAt 
+                  : new Date(jobCardData.pinGeneratedAt))
+              : undefined,
+            taskPIN: jobCardData.taskPIN,
           };
           setJobCard(jobCardWithPIN);
           setStatus(jobCardData?.status || 'pending');
@@ -588,9 +698,8 @@ export default function ActiveServiceScreen({
           }
           
           // Check if this is an immediate service (from job card or consultation)
-          const jobCardUrgency = jobCardData?.urgency;
           const hasScheduledTime = jobCardData?.scheduledTime;
-          const isImmediate = jobCardUrgency === 'immediate' || !hasScheduledTime;
+          const isImmediate = !hasScheduledTime;
           setIsImmediateService(isImmediate);
           
           // Request location permission only for immediate services
@@ -602,141 +711,71 @@ export default function ActiveServiceScreen({
 
           // Load provider profile and location
           if (jobCardData?.providerId) {
-            // Try to fetch full provider profile from providers collection
-            // Fallback to doctors collection for backward compatibility
+            // Fetch provider profile from API (backend will get location from Firebase Realtime DB)
             try {
-            const providerDoc = await firestore()
-              .collection('providers')
-              .doc(jobCardData.providerId)
-              .get();
+              const provider = await providersApi.getById(jobCardData.providerId);
+              if (provider) {
+                setProviderProfile({
+                  id: provider._id || provider.id,
+                  ...provider,
+                });
 
-            if (providerDoc.exists) {
-              setProviderProfile({
-                id: providerDoc.id,
-                ...providerDoc.data(),
-              });
-              } else {
-                // Try doctors collection as fallback
-                const doctorDoc = await firestore()
-                  .collection('doctors')
-                  .doc(jobCardData.providerId)
-                  .get();
-
-                if (doctorDoc.exists) {
-                  setProviderProfile({
-                    id: doctorDoc.id,
-                    ...doctorDoc.data(),
-                  });
+                // Get provider location from backend API (backend reads from Firebase Realtime DB)
+                // Backend returns location in currentLocation field
+                const locationData = (provider as any).currentLocation || provider.location;
+                if (locationData && locationData.latitude && locationData.longitude) {
+                  const location = {
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude,
+                    address: locationData.address || provider.location?.address,
+                    city: locationData.city || provider.location?.city,
+                    state: locationData.state || provider.location?.state,
+                    pincode: locationData.pincode || provider.location?.pincode,
+                    updatedAt: locationData.updatedAt || Date.now(),
+                  };
+                  console.log('Provider location loaded from backend API (via Firebase Realtime DB):', location);
+                  setProviderLocation(location);
+                  calculateDistanceAndETA(location);
+                } else {
+                  console.log('Provider location not available from backend API');
                 }
               }
-            } catch (providerError: any) {
-              // If permission denied for providers collection, try doctors collection
-              if (providerError.code === 'permission-denied') {
-                try {
-                  const doctorDoc = await firestore()
-                    .collection('doctors')
-                    .doc(jobCardData.providerId)
-                    .get();
-
-                  if (doctorDoc.exists) {
-                    setProviderProfile({
-                      id: doctorDoc.id,
-                      ...doctorDoc.data(),
-                    });
-                  }
-                } catch (doctorError) {
-                  console.warn('Could not fetch provider profile:', doctorError);
-                }
-              } else {
-                console.warn('Error fetching provider profile:', providerError);
-              }
-            }
-
-            // Load provider location
-            const providerLocationRef = database().ref(
-              `providers/${jobCardData.providerId}/location`,
-            );
-            const snapshot = await providerLocationRef.once('value');
-            if (snapshot.exists()) {
-              const location = snapshot.val();
-              setProviderLocation(location);
-              calculateDistanceAndETA(location);
+            } catch (providerError) {
+              console.warn('Could not fetch provider profile:', providerError);
             }
           }
         }
-      } else {
-        // If no job card yet but provider is assigned in consultation
-        if (requestData && (requestData.providerId || requestData.doctorId)) {
-          const providerId = requestData.providerId || requestData.doctorId;
-          
-          // If provider details are already in the consultation document, use them
-          // Otherwise, fetch from providers collection
-          if (requestData.providerName || requestData.providerPhone) {
-            // Provider details already stored in consultation document
-            if (!providerProfile) {
+      } else if (requestData?.providerId) {
+        // If no job card yet but provider is assigned in service request
+        // If provider details are already in the service request document, use them
+        if (requestData.providerName || requestData.providerPhone) {
+          // Provider details already stored in service request document
+          if (!providerProfile) {
+            setProviderProfile({
+              id: requestData.providerId,
+              name: requestData.providerName,
+              phoneNumber: requestData.providerPhone,
+              phone: requestData.providerPhone,
+              email: requestData.providerEmail,
+              specialization: requestData.providerSpecialization,
+              specialty: requestData.providerSpecialization,
+              rating: requestData.providerRating || 0,
+              profileImage: requestData.providerImage,
+              address: requestData.providerAddress,
+            });
+          }
+        } else {
+          // Fetch provider profile from API
+          try {
+            const provider = await providersApi.getById(requestData.providerId);
+            if (provider) {
               setProviderProfile({
-                id: providerId,
-                name: requestData.providerName,
-                phoneNumber: requestData.providerPhone,
-                phone: requestData.providerPhone,
-                email: requestData.providerEmail,
-                specialization: requestData.providerSpecialization,
-                specialty: requestData.providerSpecialization,
-                rating: requestData.providerRating || 0,
-                profileImage: requestData.providerImage,
-                address: requestData.providerAddress,
+                id: provider._id || provider.id,
+                ...provider,
               });
             }
-          } else {
-            // Try to fetch full provider profile from providers collection
-            // Fallback to doctors collection for backward compatibility
-            try {
-          const providerDoc = await firestore()
-            .collection('providers')
-            .doc(providerId)
-            .get();
-
-          if (providerDoc.exists) {
-            setProviderProfile({
-              id: providerDoc.id,
-              ...providerDoc.data(),
-            });
-              } else {
-                // Try doctors collection as fallback
-                const doctorDoc = await firestore()
-                  .collection('doctors')
-                  .doc(providerId)
-                  .get();
-
-                if (doctorDoc.exists) {
-                  setProviderProfile({
-                    id: doctorDoc.id,
-                    ...doctorDoc.data(),
-                  });
-                }
-              }
-            } catch (providerError: any) {
-              // If permission denied for providers collection, try doctors collection
-              if (providerError.code === 'permission-denied') {
-                try {
-                  const doctorDoc = await firestore()
-                    .collection('doctors')
-                    .doc(providerId)
-                    .get();
-
-                  if (doctorDoc.exists) {
-                    setProviderProfile({
-                      id: doctorDoc.id,
-                      ...doctorDoc.data(),
-                    });
-                  }
-                } catch (doctorError) {
-                  console.warn('Could not fetch provider profile:', doctorError);
-                }
-              } else {
-                console.warn('Error fetching provider profile:', providerError);
-              }
-            }
+          } catch (providerError) {
+            console.warn('Could not fetch provider profile:', providerError);
           }
         }
       }
@@ -746,22 +785,12 @@ export default function ActiveServiceScreen({
       const errorMessage = error?.message || String(error || 'Unknown error');
       console.error('Error loading service data:', errorMessage);
       
-      // Handle permission denied errors gracefully
-      if (error?.code === 'permission-denied' || error?.code === 'permissions-denied') {
-        setAlertModalConfig({
-          title: t('activeService.accessDenied'),
-          message: t('activeService.accessDeniedDetailMessage'),
-          type: 'error',
-        });
-        setShowAlertModal(true);
-      } else {
-        setAlertModalConfig({
-          title: t('common.error'),
-          message: errorMessage || t('errors.generic'),
-          type: 'error',
-        });
-        setShowAlertModal(true);
-      }
+      setAlertModalConfig({
+        title: t('common.error'),
+        message: errorMessage || t('errors.generic'),
+        type: 'error',
+      });
+      setShowAlertModal(true);
       
       setLoading(false);
     } finally {
@@ -809,22 +838,23 @@ export default function ActiveServiceScreen({
       
       if (!currentJobCardId && serviceRequestId) {
         console.log('🔍 No jobCardId, searching by consultationId:', serviceRequestId);
-        // Try to find jobCard by consultationId
+        // Try to find jobCard by consultationId using API
         try {
-          const jobCardsSnapshot = await firestore()
-            .collection('jobCards')
-            .where('consultationId', '==', serviceRequestId)
-            .where('customerId', '==', currentUser?.uid)
-            .limit(1)
-            .get();
+          const jobCards = await jobCardsApi.getAll({
+            customerId: currentUser?.uid,
+            limit: 10,
+          });
           
-          if (!jobCardsSnapshot.empty) {
-            currentJobCardId = jobCardsSnapshot.docs[0].id;
-            const jobCardData = jobCardsSnapshot.docs[0].data();
-            console.log('✅ Found jobCard:', currentJobCardId, 'Status:', jobCardData?.status);
+          const matchingJobCard = jobCards.find(
+            (jc: any) => jc.consultationId === serviceRequestId || jc._id === serviceRequestId || jc.id === serviceRequestId
+          );
+          
+          if (matchingJobCard) {
+            currentJobCardId = matchingJobCard._id || matchingJobCard.id;
+            console.log('✅ Found jobCard:', currentJobCardId, 'Status:', matchingJobCard?.status);
             setJobCard({
               id: currentJobCardId,
-              ...jobCardData,
+              ...matchingJobCard,
             });
           } else {
             console.log('⚠️ No jobCard found for consultationId:', serviceRequestId);
@@ -931,22 +961,16 @@ export default function ActiveServiceScreen({
 
       // Cancel the old request first
       try {
-        await firestore()
-          .collection('consultations')
-          .doc(serviceRequestId)
-          .update({
-            status: 'cancelled',
-            cancellationReason: 'Re-requested by customer after 10 minutes',
-            updatedAt: firestore.FieldValue.serverTimestamp(),
-          });
+        await serviceRequestsApi.cancel(
+          serviceRequestId,
+          'Re-requested by customer after 10 minutes'
+        );
       } catch (error) {
         console.warn('Could not cancel old request:', error);
         // Continue anyway
       }
 
       // Create new service request
-      const newServiceRequestRef = firestore().collection('consultations').doc();
-      
       const newServiceRequestData: any = {
         customerId: authUser.uid,
         customerName: serviceRequest.customerName || (currentUser as any)?.name || 'Customer',
@@ -956,49 +980,69 @@ export default function ActiveServiceScreen({
         problem: serviceRequest.problem || '',
         status: 'pending',
         urgency: serviceRequest.urgency || 'immediate',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
         questionnaireAnswers: serviceRequest.questionnaireAnswers || undefined,
       };
 
       if (serviceRequest.scheduledTime) {
-        const scheduledTime = serviceRequest.scheduledTime.toDate ? serviceRequest.scheduledTime.toDate() : new Date(serviceRequest.scheduledTime);
-        newServiceRequestData.scheduledTime = firestore.Timestamp.fromDate(scheduledTime);
-      } else {
-        newServiceRequestData.scheduledTime = firestore.FieldValue.serverTimestamp();
+        const scheduledTime = serviceRequest.scheduledTime instanceof Date 
+          ? serviceRequest.scheduledTime 
+          : new Date(serviceRequest.scheduledTime);
+        newServiceRequestData.scheduledTime = scheduledTime.toISOString();
       }
 
       if (serviceRequest.photos && serviceRequest.photos.length > 0) {
         newServiceRequestData.photos = serviceRequest.photos;
       }
 
-      await newServiceRequestRef.set(newServiceRequestData);
+      // Create service request in Firestore (PRIMARY) - ensures provider can always find it
+      const firestoreData = {
+        ...newServiceRequestData,
+        customerId: currentUser?.uid || '',
+        status: 'pending',
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Create document with auto-generated ID
+      const docRef = await firestore()
+        .collection('serviceRequests')
+        .add(firestoreData);
+
+      const newServiceRequestId = docRef.id;
+      console.log('✅ Service request created in Firestore:', newServiceRequestId);
+
+      // Also try to sync to MongoDB (optional, for backend consistency)
+      try {
+        await serviceRequestsApi.create({
+          ...newServiceRequestData,
+          _id: newServiceRequestId, // Use Firestore ID
+          consultationId: newServiceRequestId,
+        });
+        console.log('✅ Service request also synced to MongoDB:', newServiceRequestId);
+      } catch (apiError: any) {
+        // MongoDB sync is optional - Firestore is primary
+        console.warn('⚠️ MongoDB sync failed (service request is in Firestore):', apiError.message);
+      }
 
       // Notify providers via WebSocket
       try {
-        const onlineProvidersSnapshot = await firestore()
-          .collection('providers')
-          .where('isOnline', '==', true)
-          .where('approvalStatus', '==', 'approved')
-          .where('specialization', '==', serviceRequest.serviceType)
-          .get();
+        // Get online providers from API
+        const onlineProviders = await providersApi.getAll({
+          serviceType: serviceRequest.serviceType,
+          isOnline: true,
+          limit: 50,
+        });
 
-        const onlineProvidersBySpecialtySnapshot = await firestore()
-          .collection('providers')
-          .where('isOnline', '==', true)
-          .where('approvalStatus', '==', 'approved')
-          .where('specialty', '==', serviceRequest.serviceType)
-          .get();
+        const allProviderIds = onlineProviders
+          .filter(p => p.approvalStatus === 'approved')
+          .map(p => p._id || p.id)
+          .filter((id): id is string => !!id);
 
-        const allProviderIds = new Set<string>();
-        onlineProvidersSnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
-        onlineProvidersBySpecialtySnapshot.docs.forEach(doc => allProviderIds.add(doc.id));
-
-        const notificationPromises = Array.from(allProviderIds).map(providerId => {
+        const notificationPromises = allProviderIds.map(providerId => {
           return WebSocketService.emitNewBooking(providerId, {
-            consultationId: newServiceRequestRef.id,
-            id: newServiceRequestRef.id,
-            bookingId: newServiceRequestRef.id,
+            consultationId: newServiceRequestId,
+            id: newServiceRequestId,
+            bookingId: newServiceRequestId,
             customerName: newServiceRequestData.customerName,
             patientName: newServiceRequestData.customerName,
             customerPhone: newServiceRequestData.customerPhone,
@@ -1007,7 +1051,11 @@ export default function ActiveServiceScreen({
             patientAddress: newServiceRequestData.customerAddress,
             serviceType: serviceRequest.serviceType,
             problem: serviceRequest.problem || '',
-            scheduledTime: serviceRequest.scheduledTime ? (serviceRequest.scheduledTime.toDate ? serviceRequest.scheduledTime.toDate() : new Date(serviceRequest.scheduledTime)) : new Date(),
+            scheduledTime: serviceRequest.scheduledTime 
+              ? (serviceRequest.scheduledTime instanceof Date 
+                  ? serviceRequest.scheduledTime 
+                  : new Date(serviceRequest.scheduledTime))
+              : new Date(),
             consultationFee: 0,
             questionnaireAnswers: newServiceRequestData.questionnaireAnswers || undefined,
           }).catch(error => {
@@ -1031,7 +1079,7 @@ export default function ActiveServiceScreen({
       // Reload with new service request ID
       setTimeout(() => {
         navigation.replace('ActiveService', {
-          serviceRequestId: newServiceRequestRef.id,
+          serviceRequestId: newServiceRequestId,
         });
       }, 2000);
     } catch (error: any) {
@@ -1068,23 +1116,10 @@ export default function ActiveServiceScreen({
       // Also cancel the consultation/service request if it exists
       if (serviceRequestId) {
         try {
-          const consultationDoc = await firestore()
-            .collection('consultations')
-            .doc(serviceRequestId)
-            .get();
-          
-          if (consultationDoc.exists) {
-            await consultationDoc.ref.update({
-              status: 'cancelled',
-              cancellationReason: reason.trim(),
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-            });
-            cancelled = true;
-          } else {
-            console.warn('Consultation document not found:', serviceRequestId);
-          }
+          await serviceRequestsApi.cancel(serviceRequestId, reason.trim());
+          cancelled = true;
         } catch (error: any) {
-          console.error('Error cancelling consultation:', error);
+          console.error('Error cancelling service request:', error);
         }
       }
       
@@ -1232,8 +1267,8 @@ export default function ActiveServiceScreen({
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      {/* Map View - Always show map for instant services */}
-      {MapView && Marker && Polyline ? (
+      {/* Map View - Hidden since mapKey is removed - showing simplified view instead */}
+      {false ? (
         <View style={styles.mapContainer}>
           <MapView
             ref={mapRef}
@@ -1420,21 +1455,167 @@ export default function ActiveServiceScreen({
           </MapView>
         </View>
       ) : (
-        <View style={[styles.mapContainer, styles.simplifiedMap]}>
+        <View style={[styles.mapContainer, styles.simplifiedMap, {backgroundColor: theme.card}]}>
           <View style={styles.mapPlaceholder}>
-            <Icon name="map" size={48} color="#8E8E93" />
-            <Text style={styles.mapPlaceholderText}>
-              {status === 'completed'
-                ? t('activeService.serviceCompleted')
-                : providerLocation
-                ? t('activeService.providerIsOnTheWay')
-                : t('activeService.waitingForProvider')}
-            </Text>
-            {distance ? (
-              <Text style={styles.mapPlaceholderDistance}>
-                {t('activeService.providerIsAway').replace('{0}', distance).replace('{1}', String(eta))}
-              </Text>
-            ) : null}
+            {status === 'completed' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#34C759' + '20'}]}>
+                  <Icon name="check-circle" size={48} color="#34C759" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.serviceCompleted')}
+                </Text>
+              </>
+            ) : status === 'cancelled' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF3B30' + '20'}]}>
+                  <Icon name="cancel" size={48} color="#FF3B30" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.cancelled')}
+                </Text>
+              </>
+            ) : providerLocation && distance ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
+                  <Icon name="directions-walk" size={48} color={theme.primary} />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text, fontWeight: '600'}]}>
+                  {t('activeService.providerIsOnTheWay')}
+                </Text>
+                <View style={styles.distanceInfoContainer}>
+                  <View style={styles.distanceItem}>
+                    <Icon name="straighten" size={24} color={theme.primary} />
+                    <Text style={[styles.distanceValue, {color: theme.primary}]}>{distance}</Text>
+                    <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.away')}</Text>
+                  </View>
+                  {eta > 0 && isImmediateService && (
+                    <View style={styles.distanceItem}>
+                      <Icon name="schedule" size={24} color="#FF9500" />
+                      <Text style={[styles.distanceValue, {color: '#FF9500'}]}>{eta} {t('activeService.min')}</Text>
+                      <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.eta')}</Text>
+                    </View>
+                  )}
+                </View>
+                {providerLocation.address && (
+                  <View style={styles.locationDetailsContainer}>
+                    <Icon name="location-on" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.locationDetailsText, {color: theme.textSecondary}]} numberOfLines={2}>
+                      {providerLocation.address}
+                      {providerLocation.city ? `, ${providerLocation.city}` : ''}
+                      {providerLocation.state ? `, ${providerLocation.state}` : ''}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : providerLocation ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
+                  <Icon name="location-on" size={48} color={theme.primary} />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text, fontWeight: '600'}]}>
+                  {t('activeService.providerLocation')}
+                </Text>
+                {providerLocation.address && (
+                  <View style={styles.locationDetailsContainer}>
+                    <Text style={[styles.locationDetailsText, {color: theme.textSecondary}]} numberOfLines={2}>
+                      {providerLocation.address}
+                      {providerLocation.city ? `, ${providerLocation.city}` : ''}
+                      {providerLocation.state ? `, ${providerLocation.state}` : ''}
+                    </Text>
+                  </View>
+                )}
+                {isImmediateService && eta > 0 && (
+                  <View style={styles.distanceInfoContainer}>
+                    <View style={styles.distanceItem}>
+                      <Icon name="schedule" size={24} color="#FF9500" />
+                      <Text style={[styles.distanceValue, {color: '#FF9500'}]}>{eta} {t('activeService.min')}</Text>
+                      <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.eta')}</Text>
+                    </View>
+                  </View>
+                )}
+                {!isImmediateService && serviceRequest?.scheduledTime && (
+                  <View style={styles.scheduledTimeContainer}>
+                    <Icon name="event" size={20} color={theme.primary} />
+                    <Text style={[styles.scheduledTimeText, {color: theme.text}]}>
+                      {new Date(serviceRequest.scheduledTime).toLocaleString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : status === 'pending' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF9500' + '20'}]}>
+                  <Icon name="hourglass-empty" size={48} color="#FF9500" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.waitingForProvider')}
+                </Text>
+                <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
+                  {t('activeService.waitingForProviderToAccept')}
+                </Text>
+              </>
+            ) : status === 'accepted' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#007AFF' + '20'}]}>
+                  <Icon name="person-pin" size={48} color="#007AFF" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.providerAssigned')}
+                </Text>
+                <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
+                  {t('activeService.providerLocationWillAppear')}
+                </Text>
+                {!isImmediateService && serviceRequest?.scheduledTime && (
+                  <View style={styles.scheduledTimeContainer}>
+                    <Icon name="event" size={20} color={theme.primary} />
+                    <Text style={[styles.scheduledTimeText, {color: theme.text}]}>
+                      {String(t('activeService.scheduledFor'))}: {new Date(serviceRequest.scheduledTime).toLocaleString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                )}
+                {isImmediateService && (
+                  <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary, marginTop: 8}]}>
+                    {String(t('activeService.providerWillArriveSoon'))}
+                  </Text>
+                )}
+              </>
+            ) : status === 'in-progress' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#34C759' + '20'}]}>
+                  <Icon name="engineering" size={48} color="#34C759" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.serviceInProgress')}
+                </Text>
+                {providerProfile?.name && (
+                  <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
+                    {String(t('activeService.providerWorking'))}: {providerProfile.name}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
+                  <Icon name="location-on" size={48} color={theme.primary} />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.trackingService')}
+                </Text>
+              </>
+            )}
           </View>
         </View>
       )}
@@ -1506,16 +1687,62 @@ export default function ActiveServiceScreen({
               </View>
             )}
             {status === 'pending' && (
-              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                {t('activeService.waitingForProviderToAccept')}
-              </Text>
+              <View>
+                <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
+                  {t('activeService.waitingForProviderToAccept')}
+                </Text>
+                {loadingProviders ? (
+                  <View style={styles.providersLoadingContainer}>
+                    <ActivityIndicator size="small" color={theme.primary} />
+                    <Text style={[styles.providersLoadingText, {color: theme.textSecondary}]}>
+                      {t('loading')}
+                    </Text>
+                  </View>
+                ) : availableProviders.length > 0 ? (
+                  <View style={styles.providersListContainer}>
+                    <Text style={[styles.providersHeader, {color: theme.text}]}>
+                      {t('activeService.availableProviders')}
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.providersScrollContainer}
+                    >
+                      {availableProviders.map((provider:any) => (
+                        <View key={provider._id || provider.id} style={[styles.providerCard, {backgroundColor: theme.card, borderColor: theme.border}]}>
+                          <View style={styles.providerCardInfo}>
+                            <Text style={[styles.providerCardName, {color: theme.text}]}>
+                              {provider.displayName || provider.name || t('activeService.providerDetails')}
+                            </Text>
+                            <Text style={[styles.providerCardPhone, {color: theme.textSecondary}]}>
+                              {provider?.phoneNumber || provider?.phone || (provider as any)?.primaryPhone || (provider as any)?.mobile || t('activeService.phoneNotAvailable')}
+                            </Text>
+                          </View>
+                          <View style={styles.providerStatusContainer}>
+                            <View style={[
+                              styles.providerStatusIndicator,
+                              {backgroundColor: provider.isOnline ? '#34C759' : '#FF3B30'}
+                            ]} />
+                            <Text style={[
+                              styles.providerStatusText,
+                              {color: provider.isOnline ? '#34C759' : '#FF3B30'}
+                            ]}>
+                              {provider.isOnline ? t('activeService.online') : t('activeService.offline')}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
+              </View>
             )}
           </View>
         </View>
       </View>
 
       {/* Provider Details Card */}
-      {(providerProfile || provider || jobCard?.providerId || serviceRequest?.providerId || serviceRequest?.doctorId) && (
+      {(providerProfile || provider || jobCard?.providerId || serviceRequest?.providerId) && (
         <ScrollView
           style={styles.detailsContainer}
           showsVerticalScrollIndicator={false}>
@@ -1874,17 +2101,70 @@ const styles = StyleSheet.create({
   },
   mapPlaceholder: {
     alignItems: 'center',
+    padding: 20,
   },
   mapPlaceholderText: {
-    fontSize: 16,
-    color: '#8E8E93',
-    marginTop: 12,
+    fontSize: 18,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  mapPlaceholderSubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   mapPlaceholderDistance: {
     fontSize: 14,
     color: '#007AFF',
     marginTop: 8,
     fontWeight: '600',
+  },
+  distanceIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  distanceInfoContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 40,
+  },
+  distanceItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  distanceValue: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  distanceLabel: {
+    fontSize: 12,
+  },
+  locationDetailsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  locationDetailsText: {
+    fontSize: 13,
+    flex: 1,
+    textAlign: 'center',
+  },
+  scheduledTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 16,
+    gap: 8,
+    justifyContent: 'center',
+  },
+  scheduledTimeText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   customerMarker: {
     backgroundColor: '#fff',
@@ -2123,6 +2403,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  providersListContainer: {
+    marginTop: 16,
+  },
+  providersHeader: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  providersScrollContainer: {
+    flexDirection: 'row',
+  },
+  providerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginRight: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 200,
+    maxWidth: 250,
+  },
+  providerCardInfo: {
+    flex: 1,
+  },
+  providerCardName: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  providerCardPhone: {
+    fontSize: 12,
+  },
+  providerStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  providerStatusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  providerStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  providersLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    padding: 8,
+  },
+  providersLoadingText: {
+    marginLeft: 8,
+    fontSize: 12,
   },
 });
 

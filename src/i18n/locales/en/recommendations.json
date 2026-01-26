@@ -1,0 +1,19 @@
+{
+  "shareContact": "Share Contact",
+  "shareContactSubtitle": "Recommend a provider and earn points",
+  "serviceType": "Service Type",
+  "selectServiceType": "Select service type",
+  "providerName": "Provider Name",
+  "providerNamePlaceholder": "Enter provider's name",
+  "providerPhone": "Provider Phone",
+  "providerPhonePlaceholder": "Enter 10-digit phone number",
+  "address": "Address",
+  "addressPlaceholder": "Enter provider's address (optional)",
+  "submit": "Submit Recommendation",
+  "successMessage": "Thank you! Your recommendation has been submitted successfully.",
+  "submitError": "Failed to submit recommendation. Please try again.",
+  "providerNameRequired": "Provider name is required",
+  "providerPhoneRequired": "Provider phone number is required",
+  "invalidPhone": "Please enter a valid 10-digit phone number",
+  "infoMessage": "Help us grow! Share contacts of plumbers, electricians, or other service providers you know. For each valid recommendation, you'll earn 5 points that can be used for future benefits."
+}

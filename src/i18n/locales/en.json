@@ -264,7 +264,7 @@
     "year": "year",
     "years": "years",
     "experience": "experience",
-    "experienceWithYears": "{{years}} {{count, plural, one {year} other {years}}} experience",
+    "experienceWithYears": "{{count, plural, one {year} other {years}} of experience",
     "providerNotAvailable": "Provider Not Available",
     "providerNotAvailableMessage": "This provider is not currently available for service requests. Please select another provider.",
     "providerNotAvailableOnlineMessage": "This provider is not currently online or available for service requests. Please select another provider.",

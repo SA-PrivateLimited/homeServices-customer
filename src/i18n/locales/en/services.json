@@ -81,5 +81,9 @@
   "additionalInfoDescription": "Add any additional information that wasn't covered in the questions above. This will be used to help the provider understand your problem better.",
   "additionalInfoPlaceholder": "E.g., Any specific instructions or additional details...",
   "enterYourAnswer": "Enter your answer...",
-  "enterANumber": "Enter a number..."
+  "enterANumber": "Enter a number...",
+  "providersAvailable": "available",
+  "noProviders": "Not available",
+  "providerNotAvailable": "Provider Not Available",
+  "providerNotAvailableMessage": "Sorry! There are no {{serviceType}} providers available at the moment. Please try selecting a different service type or check back later."
 }

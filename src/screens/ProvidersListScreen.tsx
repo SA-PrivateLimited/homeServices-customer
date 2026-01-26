@@ -17,8 +17,8 @@ import {
   Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import firestore from '@react-native-firebase/firestore';
-import database from '@react-native-firebase/database';
+import {providersApi} from '../services/api/providersApi';
+import {usersApi} from '../services/api/usersApi';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import EmptyState from '../components/EmptyState';
@@ -77,33 +77,6 @@ export default function ProvidersListScreen({navigation}: any) {
 
   useEffect(() => {
     loadOnlineProviders();
-
-    // Listen to real-time online status updates via Realtime Database
-    // This updates online status instantly when provider goes online/offline
-    const providersRef = database().ref('providers');
-    
-    // Listen to status changes for any provider
-    const unsubscribeStatus = providersRef.on('child_changed', (snapshot) => {
-      const providerId = snapshot.key;
-      if (!providerId) return;
-      
-      // Check if status node changed
-      const statusSnapshot = snapshot.child('status');
-      if (statusSnapshot.exists()) {
-        const isOnline = statusSnapshot.val()?.isOnline === true;
-        
-        // Update online status for this specific provider
-        setProviders(prevProviders => 
-          prevProviders.map(p => 
-            p.id === providerId ? {...p, isOnline} : p
-          )
-        );
-      }
-    });
-
-    return () => {
-      providersRef.off('child_changed', unsubscribeStatus);
-    };
   }, []);
 
   useEffect(() => {
@@ -117,40 +90,34 @@ export default function ProvidersListScreen({navigation}: any) {
     try {
       setLoading(true);
 
-      const snapshot = await firestore()
-        .collection('providers')
-        .where('approvalStatus', '==', 'approved')
-        .get();
+      // Fetch approved providers from backend API
+      const apiProviders = await providersApi.getAll();
 
       const list: ProviderWithStatus[] = [];
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
-        const providerId = doc.id;
-
-        let isOnline = false;
-        try {
-          const statusSnap = await database()
-            .ref(`providers/${providerId}/status`)
-            .once('value');
-          isOnline = statusSnap.val()?.isOnline === true;
-        } catch {
-          isOnline = data.isOnline === true;
-        }
+      for (const data of apiProviders) {
+        const providerId = data._id || data.id || '';
 
         const provider: ProviderWithStatus = {
           id: providerId,
-          name: data.name || 'Provider',
+          name: data.name || data.displayName || 'Provider',
           email: data.email,
-          phone: data.phone,
+          phone: (data as any).phone,
           phoneNumber: data.phoneNumber,
-          specialization: data.specialization || data.specialty,
+          specialization: data.specialization || (data as any).specialty,
           experience: data.experience,
           rating: data.rating,
-          totalConsultations: data.totalConsultations,
-          profileImage: data.profileImage,
-          isOnline,
-          address: data.address,
+          totalConsultations: (data as any).totalConsultations,
+          profileImage: (data as any).profileImage,
+          isOnline: data.isOnline,
+          address: {
+            latitude: data.location?.latitude || (data as any).currentLocation?.latitude,
+            longitude: data.location?.longitude || (data as any).currentLocation?.longitude,
+            address: data.location?.address || (data as any).address?.address,
+            city: data.location?.city || (data as any).address?.city,
+            state: data.location?.state || (data as any).address?.state,
+            pincode: data.location?.pincode || (data as any).address?.pincode,
+          },
         };
 
         // Distance calculation
@@ -193,10 +160,12 @@ export default function ProvidersListScreen({navigation}: any) {
     } catch (error: any) {
       console.error('Error loading providers:', error);
       setProviders([]);
-      Alert.alert(
-        'Error',
-        String(error?.message || 'Failed to load providers'),
-      );
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: error?.message || t('providers.failedToLoad'),
+        type: 'error',
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -213,16 +182,12 @@ export default function ProvidersListScreen({navigation}: any) {
     try {
       if (!currentUser?.id) return null;
 
-      const doc = await firestore()
-        .collection('users')
-        .doc(currentUser.id)
-        .get();
-
-      const data = doc.data();
-      if (data?.location?.latitude && data?.location?.longitude) {
+      // Get user location from API
+      const user = await usersApi.getMe();
+      if (user?.location?.latitude && user?.location?.longitude) {
         return {
-          latitude: Number(data.location.latitude),
-          longitude: Number(data.location.longitude),
+          latitude: Number(user.location.latitude),
+          longitude: Number(user.location.longitude),
         };
       }
       return null;

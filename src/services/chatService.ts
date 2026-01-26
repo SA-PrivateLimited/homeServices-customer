@@ -1,6 +1,6 @@
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
-import type {ChatMessage, SendMessageData} from '../types/consultation';
+import type {ChatMessage, SendMessageData} from '../types/common';
 
 /**
  * Chat Service

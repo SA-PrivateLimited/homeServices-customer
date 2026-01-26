@@ -10,21 +10,24 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import database from '@react-native-firebase/database';
+import auth from '@react-native-firebase/auth';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
-import type {Doctor} from '../types/consultation';
+import type {Provider} from '../services/api/providersApi';
 import StarRating from '../components/StarRating';
 import {serializeDoctorForNavigation} from '../utils/helpers';
 import ReviewsList from '../components/ReviewsList';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import useTranslation from '../hooks/useTranslation';
+import WebSocketService from '../services/websocketService';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
   route: {
     params: {
-      provider: Doctor;
+      provider: Provider;
+      doctor?: Provider; // Backward compatibility
     };
   };
 }
@@ -33,7 +36,15 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   navigation,
   route,
 }) => {
-  const {provider} = route.params || {provider: route.params?.doctor}; // Support both provider and doctor for backward compatibility
+  const provider = (route.params?.provider || route.params?.doctor) as Provider & {
+    profileImage?: string;
+    photo?: string;
+    specialty?: string;
+    totalConsultations?: number;
+    phone?: string;
+    languages?: string[];
+    qualifications?: string[];
+  };
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
@@ -95,7 +106,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const isApproved = provider.approvalStatus === 'approved' || 
                      (!provider.approvalStatus && provider.verified === true);
 
-  const handleBookConsultation = () => {
+  const handleRequestService = async () => {
     // Prevent booking if provider is not approved
     if (!isApproved) {
       setAlertModal({
@@ -130,7 +141,32 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       return;
     }
 
-    const serializableProvider = serializeDoctorForNavigation(provider);
+    // Send WebSocket notification to the specific provider if approved and online
+    const providerId = (provider as any).id || (provider as any)._id || (provider as any).uid;
+    const authUser = auth().currentUser;
+    if (providerId && authUser && isApproved && isOnline && isAvailable) {
+      try {
+        // Prepare notification data (preliminary notification before service request is created)
+        const notificationData = {
+          customerId: authUser.uid,
+          customerName: (currentUser as any)?.name || 'Customer',
+          patientName: (currentUser as any)?.name || 'Customer', // For backward compatibility
+          serviceType: provider.specialization || (provider as any).specialty || 'Service',
+          message: String(t('providers.newServiceRequestNotification')),
+          timestamp: new Date().toISOString(),
+          isPreliminary: true, // Indicates this is sent before service request creation
+        };
+
+        // Send WebSocket notification to the specific provider
+        await WebSocketService.emitNewBooking(providerId, notificationData);
+        console.log('✅ WebSocket notification sent to provider:', providerId);
+      } catch (websocketError) {
+        console.warn('Could not send WebSocket notification to provider:', websocketError);
+        // Don't block navigation if WebSocket fails
+      }
+    }
+
+    const serializableProvider = serializeDoctorForNavigation(provider as any);
     navigation.navigate('ServiceRequest', {provider: serializableProvider});
   };
 
@@ -146,7 +182,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           ]}>
           <View style={styles.imageContainer}>
             {(() => {
-              const imageUrl = (provider.profileImage || provider.photo || '').trim();
+              const imageUrl = ((provider as any).profileImage || (provider as any).photo || provider.photos?.[0] || '').trim();
               const hasValidImage = imageUrl !== '' && !imageError && 
                 (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || 
                  imageUrl.startsWith('file://') || imageUrl.startsWith('content://'));
@@ -185,7 +221,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               {provider.name}
             </Text>
             <Text style={[styles.specialization, {color: theme.textSecondary}]}>
-              {provider.specialization || provider.specialty || 'Service Provider'}
+              {provider.specialization || (provider as any).specialty || 'Service Provider'}
             </Text>
 
             {/* Online Status Indicator */}
@@ -207,8 +243,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             <View style={styles.ratingRow}>
               <StarRating rating={provider.rating || 0} size={18} />
               <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
-                {provider.rating?.toFixed(1) || '0.0'} ({provider.totalConsultations || 0}{' '}
-                {provider.totalConsultations === 1 ? t('providers.service') : t('providers.services')})
+                {provider.rating?.toFixed(1) || '0.0'} ({(provider as any).totalConsultations || provider.totalReviews || 0}{' '}
+                {((provider as any).totalConsultations || provider.totalReviews || 0) === 1 ? t('providers.service') : t('providers.services')})
               </Text>
             </View>
 
@@ -219,11 +255,11 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               </Text>
             </View>
 
-            {provider.phone && (
+            {(provider.phoneNumber || (provider as any).phone) && (
               <TouchableOpacity
                 style={styles.contactRow}
                 onPress={() => {
-                  const phoneNumber = provider.phone.replace(/[^\d+]/g, '');
+                  const phoneNumber = (provider.phoneNumber || (provider as any).phone || '').replace(/[^\d+]/g, '');
                   Linking.openURL(`tel:${phoneNumber}`).catch(() => {
                     setAlertModal({
                       visible: true,
@@ -235,10 +271,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 }}
                 activeOpacity={0.7}>
                 <Icon name="call-outline" size={16} color={theme.primary} />
-                <Text style={[styles.contactText, styles.phoneText, {color: theme.primary}]}>
-                  {provider.phone}
+                <Text style={[styles.contactText, {color: theme.primary}]}>
+                  {provider.phoneNumber || (provider as any).phone}
                 </Text>
-                <Icon name="call" size={14} color={theme.primary} style={styles.callIcon} />
+                <Icon name="call" size={14} color={theme.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -289,7 +325,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           )}
 
           {/* Languages */}
-          {provider.languages && provider.languages.length > 0 && (
+          {(provider as any).languages && (provider as any).languages.length > 0 && (
             <View style={styles.detailRow}>
               <Icon name="language-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
@@ -297,14 +333,14 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                   {t('providers.languages')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {provider.languages.join(', ')}
+                  {(provider as any).languages.join(', ')}
                 </Text>
               </View>
             </View>
           )}
 
           {/* Qualifications (if available) */}
-          {provider.qualifications && provider.qualifications.length > 0 && (
+          {(provider as any).qualifications && (provider as any).qualifications.length > 0 && (
             <View style={styles.detailRow}>
               <Icon name="school-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
@@ -312,9 +348,9 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                   {t('providers.qualifications')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {Array.isArray(provider.qualifications) 
-                    ? provider.qualifications.join(', ')
-                    : provider.qualifications}
+                  {Array.isArray((provider as any).qualifications) 
+                    ? (provider as any).qualifications.join(', ')
+                    : (provider as any).qualifications}
                 </Text>
               </View>
             </View>
@@ -328,7 +364,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 {t('providers.serviceType')}
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
-                {provider.specialization || provider.specialty || 'Service Provider'}
+                {provider.specialization || (provider as any).specialty || 'Service Provider'}
               </Text>
             </View>
           </View>
@@ -355,7 +391,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       <View style={[styles.footer, {backgroundColor: theme.card}]}>
         <TouchableOpacity
           style={[styles.bookButton, {backgroundColor: theme.primary}]}
-          onPress={handleBookConsultation}>
+          onPress={handleRequestService}>
           <Text style={styles.bookButtonText}>{t('providers.requestService')}</Text>
         </TouchableOpacity>
       </View>
@@ -384,7 +420,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setShowLoginModal(false);
-          const serializableProvider = serializeDoctorForNavigation(provider);
+          const serializableProvider = serializeDoctorForNavigation(provider as any);
           setRedirectAfterLogin({route: 'ServiceRequest', params: {provider: serializableProvider}});
           navigation.navigate('Login');
         }}

@@ -53,34 +53,23 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     // Navigate based on notification type
     // Use getParent() to navigate to root navigator, then to the correct tab
     if (notification.consultationId) {
+      const serviceRequestId = notification.consultationId;
       try {
-        // Try to navigate to ConsultationsHistory in the ConsultationsStack
+        // Try to navigate to ServiceHistory
         const parent = navigation.getParent();
         if (parent) {
-          // Navigate to Consultations tab first, then to ConsultationsHistory
-          parent.navigate('Consultations', {
-            screen: 'ConsultationsHistory',
-            params: {consultationId: notification.consultationId},
+          // Navigate to History tab first, then to ServiceHistory
+          parent.navigate('History', {
+            screen: 'ServiceHistory',
+            params: {serviceRequestId},
           });
         } else {
-          // Fallback: navigate to Consultations tab
-          navigation.navigate('Consultations');
+          // Fallback: navigate to ServiceHistory
+          navigation.navigate('ServiceHistory', {serviceRequestId});
         }
       } catch (error) {
-        // Fallback: just navigate to Consultations tab
-        navigation.navigate('Consultations');
-      }
-    } else if (notification.prescriptionId) {
-      // Navigate to Consultations tab
-      try {
-        const parent = navigation.getParent();
-        if (parent) {
-          parent.navigate('Consultations');
-        } else {
-          navigation.navigate('Consultations');
-        }
-      } catch (error) {
-        navigation.navigate('Consultations');
+        // Fallback: just navigate to ServiceHistory
+        navigation.navigate('ServiceHistory', {serviceRequestId});
       }
     }
   };
@@ -88,7 +77,7 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
       case 'consultation':
-        return 'medical-outline';
+        return 'build-outline';
       case 'prescription':
         return 'document-text-outline';
       case 'reminder':

@@ -19,5 +19,11 @@
   "dateNotAvailable": "Date not available",
   "waitingForProvider": "Waiting for provider...",
   "loading": "Loading service history...",
-  "yourReview": "Your Review"
+  "yourReview": "Your Review",
+  "totalAmount": "Total Amount",
+  "serviceFee": "Service Fee",
+  "materials": "Materials",
+  "jobCard": "Job Card",
+  "viewJobCard": "View Job Card",
+  "failedToOpenPDF": "Failed to open PDF. Please try again."
 }

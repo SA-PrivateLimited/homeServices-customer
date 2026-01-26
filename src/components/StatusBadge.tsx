@@ -1,6 +1,6 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
-import type {ConsultationStatus} from '../types/consultation';
+import type {ConsultationStatus} from '../types/common';
 
 interface StatusBadgeProps {
   status: ConsultationStatus;

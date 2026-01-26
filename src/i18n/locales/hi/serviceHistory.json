@@ -19,5 +19,11 @@
   "dateNotAvailable": "तारीख उपलब्ध नहीं",
   "waitingForProvider": "प्रदाता की प्रतीक्षा कर रहे हैं...",
   "loading": "सेवा इतिहास लोड हो रहा है...",
-  "yourReview": "आपकी समीक्षा"
+  "yourReview": "आपकी समीक्षा",
+  "totalAmount": "कुल राशि",
+  "serviceFee": "सेवा शुल्क",
+  "materials": "सामग्री",
+  "jobCard": "जॉब कार्ड",
+  "viewJobCard": "जॉब कार्ड देखें",
+  "failedToOpenPDF": "PDF खोलने में विफल। कृपया पुनः प्रयास करें।"
 }

@@ -17,6 +17,7 @@ import enErrors from './locales/en/errors.json';
 import enMessages from './locales/en/messages.json';
 import enNotifications from './locales/en/notifications.json';
 import enProviders from './locales/en/providers.json';
+import enRecommendations from './locales/en/recommendations.json';
 
 // Hindi translations
 import hiCommon from './locales/hi/common.json';
@@ -33,6 +34,7 @@ import hiErrors from './locales/hi/errors.json';
 import hiMessages from './locales/hi/messages.json';
 import hiNotifications from './locales/hi/notifications.json';
 import hiProviders from './locales/hi/providers.json';
+import hiRecommendations from './locales/hi/recommendations.json';
 
 // Merge all translations
 const en = {
@@ -50,6 +52,7 @@ const en = {
   messages: enMessages,
   notifications: enNotifications,
   providers: enProviders,
+  recommendations: enRecommendations,
 };
 
 const hi = {
@@ -67,6 +70,7 @@ const hi = {
   messages: hiMessages,
   notifications: hiNotifications,
   providers: hiProviders,
+  recommendations: hiRecommendations,
 };
 
 const LANGUAGE_KEY = '@app_language';

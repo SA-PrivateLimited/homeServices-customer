@@ -7,6 +7,7 @@ import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import NotificationService from '../services/notificationService';
+import useTranslation from '../hooks/useTranslation';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -31,6 +32,7 @@ export default function AppNavigator() {
   const [phoneVerified, setPhoneVerified] = useState<boolean | null>(null);
   const {isDarkMode, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (authUser) => {
@@ -149,7 +151,7 @@ export default function AppNavigator() {
           component={ServiceRequestScreen}
           options={{
             headerShown: true,
-            title: 'Request Service',
+            title: t('services.requestService'),
             headerStyle: {backgroundColor: theme.card},
             headerTintColor: theme.text,
           }}
@@ -159,7 +161,7 @@ export default function AppNavigator() {
           component={ServiceHistoryScreen}
           options={{
             headerShown: true,
-            title: 'Service History',
+            title: t('services.serviceHistory'),
             headerStyle: {backgroundColor: theme.card},
             headerTintColor: theme.text,
           }}
@@ -169,7 +171,7 @@ export default function AppNavigator() {
           component={ActiveServiceScreen}
           options={{
             headerShown: true,
-            title: 'Active Service',
+            title: t('services.activeService'),
             headerStyle: {backgroundColor: theme.card},
             headerTintColor: theme.text,
           }}

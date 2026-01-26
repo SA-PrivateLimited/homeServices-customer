@@ -11,7 +11,6 @@ import {
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import Icon from 'react-native-vector-icons/Ionicons';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
 const {width, height} = Dimensions.get('window');
@@ -24,7 +23,7 @@ interface OnboardingStep {
   iconColor: string;
 }
 
-const patientSteps: OnboardingStep[] = [
+const customerSteps: OnboardingStep[] = [
   {
     id: 1,
     title: 'Welcome to HomeServices',
@@ -34,35 +33,35 @@ const patientSteps: OnboardingStep[] = [
   },
   {
     id: 2,
-    title: 'Find Doctors',
-    description: 'Browse through our list of verified doctors. Search by specialty, view ratings, experience, and consultation fees.',
+    title: 'Find Service Providers',
+    description: 'Browse through our list of verified service providers. Search by service type, view ratings, experience, and service fees.',
     icon: 'search',
     iconColor: '#27AE60',
   },
   {
     id: 3,
-    title: 'Book Consultations',
-    description: 'Select a doctor, choose an available time slot, and book your consultation. Pay securely through the app.',
+    title: 'Request Services',
+    description: 'Select a provider, choose an available time slot, and request your service. Pay securely through the app.',
     icon: 'calendar',
     iconColor: '#E67E22',
   },
   {
     id: 4,
-    title: 'Chat with Doctors',
-    description: 'Once booked, you can chat with your doctor, share medical reports, and get prescriptions directly in the app.',
+    title: 'Track Your Service',
+    description: 'Once requested, you can track your service in real-time, chat with your provider, and get updates directly in the app.',
     icon: 'chatbubbles',
     iconColor: '#9B59B6',
   },
   {
     id: 5,
-    title: 'View Prescriptions',
-    description: 'Access all your prescriptions and consultation history anytime. Keep track of your health records securely.',
+    title: 'View Service History',
+    description: 'Access all your service requests and history anytime. Keep track of your service records securely.',
     icon: 'document-text',
     iconColor: '#E74C3C',
   },
 ];
 
-const doctorSteps: OnboardingStep[] = [
+const providerSteps: OnboardingStep[] = [
   {
     id: 1,
     title: 'Welcome Service Provider',
@@ -73,28 +72,28 @@ const doctorSteps: OnboardingStep[] = [
   {
     id: 2,
     title: 'Complete Your Profile',
-    description: 'Set up your professional profile with qualifications, specialties, experience, and consultation fees. Your profile will be reviewed by our admin team.',
+    description: 'Set up your professional profile with qualifications, specialties, experience, and service fees. Your profile will be reviewed by our admin team.',
     icon: 'person',
     iconColor: '#27AE60',
   },
   {
     id: 3,
     title: 'Set Your Availability',
-    description: 'Manage your schedule by setting available time slots. Patients can book consultations during these slots.',
+    description: 'Manage your schedule by setting available time slots. Customers can request services during these slots.',
     icon: 'time',
     iconColor: '#E67E22',
   },
   {
     id: 4,
-    title: 'Manage Appointments',
-    description: 'View upcoming and past appointments. Chat with patients, share prescriptions, and provide medical advice.',
+    title: 'Manage Service Requests',
+    description: 'View upcoming and past service requests. Chat with customers and provide service updates.',
     icon: 'calendar',
     iconColor: '#9B59B6',
   },
   {
     id: 5,
-    title: 'Create Prescriptions',
-    description: 'Write digital prescriptions for your patients. They can access them anytime from their consultation history.',
+    title: 'Track Your Services',
+    description: 'Manage all your service requests and track your service history. Customers can access their service records anytime.',
     icon: 'create',
     iconColor: '#E74C3C',
   },
@@ -104,7 +103,7 @@ interface OnboardingScreenProps {
   navigation: any;
   route: {
     params: {
-      userRole: 'patient' | 'doctor';
+      userRole: 'customer' | 'provider';
     };
   };
 }
@@ -116,7 +115,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation, route}) 
   const [currentStep, setCurrentStep] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const steps = userRole === 'patient' ? patientSteps : doctorSteps;
+  const steps = userRole === 'customer' ? customerSteps : providerSteps;
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -149,37 +148,23 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation, route}) 
   const handleComplete = async () => {
     try {
       const currentUser = auth().currentUser;
-      if (currentUser) {
-        await firestore()
-          .collection('users')
-          .doc(currentUser.uid)
-          .update({
-            hasCompletedOnboarding: true,
-          });
-      }
+      // Note: Onboarding completion is now handled by the backend API
+      // The user will be redirected to the main screen
 
       // Navigate to appropriate main screen based on role
-      if (userRole === 'patient') {
+      if (userRole === 'customer') {
         navigation.replace('Main');
-      } else if (userRole === 'doctor') {
-        // Check if doctor has completed profile setup
-        const doctorProfile = await firestore()
-          .collection('providers')
-          .where('email', '==', currentUser?.email)
-          .get();
-
-        if (doctorProfile.empty) {
-          navigation.replace('DoctorProfileSetup');
-        } else {
-          navigation.replace('DoctorMain');
-        }
+      } else if (userRole === 'provider') {
+        // Navigate to provider main screen
+        // Profile setup will be handled by the provider app
+        navigation.replace('Main');
       }
     } catch (error) {
       // Navigate anyway to not block the user
-      if (userRole === 'patient') {
+      if (userRole === 'customer') {
         navigation.replace('Main');
       } else {
-        navigation.replace('DoctorMain');
+        navigation.replace('Main');
       }
     }
   };
@@ -331,7 +316,6 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
-    transition: 'all 0.3s ease',
   },
   navigationContainer: {
     flexDirection: 'row',

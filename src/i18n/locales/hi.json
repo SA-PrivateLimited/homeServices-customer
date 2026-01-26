@@ -274,7 +274,7 @@
     "year": "वर्ष",
     "years": "वर्ष",
     "experience": "अनुभव",
-    "experienceWithYears": "{{years}} {{count, plural, one {वर्ष} other {वर्ष}}} अनुभव",
+    "experienceWithYears": "{{count, plural, one {वर्ष} other {वर्ष}} का अनुभव",
     "providerNotAvailable": "प्रदाता उपलब्ध नहीं",
     "providerNotAvailableMessage": "यह प्रदाता वर्तमान में सेवा अनुरोधों के लिए उपलब्ध नहीं है। कृपया कोई अन्य प्रदाता चुनें।",
     "providerNotAvailableOnlineMessage": "यह प्रदाता वर्तमान में ऑनलाइन या सेवा अनुरोधों के लिए उपलब्ध नहीं है। कृपया कोई अन्य प्रदाता चुनें।",

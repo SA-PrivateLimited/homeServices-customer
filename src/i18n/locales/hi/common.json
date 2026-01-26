@@ -122,5 +122,6 @@
   "invalidAddress": "अमान्य पता",
   "invalidAddressMessage": "कृपया पिनकोड और पते के साथ एक वैध पता चुनें",
   "invalidDateTime": "अमान्य तिथि/समय",
-  "invalidDateTimeMessage": "कृपया निर्धारित सेवा के लिए कम से कम 1 घंटे बाद की तिथि और समय चुनें।"
+  "invalidDateTimeMessage": "कृपया निर्धारित सेवा के लिए कम से कम 1 घंटे बाद की तिथि और समय चुनें।",
+  "optional": "वैकल्पिक"
 }

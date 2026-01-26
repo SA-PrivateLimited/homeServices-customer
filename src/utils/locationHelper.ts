@@ -1,7 +1,7 @@
 import GeolocationService from '../services/geolocationService';
 import {updateUserLocation} from '../services/authService';
 import {Alert} from 'react-native';
-import type {UserLocation} from '../types/consultation';
+import type {UserLocation} from '../types/common';
 
 /**
  * Helper function to get and save user location

@@ -1,6 +1,9 @@
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type {Consultation} from '../types/consultation';
+import type {ServiceRequest} from './api/serviceRequestsApi';
+
+// Alias for backward compatibility
+type Consultation = ServiceRequest;
 import {OPEN_AI_API_KEY} from '@env';
 
 /**

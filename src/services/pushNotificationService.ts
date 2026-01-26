@@ -1,6 +1,10 @@
 import firestore from '@react-native-firebase/firestore';
 import functions from '@react-native-firebase/functions';
-import type {Consultation, UserRole} from '../types/consultation';
+import type {ServiceRequest} from './api/serviceRequestsApi';
+import type {UserRole} from '../types/common';
+
+// Alias for backward compatibility
+type Consultation = ServiceRequest;
 
 const COLLECTIONS = {
   USERS: 'users',

@@ -44,5 +44,14 @@
   "locationPermissionMessage": "मानचित्र पर आपका लाइव स्थान दिखाने के लिए स्थान अनुमति आवश्यक है। कृपया इसे डिवाइस सेटिंग्स में सक्षम करें।",
   "yourCurrentLocation": "आपका वर्तमान स्थान",
   "providerLocation": "प्रदाता स्थान",
-  "liveLocation": "लाइव स्थान"
+  "liveLocation": "लाइव स्थान",
+  "availableProviders": "उपलब्ध प्रदाता",
+  "online": "ऑनलाइन",
+  "offline": "ऑफलाइन",
+  "away": "दूर",
+  "eta": "अनुमानित समय",
+  "min": "मिनट",
+  "scheduledFor": "अनुसूचित",
+  "providerWillArriveSoon": "प्रदाता जल्द ही पहुंचेगा",
+  "providerWorking": "प्रदाता काम कर रहा है"
 }

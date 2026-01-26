@@ -72,7 +72,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
       {
         id: '1',
         role: 'assistant',
-        content: '👋 Hello! I\'m your consultation assistant. I can help you answer questions about your past consultations, appointments, prescriptions, and more. What would you like to know?',
+        content: '👋 Hello! I\'m your service assistant. I can help you answer questions about your past service requests, appointments, and more. What would you like to know?',
         timestamp: new Date(),
       },
     ]);
@@ -80,9 +80,9 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
     // Load index stats
     loadIndexStats();
 
-    // Index consultations if available
+    // Index service requests if available (using consultations from store)
     if (currentUser && consultations.length > 0) {
-      indexConsultations();
+      indexServiceRequests();
     }
   }, [currentUser, consultations]);
 
@@ -94,7 +94,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
     }
   };
 
-  const indexConsultations = async () => {
+  const indexServiceRequests = async () => {
     if (!currentUser || consultations.length === 0 || !OPEN_AI_API_KEY) {
       return;
     }
@@ -104,7 +104,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
       await ragService.indexConsultations(consultations);
       await loadIndexStats();
     } catch (error: any) {
-      addMessage('assistant', `⚠️ Failed to index consultations: ${error.message}. Some features may not work correctly.`);
+      addMessage('assistant', `⚠️ Failed to index service requests: ${error.message}. Some features may not work correctly.`);
     } finally {
       setIsIndexing(false);
     }
@@ -298,11 +298,11 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           <Text style={[styles.headerTitle, {color: theme.text}]}>{t('helpSupport.title')}</Text>
           {isIndexing ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              {t('helpSupport.indexingConsultations')}
+              {t('helpSupport.indexingServiceRequests') || 'Indexing service requests...'}
             </Text>
           ) : indexStats.count > 0 ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              {t('helpSupport.consultationsIndexed', {count: indexStats.count})}
+              {t('helpSupport.serviceRequestsIndexed', {count: indexStats.count}) || `${indexStats.count} service requests indexed`}
             </Text>
           ) : (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
@@ -312,7 +312,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
         </View>
         {consultations.length > 0 && (
           <TouchableOpacity
-            onPress={indexConsultations}
+            onPress={indexServiceRequests}
             style={styles.refreshButton}
             disabled={isIndexing}>
             <Icon
@@ -362,7 +362,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
                 borderColor: theme.border,
               },
             ]}
-            placeholder={t('helpSupport.askAboutConsultations')}
+            placeholder={t('helpSupport.askAboutServiceRequests') || 'Ask about your service requests...'}
             placeholderTextColor={theme.textSecondary}
             value={inputText}
             onChangeText={setInputText}

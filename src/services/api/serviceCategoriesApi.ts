@@ -5,18 +5,34 @@
 
 import {apiGet} from './apiClient';
 
+export interface QuestionnaireQuestion {
+  id: string;
+  question: string;
+  questionHi?: string;
+  type: 'text' | 'number' | 'select' | 'multiselect' | 'boolean';
+  options?: string[];
+  optionsHi?: string[];
+  required: boolean;
+  placeholder?: string;
+  placeholderHi?: string;
+}
+
 export interface ServiceCategory {
   _id?: string;
   id?: string;
   name: string;
-  nameHindi?: string;
   description?: string;
-  descriptionHindi?: string;
+  descriptionHi?: string;
   icon?: string;
   color?: string;
-  enabled?: boolean;
+  order?: number;
+  isActive?: boolean;
+  requiresVehicle?: boolean;
+  questionnaire?: QuestionnaireQuestion[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
+  _migratedAt?: string | Date;
+  _migratedFrom?: string;
 }
 
 /**

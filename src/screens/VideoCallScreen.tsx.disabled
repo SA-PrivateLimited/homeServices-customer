@@ -21,7 +21,10 @@ import functions from '@react-native-firebase/functions';
 import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import type {Consultation} from '../types/consultation';
+import type {ServiceRequest} from '../services/api/serviceRequestsApi';
+
+// Alias for backward compatibility
+type Consultation = ServiceRequest;
 
 interface VideoCallScreenProps {
   navigation: any;

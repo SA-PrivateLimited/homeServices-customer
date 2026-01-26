@@ -3,7 +3,8 @@ import firestore, {FirebaseFirestoreTypes} from '@react-native-firebase/firestor
 import messaging from '@react-native-firebase/messaging';
 import functions from '@react-native-firebase/functions';
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
-import type {User, UserLocation} from '../types/consultation';
+import type {User} from './api/usersApi';
+import type {UserLocation} from '../types/common';
 import NotificationService from './notificationService';
 
 /**

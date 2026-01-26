@@ -10,6 +10,7 @@ import useTranslation from '../hooks/useTranslation';
 // Screens - Settings (kept for profile management)
 import SettingsScreen from '../screens/SettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ShareContactRecommendationScreen from '../screens/ShareContactRecommendationScreen';
 
 // Screens - Services
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
@@ -108,6 +109,7 @@ const ServicesStack = () => {
 const SettingsStack = React.memo(() => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   return (
     <Stack.Navigator
@@ -131,6 +133,13 @@ const SettingsStack = React.memo(() => {
         name="Profile"
         component={ProfileScreen}
         options={{title: 'My Profile'}}
+      />
+      <Stack.Screen
+        name="ShareContactRecommendation"
+        component={ShareContactRecommendationScreen}
+        options={{
+          title: t('recommendations.shareContact'),
+        }}
       />
     </Stack.Navigator>
   );

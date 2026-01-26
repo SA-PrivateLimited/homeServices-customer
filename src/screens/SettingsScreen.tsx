@@ -309,31 +309,18 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           {t('settings.support')}
         </Text>
         <SettingItem
+          icon="person-add"
+          title={t('recommendations.shareContact')}
+          subtitle={t('recommendations.shareContactSubtitle')}
+          onPress={() => navigation.navigate('ShareContactRecommendation')}
+        />
+        <SettingItem
           icon="help-circle"
           title={t('settings.helpSupport')}
           subtitle={t('settings.contactUsForAssistance')}
           onPress={handleHelpSupport}
         />
-        <SettingItem
-          icon="notifications"
-          title={t('settings.testNotification')}
-          subtitle={t('settings.sendTestNotification')}
-          onPress={async () => {
-            try {
-              const sendTest = require('../utils/sendTestNotification').default;
-              await sendTest(t('settings.testNotificationMessage'));
-              setSuccessMessage(t('settings.testNotificationSent'));
-              setShowSuccessModal(true);
-            } catch (error: any) {
-              setAlertModal({
-                visible: true,
-                title: t('common.error'),
-                message: error?.message || error?.code || t('settings.failedToSendTestNotification'),
-                type: 'error',
-              });
-            }
-          }}
-        />
+      
       </View>
 
       <View style={styles.section}>

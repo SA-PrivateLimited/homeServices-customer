@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {useStore} from '../store';
@@ -23,7 +22,7 @@ import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
 import useTranslation from '../hooks/useTranslation';
-import type {User} from '../types/consultation';
+import type {User} from '../services/api/usersApi';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -95,7 +94,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     return await reference.getDownloadURL();
   };
 
-  // Load customer profile from Firestore if not in store
+  // Load customer profile from API if not in store
   useEffect(() => {
     const loadCustomerProfile = async () => {
       const authUser = auth().currentUser;
@@ -142,43 +141,35 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         return;
       }
 
-      // Otherwise, fetch from Firestore
+      // Otherwise, fetch from API via authService
       try {
-        const userDoc = await firestore().collection('users').doc(authUser.uid).get();
-        if (userDoc.exists) {
-          const userData = userDoc.data() as any;
-          const user: User = {
-            ...userData,
-            id: userDoc.id,
-            createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : userData.createdAt,
-            dateOfBirth: userData.dateOfBirth?.toDate ? userData.dateOfBirth.toDate() : userData.dateOfBirth,
-          };
-          
+        const user = await authService.getCurrentUser();
+        if (user) {
           setName(user.name || authUser.displayName || '');
           setEmail(user.email || authUser.email || '');
           setPhone(user.phone || authUser.phoneNumber || '');
-          setSecondaryPhone(user.secondaryPhone || '');
-          setGender(user.gender || '');
-          setBloodGroup(user.bloodGroup || '');
+          setSecondaryPhone((user as any).secondaryPhone || '');
+          setGender((user as any).gender || '');
+          setBloodGroup((user as any).bloodGroup || '');
           setHomeAddress({
-            address: user.homeAddress?.address || '',
-            city: user.homeAddress?.city || '',
-            state: user.homeAddress?.state || '',
-            pincode: user.homeAddress?.pincode || '',
+            address: (user as any).homeAddress?.address || '',
+            city: (user as any).homeAddress?.city || '',
+            state: (user as any).homeAddress?.state || '',
+            pincode: (user as any).homeAddress?.pincode || '',
           });
           setOfficeAddress({
-            address: user.officeAddress?.address || '',
-            city: user.officeAddress?.city || '',
-            state: user.officeAddress?.state || '',
-            pincode: user.officeAddress?.pincode || '',
+            address: (user as any).officeAddress?.address || '',
+            city: (user as any).officeAddress?.city || '',
+            state: (user as any).officeAddress?.state || '',
+            pincode: (user as any).officeAddress?.pincode || '',
           });
           setSameAsHomeAddress(
-            !!(user.homeAddress?.address && 
-            user.officeAddress?.address &&
-            user.homeAddress.address === user.officeAddress.address)
+            !!((user as any).homeAddress?.address && 
+            (user as any).officeAddress?.address &&
+            (user as any).homeAddress.address === (user as any).officeAddress.address)
           );
           
-          const existingImage = user.profileImage;
+          const existingImage = (user as any).profileImage;
           if (existingImage && typeof existingImage === 'string' && existingImage.trim() !== '' && 
               (existingImage.startsWith('http://') || existingImage.startsWith('https://') || 
                existingImage.startsWith('file://') || existingImage.startsWith('content://'))) {
@@ -295,16 +286,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       
       // For phone-authenticated users, we can't use sendEmailVerification()
       if (isPhoneAuth && !hasEmailPassword) {
-        // Update email in Firestore only (can't verify via Firebase Auth)
+        // Update email via API (can't verify via Firebase Auth)
         if (currentEmail && emailToVerify !== currentEmail) {
-          await firestore()
-            .collection('users')
-            .doc(authUser.uid)
-            .update({
+          try {
+            await authService.updateUserProfile(authUser.uid, {
               email: emailToVerify,
               emailVerified: false,
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-            });
+            } as any);
+          } catch (error) {
+            console.warn('Could not update email:', error);
+          }
         }
         setAlertModal({
           visible: true,
@@ -320,15 +311,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       if (currentEmail && emailToVerify !== currentEmail) {
         try {
           await authUser.updateEmail(emailToVerify);
-          // Update email in Firestore after successful update
-          await firestore()
-            .collection('users')
-            .doc(authUser.uid)
-            .update({
+          // Update email via API after successful update
+          try {
+            await authService.updateUserProfile(authUser.uid, {
               email: emailToVerify,
               emailVerified: false,
-              updatedAt: firestore.FieldValue.serverTimestamp(),
-            });
+            } as any);
+          } catch (apiError) {
+            console.warn('Could not update email in API:', apiError);
+          }
         } catch (updateError: any) {
           if (updateError.code === 'auth/requires-recent-login') {
             setAlertModal({
@@ -488,7 +479,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         homeAddress: homeAddress.address ? homeAddress : null,
         officeAddress: finalOfficeAddress.address ? finalOfficeAddress : null,
         profileImage: imageUrl || null,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        // updatedAt will be set by API
       };
 
       // Update email in Firebase Auth if changed
@@ -868,15 +859,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     onPress={async () => {
                       try {
                         setLoading(true);
-                        // Remove secondary phone from Firestore
-                      await firestore()
-                        .collection('users')
-                        .doc(authUser?.uid || '')
-                        .update({
-                          secondaryPhone: firestore.FieldValue.delete(),
-                          secondaryPhoneVerified: firestore.FieldValue.delete(),
-                          updatedAt: firestore.FieldValue.serverTimestamp(),
-                        });
+                        // Remove secondary phone via API
+                        try {
+                          await authService.removeSecondaryPhone();
+                        } catch (apiError) {
+                          console.warn('Could not remove secondary phone via API:', apiError);
+                        }
                         setSecondaryPhone('');
                         const updatedUser = await authService.getCurrentUser();
                         if (updatedUser) {

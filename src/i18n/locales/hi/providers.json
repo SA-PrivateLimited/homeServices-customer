@@ -13,7 +13,7 @@
   "year": "वर्ष",
   "years": "वर्ष",
   "experience": "अनुभव",
-  "experienceWithYears": "{{years}} {{count, plural, one {वर्ष} other {वर्ष}}} अनुभव",
+  "experienceWithYears": "{{count, plural, one {वर्ष} other {वर्ष}} का अनुभव",
   "providerNotAvailable": "प्रदाता उपलब्ध नहीं",
   "providerNotAvailableMessage": "यह प्रदाता वर्तमान में सेवा अनुरोधों के लिए उपलब्ध नहीं है। कृपया दूसरे प्रदाता का चयन करें।",
   "providerNotAvailableOnlineMessage": "यह प्रदाता वर्तमान में ऑनलाइन या सेवा अनुरोधों के लिए उपलब्ध नहीं है। कृपया दूसरे प्रदाता का चयन करें।",
@@ -31,6 +31,7 @@
   "requestService": "सेवा का अनुरोध करें",
   "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें",
   "browseProviders": "प्रदाता ब्राउज़ करें",
-  "providerDetails": "प्रदाता विवरण"
+  "providerDetails": "प्रदाता विवरण",
+  "newServiceRequestNotification": "नया सेवा अनुरोध आ रहा है"
 }
 

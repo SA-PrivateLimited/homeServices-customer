@@ -20,7 +20,8 @@ export interface QuestionnaireQuestion {
 
 export interface ServiceCategory {
   id: string;
-  name: string;
+  name: string; // English name (backward compatibility)
+  nameHi?: string; // Hindi name (optional)
   icon: string; // Material icon name
   color: string; // Hex color code
   description?: string; // English description
@@ -39,6 +40,7 @@ export interface ServiceCategory {
 export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Plumber',
+    nameHi: 'प्लंबर',
     icon: 'plumbing',
     color: '#3498db',
     description: 'Professional plumbing services for homes and businesses',
@@ -48,6 +50,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Electrician',
+    nameHi: 'इलेक्ट्रीशियन',
     icon: 'electrical-services',
     color: '#f39c12',
     description: 'Licensed electrical services and repairs',
@@ -57,6 +60,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Carpenter',
+    nameHi: 'बढ़ई',
     icon: 'carpenter',
     color: '#95a5a6',
     description: 'Professional carpentry and woodwork services',
@@ -66,6 +70,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'AC Repair',
+    nameHi: 'एसी मरम्मत',
     icon: 'ac-unit',
     color: '#1abc9c',
     description: 'Air conditioning repair and maintenance',
@@ -75,6 +80,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Appliance Repair',
+    nameHi: 'उपकरण मरम्मत',
     icon: 'kitchen',
     color: '#9b59b6',
     description: 'Home appliance repairs',
@@ -84,6 +90,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Painter',
+    nameHi: 'पेंटर',
     icon: 'format-paint',
     color: '#e74c3c',
     description: 'Interior and exterior painting services',
@@ -93,6 +100,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Cleaning Service',
+    nameHi: 'सफाई सेवा',
     icon: 'cleaning-services',
     color: '#16a085',
     description: 'Professional home and office cleaning',
@@ -102,6 +110,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Pest Control',
+    nameHi: 'कीट नियंत्रण',
     icon: 'bug-report',
     color: '#c0392b',
     description: 'Pest control and extermination',
@@ -111,6 +120,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Mason',
+    nameHi: 'राजमिस्त्री',
     icon: 'construction',
     color: '#7f8c8d',
     description: 'Masonry and construction work',
@@ -120,6 +130,7 @@ export const DEFAULT_SERVICE_CATEGORIES: Omit<ServiceCategory, 'id' | 'createdAt
   },
   {
     name: 'Welder',
+    nameHi: 'वेल्डर',
     icon: 'build',
     color: '#34495e',
     description: 'Welding services',
@@ -140,18 +151,21 @@ export const fetchServiceCategories = async (): Promise<ServiceCategory[]> => {
     // Convert API response to app format
     // Filter active categories if needed (backend should handle this)
     const activeCategories = categories
-      .filter((cat: ServiceCategoryApi) => cat.enabled !== false)
+      .filter((cat: ServiceCategoryApi) => cat.isActive !== false)
       .map((cat: ServiceCategoryApi) => {
         // Map API fields to app format
         return {
           id: cat._id || cat.id || '',
           name: cat.name,
+          nameHi: (cat as any).nameHi || (cat as any).nameHindi,
           icon: cat.icon || 'build',
           color: cat.color || '#3498db',
           description: cat.description,
-          descriptionHi: cat.descriptionHindi,
-          isActive: cat.enabled !== false,
-          order: 0, // Backend should provide order if needed
+          descriptionHi: cat.descriptionHi || (cat as any).descriptionHindi,
+          isActive: cat.isActive !== false,
+          order: cat.order || 0,
+          questionnaire: cat.questionnaire || [],
+          requiresVehicle: cat.requiresVehicle || false,
           createdAt: cat.createdAt ? (cat.createdAt instanceof Date ? cat.createdAt : new Date(cat.createdAt)) : new Date(),
           updatedAt: cat.updatedAt ? (cat.updatedAt instanceof Date ? cat.updatedAt : new Date(cat.updatedAt)) : undefined,
         } as ServiceCategory;
@@ -201,7 +215,7 @@ export const getServiceCategoryByName = async (
     // Fetch all categories and filter by name
     // Note: Backend should ideally provide a search/by-name endpoint
     const categories = await serviceCategoriesApi.getAll();
-    const category = categories.find((cat: ServiceCategoryApi) => cat.name === name && cat.enabled !== false);
+    const category = categories.find((cat: ServiceCategoryApi) => cat.name === name && cat.isActive !== false);
 
     if (!category) {
       // Check defaults as fallback
@@ -221,11 +235,12 @@ export const getServiceCategoryByName = async (
     return {
       id: category._id || category.id || '',
       name: category.name,
+      nameHi: (category as any).nameHi || (category as any).nameHindi,
       icon: category.icon || 'build',
       color: category.color || '#3498db',
       description: category.description,
-      descriptionHi: category.descriptionHindi,
-      isActive: category.enabled !== false,
+      descriptionHi: category.descriptionHi || (category as any).descriptionHindi,
+      isActive: (category as any).isActive !== false,
       order: 0,
       createdAt: category.createdAt ? (category.createdAt instanceof Date ? category.createdAt : new Date(category.createdAt)) : new Date(),
       updatedAt: category.updatedAt ? (category.updatedAt instanceof Date ? category.updatedAt : new Date(category.updatedAt)) : undefined,

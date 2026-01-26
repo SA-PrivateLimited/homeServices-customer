@@ -39,6 +39,14 @@ export interface JobCard {
   pinGeneratedAt?: string | Date;
   scheduledTime?: string | Date;
   cancellationReason?: string;
+  jobCardPdfUrl?: string;
+  serviceAmount?: number;
+  materialsUsed?: Array<{
+    description: string;
+    quantity?: number;
+    unitPrice?: number;
+    total?: number;
+  }>;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

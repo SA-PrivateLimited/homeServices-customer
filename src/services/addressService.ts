@@ -5,7 +5,7 @@
 
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import type {UserLocation} from '../types/consultation';
+import type {UserLocation} from '../types/common';
 
 export interface SavedAddress extends UserLocation {
   id?: string;

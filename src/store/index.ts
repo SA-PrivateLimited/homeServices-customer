@@ -1,20 +1,15 @@
 import {create} from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type {
-  Doctor,
-  User,
-  Consultation,
-  ChatMessage,
-  Prescription,
-} from '../types/consultation';
+import type {User} from '../services/api/usersApi';
+import type {ServiceRequest} from '../services/api/serviceRequestsApi';
+import {changeLanguage} from '../i18n';
 
 export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'consultation' | 'prescription' | 'reminder' | 'system';
+  type: 'consultation' | 'reminder' | 'system';
   consultationId?: string;
-  prescriptionId?: string;
   userId: string; // User ID who should receive this notification (customerId or providerId)
   read: boolean;
   createdAt: Date;
@@ -37,7 +32,7 @@ interface AppState {
   currentPincode: string | null;
   setCurrentPincode: (pincode: string | null) => void;
 
-  // Consultation - User
+  // User
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
 
@@ -45,27 +40,13 @@ interface AppState {
   redirectAfterLogin: {route: string; params?: any} | null;
   setRedirectAfterLogin: (redirect: {route: string; params?: any} | null) => void;
 
-  // Consultation - Doctors
-  doctors: Doctor[];
-  setDoctors: (doctors: Doctor[]) => void;
-
-  // Consultation - Consultations
-  consultations: Consultation[];
-  setConsultations: (consultations: Consultation[]) => void;
-  addConsultation: (consultation: Consultation) => void;
-  updateConsultation: (id: string, updates: Partial<Consultation>) => void;
-  activeConsultation: Consultation | null;
-  setActiveConsultation: (consultation: Consultation | null) => void;
-
-  // Consultation - Chat
-  chatMessages: {[consultationId: string]: ChatMessage[]};
-  setChatMessages: (consultationId: string, messages: ChatMessage[]) => void;
-  addChatMessage: (consultationId: string, message: ChatMessage) => void;
-
-  // Consultation - Prescriptions
-  prescriptions: Prescription[];
-  setPrescriptions: (prescriptions: Prescription[]) => void;
-  addPrescription: (prescription: Prescription) => void;
+  // Service Requests
+  serviceRequests: ServiceRequest[];
+  setServiceRequests: (serviceRequests: ServiceRequest[]) => void;
+  addServiceRequest: (serviceRequest: ServiceRequest) => void;
+  updateServiceRequest: (id: string, updates: Partial<ServiceRequest>) => void;
+  activeServiceRequest: ServiceRequest | null;
+  setActiveServiceRequest: (serviceRequest: ServiceRequest | null) => void;
 
   // Notifications
   notifications: AppNotification[];
@@ -86,14 +67,11 @@ export const useStore = create<AppState>((set, get) => ({
   isLoading: false,
   language: 'en',
 
-  // Consultation initial state
+  // Service Request initial state
   currentUser: null,
   redirectAfterLogin: null,
-  doctors: [],
-  consultations: [],
-  activeConsultation: null,
-  chatMessages: {},
-  prescriptions: [],
+  serviceRequests: [],
+  activeServiceRequest: null,
   notifications: [],
   currentPincode: null,
 
@@ -107,7 +85,6 @@ export const useStore = create<AppState>((set, get) => ({
     set({language});
     await AsyncStorage.setItem('language', language);
     // Change i18n language
-    const {changeLanguage} = await import('../i18n');
     await changeLanguage(language);
   },
 
@@ -116,7 +93,7 @@ export const useStore = create<AppState>((set, get) => ({
   // Location & Pincode
   setCurrentPincode: (pincode: string | null) => set({currentPincode: pincode}),
 
-  // Consultation actions
+  // Service Request actions
   setCurrentUser: async (user: User | null) => {
     set({currentUser: user});
     if (user) {
@@ -130,63 +107,27 @@ export const useStore = create<AppState>((set, get) => ({
     set({redirectAfterLogin: redirect});
   },
 
-  setDoctors: async (doctors: Doctor[]) => {
-    set({doctors});
-    await AsyncStorage.setItem('doctors', JSON.stringify(doctors));
-    await AsyncStorage.setItem('doctorsCachedAt', new Date().toISOString());
+  setServiceRequests: async (serviceRequests: ServiceRequest[]) => {
+    set({serviceRequests});
+    await AsyncStorage.setItem('serviceRequests', JSON.stringify(serviceRequests));
   },
 
-  setConsultations: async (consultations: Consultation[]) => {
-    set({consultations});
-    await AsyncStorage.setItem('consultations', JSON.stringify(consultations));
+  addServiceRequest: async (serviceRequest: ServiceRequest) => {
+    const serviceRequests = [...get().serviceRequests, serviceRequest];
+    set({serviceRequests});
+    await AsyncStorage.setItem('serviceRequests', JSON.stringify(serviceRequests));
   },
 
-  addConsultation: async (consultation: Consultation) => {
-    const consultations = [...get().consultations, consultation];
-    set({consultations});
-    await AsyncStorage.setItem('consultations', JSON.stringify(consultations));
-  },
-
-  updateConsultation: async (id: string, updates: Partial<Consultation>) => {
-    const consultations = get().consultations.map(c =>
-      c.id === id ? {...c, ...updates} : c,
+  updateServiceRequest: async (id: string, updates: Partial<ServiceRequest>) => {
+    const serviceRequests = get().serviceRequests.map(sr =>
+      (sr.id === id || sr._id === id) ? {...sr, ...updates} : sr,
     );
-    set({consultations});
-    await AsyncStorage.setItem('consultations', JSON.stringify(consultations));
+    set({serviceRequests});
+    await AsyncStorage.setItem('serviceRequests', JSON.stringify(serviceRequests));
   },
 
-  setActiveConsultation: (consultation: Consultation | null) => {
-    set({activeConsultation: consultation});
-  },
-
-  setChatMessages: (consultationId: string, messages: ChatMessage[]) => {
-    set({
-      chatMessages: {
-        ...get().chatMessages,
-        [consultationId]: messages,
-      },
-    });
-  },
-
-  addChatMessage: (consultationId: string, message: ChatMessage) => {
-    const existingMessages = get().chatMessages[consultationId] || [];
-    set({
-      chatMessages: {
-        ...get().chatMessages,
-        [consultationId]: [...existingMessages, message],
-      },
-    });
-  },
-
-  setPrescriptions: async (prescriptions: Prescription[]) => {
-    set({prescriptions});
-    await AsyncStorage.setItem('prescriptions', JSON.stringify(prescriptions));
-  },
-
-  addPrescription: async (prescription: Prescription) => {
-    const prescriptions = [...get().prescriptions, prescription];
-    set({prescriptions});
-    await AsyncStorage.setItem('prescriptions', JSON.stringify(prescriptions));
+  setActiveServiceRequest: (serviceRequest: ServiceRequest | null) => {
+    set({activeServiceRequest: serviceRequest});
   },
 
   // Notification actions
@@ -249,33 +190,26 @@ export const useStore = create<AppState>((set, get) => ({
         theme,
         language,
         currentUser,
-        doctors,
-        consultations,
-        prescriptions,
+        serviceRequests,
         notifications,
       ] = await Promise.all([
         AsyncStorage.getItem('theme'),
         AsyncStorage.getItem('language'),
         AsyncStorage.getItem('currentUser'),
-        AsyncStorage.getItem('doctors'),
-        AsyncStorage.getItem('consultations'),
-        AsyncStorage.getItem('prescriptions'),
+        AsyncStorage.getItem('serviceRequests'),
         AsyncStorage.getItem('notifications'),
       ]);
 
       const storedLanguage = (language || 'en') as 'en' | 'hi';
       
       // Initialize i18n with stored language
-      const {changeLanguage} = await import('../i18n');
       await changeLanguage(storedLanguage);
 
       set({
         isDarkMode: theme ? JSON.parse(theme) : false,
         language: storedLanguage,
         currentUser: currentUser ? JSON.parse(currentUser) : null,
-        doctors: doctors ? JSON.parse(doctors) : [],
-        consultations: consultations ? JSON.parse(consultations) : [],
-        prescriptions: prescriptions ? JSON.parse(prescriptions) : [],
+        serviceRequests: serviceRequests ? JSON.parse(serviceRequests) : [],
         notifications: notifications ? JSON.parse(notifications).map((n: any) => ({
           ...n,
           createdAt: new Date(n.createdAt),

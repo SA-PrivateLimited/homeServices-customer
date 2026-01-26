@@ -26,7 +26,7 @@ import {getCustomerJobCards, JobCard} from '../services/jobCardService';
 import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
-import firestore from '@react-native-firebase/firestore';
+import {providersApi} from '../services/api/providersApi';
 import useTranslation from '../hooks/useTranslation';
 
 type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed';
@@ -98,77 +98,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
       let cardsByCustomerId = await getCustomerJobCards(user.uid);
       console.log(`✅ Loaded ${cardsByCustomerId.length} job cards by customerId`);
 
-      // ALWAYS fetch by phone number as well and merge results
-      let cardsByPhone: JobCard[] = [];
-      if (user.phoneNumber) {
-        console.log('🔍 Also fetching by phone number:', user.phoneNumber);
-        try {
-          const phoneSnapshot = await firestore()
-            .collection('jobCards')
-            .where('customerPhone', '==', user.phoneNumber)
-            .get();
+      // Note: Job cards are now fetched via API which handles filtering by customerId
+      // Phone number filtering is handled by the backend API
 
-          cardsByPhone = phoneSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              ...data,
-              createdAt: data?.createdAt?.toDate() || new Date(),
-              updatedAt: data?.updatedAt?.toDate() || new Date(),
-              scheduledTime: data?.scheduledTime?.toDate(),
-              pinGeneratedAt: data?.pinGeneratedAt?.toDate(),
-              taskPIN: data?.taskPIN,
-            };
-          }) as JobCard[];
-
-          console.log(`✅ Found ${cardsByPhone.length} cards by phone number`);
-        } catch (error) {
-          console.error('❌ Error fetching by phone:', error);
-        }
-      }
-
-      // Merge and deduplicate cards (prefer cardsByPhone if duplicate IDs)
-      const cardsMap = new Map<string, JobCard>();
-
-      // Add cards by customerId first
-      cardsByCustomerId.forEach(card => {
-        if (card.id) cardsMap.set(card.id, card);
-      });
-
-      // Add/override with cards by phone (in case customerId is wrong but phone is correct)
-      cardsByPhone.forEach(card => {
-        if (card.id) cardsMap.set(card.id, card);
-      });
-
-      const cards = Array.from(cardsMap.values());
-      console.log(`📊 Total unique cards after merge: ${cards.length}`);
-
-      // DEBUG: Directly query Firestore to see ALL job cards
-      console.log('🔍 DEBUG: Current user ID:', user.uid);
-      console.log('🔍 DEBUG: User phone:', user.phoneNumber);
-
-      const debugSnapshot = await firestore()
-        .collection('jobCards')
-        .where('customerId', '==', user.uid)
-        .get();
-      console.log('🔍 DEBUG: Total job cards in Firestore (by customerId):', debugSnapshot.size);
-      const debugStatuses = debugSnapshot.docs.map(doc => doc.data().status);
-      console.log('🔍 DEBUG: All statuses in Firestore:', debugStatuses);
-      const debugAcceptedCount = debugStatuses.filter(s => s === 'accepted').length;
-      console.log('🔍 DEBUG: Accepted count in Firestore:', debugAcceptedCount);
-
-      // Check if there are job cards with different customerId but same phone
-      if (user.phoneNumber) {
-        const phoneSnapshot = await firestore()
-          .collection('jobCards')
-          .where('customerPhone', '==', user.phoneNumber)
-          .get();
-        console.log('🔍 DEBUG: Job cards by phone:', phoneSnapshot.size);
-        phoneSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          console.log(`  - ID: ${doc.id}, customerId: ${data.customerId}, status: ${data.status}`);
-        });
-      }
+      // Use job cards from API (backend handles filtering by customerId and phone)
+      const cards = cardsByCustomerId;
+      console.log(`📊 Total cards loaded: ${cards.length}`);
 
       // Debug: Log unique status values
       const uniqueStatuses = new Set(cards.map(card => card.status));
@@ -209,7 +144,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         return bTime - aTime;
       });
       
-      // Fetch provider phones for all cards
+      // Fetch provider phones for all cards using API
       const phoneMap: Record<string, string> = {};
       const providerIds = new Set(allCards.map(card => card.providerId).filter(Boolean));
       
@@ -217,19 +152,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
         Array.from(providerIds).map(async (providerId) => {
           if (providerId) {
             try {
-              const providerDoc = await firestore()
-                .collection('providers')
-                .doc(providerId)
-                .get();
-              if (providerDoc.exists) {
-                const providerData = providerDoc.data();
-                const phone = providerData?.phone || providerData?.primaryPhone || providerData?.phoneNumber;
+              const provider = await providersApi.getById(providerId);
+              if (provider) {
+                const phone = provider.phoneNumber || (provider as any).phone || (provider as any).primaryPhone;
                 if (phone) {
                   phoneMap[providerId] = phone;
                   console.log(`✅ Fetched phone for provider ${providerId}: ${phone}`);
                 }
               } else {
-                console.warn(`Provider document not found: ${providerId}`);
+                console.warn(`Provider not found: ${providerId}`);
               }
             } catch (error) {
               console.error(`Error fetching phone for provider ${providerId}:`, error);
@@ -267,17 +198,13 @@ export default function ServiceHistoryScreen({navigation}: any) {
     
     setLoadingProviderDetails(true);
     try {
-      // Fetch provider details
-      const providerDoc = await firestore()
-        .collection('providers')
-        .doc(jobCard.providerId)
-        .get();
+      // Fetch provider details from API
+      const provider = await providersApi.getById(jobCard.providerId);
       
-      if (providerDoc.exists) {
-        const providerData = providerDoc.data();
+      if (provider) {
         setProviderDetails({
-          phone: providerData?.phone || providerData?.primaryPhone,
-          address: providerData?.address || providerData?.homeAddress || providerData?.officeAddress,
+          phone: provider.phoneNumber || (provider as any).phone || (provider as any).primaryPhone,
+          address: provider.location || (provider as any).address || (provider as any).homeAddress || (provider as any).officeAddress,
         });
       }
 
@@ -416,7 +343,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       if (date instanceof Date) {
         dateObj = date;
       } else if (date && typeof date.toDate === 'function') {
-        // Firestore Timestamp
+        // Legacy Firestore Timestamp (for backward compatibility)
         dateObj = date.toDate();
       } else if (typeof date === 'string' || typeof date === 'number') {
         dateObj = new Date(date);
@@ -862,7 +789,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       ) : (
         <FlatList
           data={filteredCards}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id || ''}
           renderItem={({item}) => renderServiceCard(item)}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -1202,17 +1129,61 @@ export default function ServiceHistoryScreen({navigation}: any) {
                   )}
 
                   {/* Amount Card */}
-                  {(selectedCompletedService as any).totalAmount && (
+                  {(selectedCompletedService as any).totalAmount || (selectedCompletedService as any).serviceAmount ? (
                     <View style={[styles.detailCard, styles.amountCard, {backgroundColor: theme.primary + '15'}]}>
                       <View style={styles.detailCardHeader}>
                         <Icon name="payment" size={24} color={theme.primary} />
                         <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Total Amount
+                          {String(t('serviceHistory.totalAmount'))}
                         </Text>
                       </View>
                       <Text style={[styles.amountValue, {color: theme.primary}]}>
-                        ₹{(selectedCompletedService as any).totalAmount}
+                        ₹{(selectedCompletedService as any).totalAmount || (selectedCompletedService as any).serviceAmount || 0}
                       </Text>
+                      {(selectedCompletedService as any).materialsUsed && (selectedCompletedService as any).materialsUsed.length > 0 && (
+                        <View style={styles.materialsBreakdown}>
+                          {(selectedCompletedService as any).serviceAmount > 0 && (
+                            <Text style={[styles.materialsBreakdownText, {color: theme.textSecondary}]}>
+                              {String(t('serviceHistory.serviceFee'))}: ₹{(selectedCompletedService as any).serviceAmount.toFixed(2)}
+                            </Text>
+                          )}
+                          {(selectedCompletedService as any).materialsUsed.reduce((sum: number, m: any) => sum + (m.total || 0), 0) > 0 && (
+                            <Text style={[styles.materialsBreakdownText, {color: theme.textSecondary}]}>
+                              {String(t('serviceHistory.materials'))}: ₹{(selectedCompletedService as any).materialsUsed.reduce((sum: number, m: any) => sum + (m.total || 0), 0).toFixed(2)}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+
+                  {/* Job Card PDF */}
+                  {(selectedCompletedService as any).jobCardPdfUrl && (
+                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                      <View style={styles.detailCardHeader}>
+                        <Icon name="description" size={24} color={theme.primary} />
+                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
+                          {String(t('serviceHistory.jobCard'))}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.pdfButton, {backgroundColor: theme.primary}]}
+                        onPress={() => {
+                          Linking.openURL((selectedCompletedService as any).jobCardPdfUrl).catch(err => {
+                            setAlertModal({
+                              visible: true,
+                              title: String(t('common.error')),
+                              message: String(t('serviceHistory.failedToOpenPDF')),
+                              type: 'error',
+                            });
+                          });
+                        }}>
+                        <Icon name="picture-as-pdf" size={20} color="#fff" />
+                        <Text style={styles.pdfButtonText}>
+                          {String(t('serviceHistory.viewJobCard'))}
+                        </Text>
+                        <Icon name="open-in-new" size={18} color="#fff" />
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -1764,6 +1735,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  pdfButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  pdfButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  materialsBreakdown: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    gap: 6,
+  },
+  materialsBreakdownText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

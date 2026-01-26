@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,8 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import authService from '../services/authService';
 import AccountCreatedSuccessModal from '../components/AccountCreatedSuccessModal';
+import useTranslation from '../hooks/useTranslation';
+import AlertModal from '../components/AlertModal';
 
 interface SignUpScreenProps {
   navigation: any;
@@ -32,9 +33,21 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdUser, setCreatedUser] = useState<{name?: string; email?: string} | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
 
   const {isDarkMode, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -49,27 +62,52 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
   const handleSignUp = async () => {
     // Validation
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('auth.pleaseEnterName'),
+        type: 'error',
+      });
       return;
     }
 
     if (!email.trim() || !validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('auth.pleaseEnterValidEmail'),
+        type: 'error',
+      });
       return;
     }
 
     if (!phone.trim() || !validatePhone(phone)) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('auth.pleaseEnterValidPhone'),
+        type: 'error',
+      });
       return;
     }
 
     if (!password.trim() || password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('auth.passwordMinLength'),
+        type: 'error',
+      });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('auth.passwordsDoNotMatch'),
+        type: 'error',
+      });
       return;
     }
 
@@ -85,7 +123,12 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
       setCreatedUser({name: user.name, email: user.email});
       setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message);
+      setAlertModal({
+        visible: true,
+        title: t('auth.signUpFailed'),
+        message: error.message || t('auth.signUpError'),
+        type: 'error',
+      });
       setLoading(false);
     }
   };
@@ -108,10 +151,10 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
         <View style={styles.header}>
           <Icon name="person-add" size={60} color={theme.primary} />
           <Text style={[styles.title, {color: theme.text}]}>
-            Create Account
+            {t('auth.createAccount')}
           </Text>
           <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-            Sign up to get started
+            {t('auth.signUpToGetStarted')}
           </Text>
         </View>
 
@@ -133,7 +176,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             />
             <TextInput
               style={[styles.input, {color: theme.text}]}
-              placeholder="Full Name"
+              placeholder={t('auth.fullName')}
               placeholderTextColor={theme.textSecondary}
               value={name}
               onChangeText={setName}
@@ -153,7 +196,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             <Icon name="mail-outline" size={20} color={theme.textSecondary} />
             <TextInput
               style={[styles.input, {color: theme.text}]}
-              placeholder="Email"
+              placeholder={t('auth.email')}
               placeholderTextColor={theme.textSecondary}
               value={email}
               onChangeText={setEmail}
@@ -175,7 +218,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             <Icon name="call-outline" size={20} color={theme.textSecondary} />
             <TextInput
               style={[styles.input, {color: theme.text}]}
-              placeholder="Phone Number"
+              placeholder={t('auth.phoneNumber')}
               placeholderTextColor={theme.textSecondary}
               value={phone}
               onChangeText={setPhone}
@@ -200,7 +243,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             />
             <TextInput
               style={[styles.input, {color: theme.text}]}
-              placeholder="Password"
+              placeholder={t('auth.password')}
               placeholderTextColor={theme.textSecondary}
               value={password}
               onChangeText={setPassword}
@@ -232,7 +275,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             />
             <TextInput
               style={[styles.input, {color: theme.text}]}
-              placeholder="Confirm Password"
+              placeholder={t('auth.confirmPassword')}
               placeholderTextColor={theme.textSecondary}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -261,7 +304,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
+              <Text style={styles.buttonText}>{t('auth.signUp')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -269,10 +312,10 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
         {/* Login Link */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, {color: theme.textSecondary}]}>
-            Already have an account?{' '}
+            {t('auth.alreadyHaveAccount')}{' '}
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={[styles.linkText, {color: theme.primary}]}>Login</Text>
+            <Text style={[styles.linkText, {color: theme.primary}]}>{t('auth.login')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -283,6 +326,15 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({navigation}) => {
         onClose={handleSuccessModalClose}
         userName={createdUser?.name}
         userEmail={createdUser?.email}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onClose={() => setAlertModal({visible: false, title: '', message: '', type: 'info'})}
       />
     </KeyboardAvoidingView>
   );

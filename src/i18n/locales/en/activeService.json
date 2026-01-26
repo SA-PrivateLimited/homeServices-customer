@@ -44,5 +44,14 @@
   "locationPermissionMessage": "Location permission is required to show your live location on the map. Please enable it in device settings.",
   "yourCurrentLocation": "Your Current Location",
   "providerLocation": "Provider Location",
-  "liveLocation": "Live location"
+  "liveLocation": "Live location",
+  "availableProviders": "Available Providers",
+  "online": "Online",
+  "offline": "Offline",
+  "away": "away",
+  "eta": "ETA",
+  "min": "min",
+  "scheduledFor": "Scheduled for",
+  "providerWillArriveSoon": "Provider will arrive soon",
+  "providerWorking": "Provider working"
 }

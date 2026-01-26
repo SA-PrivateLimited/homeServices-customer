@@ -29,6 +29,15 @@ export interface Provider {
     state?: string;
     pincode?: string;
   };
+  currentLocation?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    updatedAt?: string | number | Date;
+  };
   photos?: string[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
