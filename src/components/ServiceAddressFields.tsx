@@ -1,6 +1,6 @@
 /**
  * Simplified service address fields:
- * address, landmark (optional), state, district, pincode (auto from district).
+ * address, landmark (optional), state, district, pincode + Use current location.
  */
 
 import React, {useEffect, useMemo, useState} from 'react';
@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {Select} from 'sapvt-ltd-app-packages';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -22,6 +23,7 @@ import {
   type GeographyDistrict,
   type GeographyState,
 } from '../services/api/geographyApi';
+import GeolocationService from '../services/geolocationService';
 import type {UserLocation} from '../types/common';
 
 export interface ServiceAddressValue extends UserLocation {
@@ -42,14 +44,68 @@ interface ServiceAddressFieldsProps {
     border: string;
     background: string;
   };
-  /** Prefill from GPS / saved "current" address */
+  /** Prefill from GPS / saved "current" address (external handler) */
   onUseCurrentAddress?: () => void;
   currentAddressLoading?: boolean;
+  /** Built-in GPS fill (same as Provider). Ignored if onUseCurrentAddress is set. */
+  showUseCurrentLocation?: boolean;
+  useCurrentLabel?: string;
+  currentLocationLabel?: string;
   /** Persist as customer's saved home address */
   saveForFuture?: boolean;
   onSaveForFutureChange?: (v: boolean) => void;
   showSaveForFuture?: boolean;
   editable?: boolean;
+}
+
+function normalizeName(s?: string) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findState(
+  states: GeographyState[],
+  name?: string,
+): GeographyState | undefined {
+  const n = normalizeName(name);
+  if (!n) return undefined;
+  return (
+    states.find(s => normalizeName(s.name) === n) ||
+    states.find(
+      s =>
+        normalizeName(s.name).includes(n) || n.includes(normalizeName(s.name)),
+    )
+  );
+}
+
+function findDistrict(
+  districts: GeographyDistrict[],
+  opts: {name?: string; pincode?: string; stateId?: string},
+): GeographyDistrict | undefined {
+  const {name, pincode, stateId} = opts;
+  const scoped = stateId
+    ? districts.filter(d => d.stateId === stateId)
+    : districts;
+
+  if (pincode && /^\d{6}$/.test(pincode)) {
+    const byPin =
+      scoped.find(d => d.pincode === pincode) ||
+      districts.find(d => d.pincode === pincode);
+    if (byPin) return byPin;
+  }
+
+  const n = normalizeName(name);
+  if (!n) return undefined;
+  return (
+    scoped.find(d => normalizeName(d.name) === n) ||
+    scoped.find(
+      d =>
+        normalizeName(d.name).includes(n) || n.includes(normalizeName(d.name)),
+    ) ||
+    districts.find(d => normalizeName(d.name) === n)
+  );
 }
 
 export function ServiceAddressFields({
@@ -58,6 +114,9 @@ export function ServiceAddressFields({
   theme,
   onUseCurrentAddress,
   currentAddressLoading,
+  showUseCurrentLocation = false,
+  useCurrentLabel,
+  currentLocationLabel,
   saveForFuture,
   onSaveForFutureChange,
   showSaveForFuture = false,
@@ -71,6 +130,7 @@ export function ServiceAddressFields({
     () => warm?.districts || [],
   );
   const [loadingMeta, setLoadingMeta] = useState(() => !hasWarmGeographyMeta());
+  const [detecting, setDetecting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,15 +152,15 @@ export function ServiceAddressFields({
   }, []);
 
   const stateOptions = useMemo(
-    () => states.map((s) => ({value: s._id, label: s.name})),
+    () => states.map(s => ({value: s._id, label: s.name})),
     [states],
   );
 
   const districtOptions = useMemo(() => {
     const sid = value.stateId || '';
     return districts
-      .filter((d) => !sid || d.stateId === sid)
-      .map((d) => ({value: d._id, label: d.name}));
+      .filter(d => !sid || d.stateId === sid)
+      .map(d => ({value: d._id, label: d.name}));
   }, [districts, value.stateId]);
 
   const patch = (partial: Partial<ServiceAddressValue>) => {
@@ -108,7 +168,7 @@ export function ServiceAddressFields({
   };
 
   const onStateChange = (stateId: string) => {
-    const st = states.find((s) => s._id === stateId);
+    const st = states.find(s => s._id === stateId);
     patch({
       stateId,
       state: st?.name || '',
@@ -120,7 +180,7 @@ export function ServiceAddressFields({
   };
 
   const onDistrictChange = (districtId: string) => {
-    const d = districts.find((x) => x._id === districtId);
+    const d = districts.find(x => x._id === districtId);
     patch({
       districtId,
       district: d?.name || '',
@@ -129,27 +189,118 @@ export function ServiceAddressFields({
       stateId: d?.stateId || value.stateId,
       state:
         d?.stateName ||
-        states.find((s) => s._id === (d?.stateId || value.stateId))?.name ||
+        states.find(s => s._id === (d?.stateId || value.stateId))?.name ||
         value.state,
     });
   };
 
+  const fillFromCurrentLocation = async () => {
+    if (!editable) return;
+    setDetecting(true);
+    try {
+      const permission = await GeolocationService.requestLocationPermission();
+      if (permission !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Location permission is required to detect your address.',
+        );
+        return;
+      }
+
+      const [location, meta] = await Promise.all([
+        GeolocationService.getCurrentLocation(),
+        getGeographyMeta(),
+      ]);
+      setStates(meta.states);
+      setDistricts(meta.districts);
+
+      const nextPincode = (location.pincode || '').replace(/\D/g, '').slice(0, 6);
+      let matchedState = findState(meta.states, location.state);
+      let matchedDistrict = findDistrict(meta.districts, {
+        name: location.city,
+        pincode: nextPincode,
+        stateId: matchedState?._id,
+      });
+
+      if (matchedDistrict && !matchedState) {
+        matchedState = meta.states.find(s => s._id === matchedDistrict!.stateId);
+      }
+      if (
+        matchedDistrict &&
+        matchedState &&
+        matchedDistrict.stateId !== matchedState._id
+      ) {
+        matchedState =
+          meta.states.find(s => s._id === matchedDistrict!.stateId) ||
+          matchedState;
+      }
+
+      const districtName =
+        matchedDistrict?.name || location.city || value.district || '';
+      const stateName =
+        matchedState?.name ||
+        matchedDistrict?.stateName ||
+        location.state ||
+        value.state ||
+        '';
+
+      onChange({
+        ...value,
+        address: location.address || value.address || '',
+        city: districtName || value.city || '',
+        district: districtName,
+        state: stateName,
+        stateId:
+          matchedState?._id || matchedDistrict?.stateId || value.stateId || '',
+        districtId: matchedDistrict?._id || '',
+        pincode: nextPincode || matchedDistrict?.pincode || value.pincode || '',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        country: 'IN',
+      });
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to detect location');
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const showCurrentBtn = Boolean(onUseCurrentAddress) || showUseCurrentLocation;
+  const currentLoading = Boolean(currentAddressLoading) || detecting;
+  const onCurrentPress = onUseCurrentAddress
+    ? onUseCurrentAddress
+    : () => void fillFromCurrentLocation();
+
+  const hasCoords =
+    typeof value.latitude === 'number' && typeof value.longitude === 'number';
+
   return (
     <View style={styles.wrap}>
-      {onUseCurrentAddress ? (
+      {showCurrentBtn ? (
         <TouchableOpacity
-          style={[styles.currentBtn, {borderColor: theme.primary}]}
-          onPress={onUseCurrentAddress}
-          disabled={currentAddressLoading || !editable}>
-          {currentAddressLoading ? (
-            <ActivityIndicator color={theme.primary} />
+          style={[styles.currentBtn, {backgroundColor: theme.primary}]}
+          onPress={onCurrentPress}
+          disabled={currentLoading || !editable}
+          activeOpacity={0.85}>
+          {currentLoading ? (
+            <ActivityIndicator color="#fff" />
           ) : (
-            <Icon name="my-location" size={18} color={theme.primary} />
+            <Icon name="my-location" size={18} color="#fff" />
           )}
-          <Text style={[styles.currentBtnText, {color: theme.primary}]}>
-            Use current address
+          <Text style={styles.currentBtnText}>
+            {useCurrentLabel || 'Use current location'}
           </Text>
         </TouchableOpacity>
+      ) : null}
+
+      {hasCoords ? (
+        <View style={[styles.coordsRow, {borderColor: theme.border}]}>
+          <Icon name="place" size={16} color={theme.primary} />
+          <Text style={[styles.coordsText, {color: theme.textSecondary}]}>
+            {currentLocationLabel || 'Current location'}:{' '}
+            {value.latitude!.toFixed(5)}, {value.longitude!.toFixed(5)}
+          </Text>
+        </View>
       ) : null}
 
       <Text style={[styles.label, {color: theme.textSecondary}]}>Address</Text>
@@ -163,7 +314,7 @@ export function ServiceAddressFields({
           },
         ]}
         value={value.address || ''}
-        onChangeText={(address) => patch({address})}
+        onChangeText={address => patch({address})}
         placeholder="House / street / area"
         placeholderTextColor={theme.textSecondary}
         editable={editable}
@@ -183,7 +334,7 @@ export function ServiceAddressFields({
           },
         ]}
         value={value.landmark || ''}
-        onChangeText={(landmark) => patch({landmark})}
+        onChangeText={landmark => patch({landmark})}
         placeholder="Near park, temple, etc."
         placeholderTextColor={theme.textSecondary}
         editable={editable}
@@ -226,7 +377,7 @@ export function ServiceAddressFields({
           },
         ]}
         value={value.pincode || ''}
-        onChangeText={(pincode) =>
+        onChangeText={pincode =>
           patch({pincode: pincode.replace(/\D/g, '').slice(0, 6)})
         }
         placeholder="Auto from district"
@@ -271,14 +422,25 @@ const styles = StyleSheet.create({
   currentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 6,
     marginBottom: 4,
   },
-  currentBtnText: {fontSize: 14, fontWeight: '600'},
+  currentBtnText: {fontSize: 14, fontWeight: '700', color: '#fff'},
+  coordsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  coordsText: {fontSize: 12, flex: 1},
   saveRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,9 +4,7 @@
  */
 
 import io, { Socket } from 'socket.io-client';
-
-// Using production Cloud Run server for both dev and prod
-const SOCKET_URL = 'https://websocket-server-425944993130.us-central1.run.app'; // GCP Cloud Run (Free Tier)
+import {SOCKET_URL} from '../config/api';
 
 class WebSocketService {
   private socket: Socket | null = null;

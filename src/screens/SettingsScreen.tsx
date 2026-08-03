@@ -85,6 +85,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     stateId: (currentUser?.homeAddress as any)?.stateId || '',
     districtId: (currentUser?.homeAddress as any)?.districtId || '',
     pincode: currentUser?.homeAddress?.pincode || '',
+    latitude: (currentUser?.homeAddress as any)?.latitude,
+    longitude: (currentUser?.homeAddress as any)?.longitude,
   });
 
   const genderOptions = [
@@ -112,6 +114,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
       stateId: (currentUser.homeAddress as any)?.stateId || '',
       districtId: (currentUser.homeAddress as any)?.districtId || '',
       pincode: currentUser.homeAddress?.pincode || '',
+      latitude: (currentUser.homeAddress as any)?.latitude,
+      longitude: (currentUser.homeAddress as any)?.longitude,
     });
   }, [currentUser]);
 
@@ -241,6 +245,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               stateId: serviceAddress.stateId || '',
               districtId: serviceAddress.districtId || '',
               pincode: serviceAddress.pincode || '',
+              latitude: serviceAddress.latitude,
+              longitude: serviceAddress.longitude,
             }
           : null;
       const updatedUser = await updateUserProfile(userId, {
@@ -311,11 +317,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const [imageError, setImageError] = useState(false);
   const phoneDisplay =
     currentUser?.phone || currentUser?.phoneNumber || t('profile.notAvailable');
-
-  const formatAddr = (a: ServiceAddressValue) =>
-    [a.address, a.landmark, a.district || a.city, a.state, a.pincode]
-      .filter(Boolean)
-      .join(', ');
 
   return (
     <View style={[styles.root, {backgroundColor: theme.background}]}>
@@ -482,11 +483,83 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                   onChange={setServiceAddress}
                   theme={theme}
                   editable
+                  showUseCurrentLocation
+                  useCurrentLabel={
+                    t('profile.useCurrentLocation') || 'Use current location'
+                  }
+                  currentLocationLabel={
+                    t('profile.currentLocation') || 'Current location'
+                  }
                 />
               ) : (
-                <Text style={[styles.fieldValue, {color: theme.text}]}>
-                  {formatAddr(serviceAddress) || '—'}
-                </Text>
+                <View>
+                  {typeof serviceAddress.latitude === 'number' &&
+                  typeof serviceAddress.longitude === 'number' ? (
+                    <>
+                      <Text
+                        style={[
+                          styles.fieldLabel,
+                          {color: theme.textSecondary, marginTop: 4},
+                        ]}>
+                        {t('profile.currentLocation') || 'Current location'}
+                      </Text>
+                      <Text style={[styles.fieldValue, {color: theme.text}]}>
+                        {serviceAddress.latitude.toFixed(5)},{' '}
+                        {serviceAddress.longitude.toFixed(5)}
+                      </Text>
+                    </>
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {color: theme.textSecondary, marginTop: 8},
+                    ]}>
+                    {t('profile.address') || 'Address'}
+                  </Text>
+                  <Text style={[styles.fieldValue, {color: theme.text}]}>
+                    {serviceAddress.address || '—'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {color: theme.textSecondary, marginTop: 8},
+                    ]}>
+                    {t('profile.landmark') || 'Landmark'}
+                  </Text>
+                  <Text style={[styles.fieldValue, {color: theme.text}]}>
+                    {serviceAddress.landmark || '—'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {color: theme.textSecondary, marginTop: 8},
+                    ]}>
+                    {t('profile.state') || 'State'}
+                  </Text>
+                  <Text style={[styles.fieldValue, {color: theme.text}]}>
+                    {serviceAddress.state || '—'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {color: theme.textSecondary, marginTop: 8},
+                    ]}>
+                    {t('profile.district') || 'District'}
+                  </Text>
+                  <Text style={[styles.fieldValue, {color: theme.text}]}>
+                    {serviceAddress.district || serviceAddress.city || '—'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.fieldLabel,
+                      {color: theme.textSecondary, marginTop: 8},
+                    ]}>
+                    {t('profile.pincode') || 'Pincode'}
+                  </Text>
+                  <Text style={[styles.fieldValue, {color: theme.text}]}>
+                    {serviceAddress.pincode || '—'}
+                  </Text>
+                </View>
               )}
 
               {isEditing ? (
