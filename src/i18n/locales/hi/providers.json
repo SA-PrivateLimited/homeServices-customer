@@ -32,6 +32,12 @@
   "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें",
   "browseProviders": "प्रदाता ब्राउज़ करें",
   "providerDetails": "प्रदाता विवरण",
-  "newServiceRequestNotification": "नया सेवा अनुरोध आ रहा है"
+  "newServiceRequestNotification": "नया सेवा अनुरोध आ रहा है",
+  "selectProfession": "पेशा चुनें",
+  "allProfessions": "सभी पेशे",
+  "selectState": "राज्य चुनें",
+  "allStates": "सभी राज्य",
+  "selectDistrict": "ज़िला चुनें",
+  "allDistricts": "सभी ज़िले"
 }
 

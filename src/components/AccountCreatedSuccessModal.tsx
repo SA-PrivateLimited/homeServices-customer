@@ -14,14 +14,14 @@ interface AccountCreatedSuccessModalProps {
   visible: boolean;
   onClose: () => void;
   userName?: string;
-  userEmail?: string;
+  userPhone?: string;
 }
 
 const AccountCreatedSuccessModal: React.FC<AccountCreatedSuccessModalProps> = ({
   visible,
   onClose,
   userName,
-  userEmail,
+  userPhone,
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -66,16 +66,16 @@ const AccountCreatedSuccessModal: React.FC<AccountCreatedSuccessModalProps> = ({
               </View>
             )}
             
-            {userEmail && (
+            {userPhone && (
               <View style={styles.detailRow}>
                 <View style={styles.detailLabelContainer}>
-                  <Icon name="mail-outline" size={18} color={theme.primary} style={styles.detailIcon} />
+                  <Icon name="call-outline" size={18} color={theme.primary} style={styles.detailIcon} />
                   <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                    Email
+                    Phone
                   </Text>
                 </View>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {userEmail}
+                  {userPhone}
                 </Text>
               </View>
             )}

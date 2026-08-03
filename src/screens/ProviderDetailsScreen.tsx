@@ -9,11 +9,9 @@ import {
   Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import database from '@react-native-firebase/database';
-import auth from '@react-native-firebase/auth';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
-import type {Provider} from '../services/api/providersApi';
+import {providersApi, type Provider} from '../services/api/providersApi';
 import StarRating from '../components/StarRating';
 import {serializeDoctorForNavigation} from '../utils/helpers';
 import ReviewsList from '../components/ReviewsList';
@@ -51,6 +49,9 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const [imageError, setImageError] = React.useState(false);
   const [isOnline, setIsOnline] = useState<boolean>((provider as any).isOnline || false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
+  const [approvalStatus, setApprovalStatus] = useState<string | undefined>(
+    (provider as any).approvalStatus,
+  );
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
@@ -66,25 +67,32 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // Fetch real-time online status from Realtime Database
+  // Poll online status from Mongo/backend API
   useEffect(() => {
-    const providerId = (provider as any).id || (provider as any).uid;
+    const providerId =
+      (provider as any).id ||
+      (provider as any)._id ||
+      (provider as any).uid;
     if (!providerId) return;
 
-    // Listen to real-time online status
-    const statusRef = database().ref(`providers/${providerId}/status`);
-    
-    const unsubscribe = statusRef.on('value', (snapshot) => {
-      if (snapshot.exists()) {
-        const status = snapshot.val();
-        setIsOnline(status.isOnline === true);
-        setIsAvailable(status.isAvailable !== false); // Default to true if not set
+    const refresh = async () => {
+      try {
+        const latest = await providersApi.getById(providerId);
+        if (latest) {
+          setIsOnline(!!(latest as any).isOnline);
+          setIsAvailable((latest as any).isAvailable !== false);
+          if ((latest as any).approvalStatus) {
+            setApprovalStatus((latest as any).approvalStatus);
+          }
+        }
+      } catch {
+        // keep last known status
       }
-    });
-
-    return () => {
-      statusRef.off('value', unsubscribe);
     };
+
+    refresh();
+    const interval = setInterval(refresh, 15000);
+    return () => clearInterval(interval);
   }, [provider]);
 
   // Helper function to get initials from name
@@ -102,13 +110,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     }
   };
 
-  // Check if provider is approved (safety check)
-  const isApproved = provider.approvalStatus === 'approved' || 
-                     (!provider.approvalStatus && provider.verified === true);
-
+  // Browse list only shows approved providers; missing status should not block requests.
+  // Only block when explicitly pending/rejected.
   const handleRequestService = async () => {
-    // Prevent booking if provider is not approved
-    if (!isApproved) {
+    if (approvalStatus === 'rejected' || approvalStatus === 'pending') {
       setAlertModal({
         visible: true,
         title: t('providers.providerNotAvailable'),
@@ -122,52 +127,53 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       return;
     }
 
-    // Check if provider is online and available
-    if (!isOnline || !isAvailable) {
-      setAlertModal({
-        visible: true,
-        title: t('providers.providerNotAvailable'),
-        message: t('providers.providerNotAvailableOnlineMessage'),
-        type: 'warning',
-        onClose: () => {
-          setAlertModal({...alertModal, visible: false});
-          navigation.goBack();
-        },
-      });
-      return;
-    }
-    if (!currentUser) {
+    // Offline / unavailable is status only — still allow requesting this provider.
+    const phoneVerified = currentUser?.phoneVerified === true;
+    const customerId = currentUser?.id || currentUser?._id;
+    if (!currentUser || !customerId || !phoneVerified) {
       setShowLoginModal(true);
       return;
     }
 
-    // Send WebSocket notification to the specific provider if approved and online
     const providerId = (provider as any).id || (provider as any)._id || (provider as any).uid;
-    const authUser = auth().currentUser;
-    if (providerId && authUser && isApproved && isOnline && isAvailable) {
+    // Best-effort live notify if connected; request is still created either way
+    if (providerId && customerId && isOnline) {
       try {
-        // Prepare notification data (preliminary notification before service request is created)
         const notificationData = {
-          customerId: authUser.uid,
+          customerId,
           customerName: (currentUser as any)?.name || 'Customer',
-          patientName: (currentUser as any)?.name || 'Customer', // For backward compatibility
+          patientName: (currentUser as any)?.name || 'Customer',
           serviceType: provider.specialization || (provider as any).specialty || 'Service',
           message: String(t('providers.newServiceRequestNotification')),
           timestamp: new Date().toISOString(),
-          isPreliminary: true, // Indicates this is sent before service request creation
+          isPreliminary: true,
         };
 
-        // Send WebSocket notification to the specific provider
         await WebSocketService.emitNewBooking(providerId, notificationData);
         console.log('✅ WebSocket notification sent to provider:', providerId);
       } catch (websocketError) {
         console.warn('Could not send WebSocket notification to provider:', websocketError);
-        // Don't block navigation if WebSocket fails
       }
     }
 
-    const serializableProvider = serializeDoctorForNavigation(provider as any);
-    navigation.navigate('ServiceRequest', {provider: serializableProvider});
+    const serializableProvider = serializeDoctorForNavigation({
+      ...(provider as any),
+      approvalStatus: approvalStatus || 'approved',
+      isOnline,
+      isAvailable,
+    });
+    navigation.navigate('Services', {
+      screen: 'ServiceRequest',
+      params: {
+        requestMode: 'specificProvider',
+        provider: serializableProvider,
+        serviceType:
+          provider.specialization ||
+          (provider as any).specialty ||
+          (provider as any).serviceType ||
+          '',
+      },
+    });
   };
 
   return (
@@ -248,13 +254,6 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               </Text>
             </View>
 
-            <View style={styles.contactRow}>
-              <Icon name="mail-outline" size={16} color={theme.textSecondary} />
-              <Text style={[styles.contactText, {color: theme.textSecondary}]}>
-                {provider.email || t('providers.notProvided')}
-              </Text>
-            </View>
-
             {(provider.phoneNumber || (provider as any).phone) && (
               <TouchableOpacity
                 style={styles.contactRow}
@@ -310,7 +309,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           )}
 
           {/* Experience */}
-          {provider.experience && (
+          {provider.experience ? (
             <View style={styles.detailRow}>
               <Icon name="time-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
@@ -322,10 +321,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Languages */}
-          {(provider as any).languages && (provider as any).languages.length > 0 && (
+          {(provider as any).languages && (provider as any).languages.length > 0 ? (
             <View style={styles.detailRow}>
               <Icon name="language-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
@@ -337,37 +336,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 </Text>
               </View>
             </View>
-          )}
-
-          {/* Qualifications (if available) */}
-          {(provider as any).qualifications && (provider as any).qualifications.length > 0 && (
-            <View style={styles.detailRow}>
-              <Icon name="school-outline" size={20} color={theme.primary} />
-              <View style={styles.detailInfo}>
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('providers.qualifications')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {Array.isArray((provider as any).qualifications) 
-                    ? (provider as any).qualifications.join(', ')
-                    : (provider as any).qualifications}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Service Type */}
-          <View style={styles.detailRow}>
-            <Icon name="build-outline" size={20} color={theme.primary} />
-            <View style={styles.detailInfo}>
-              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                {t('providers.serviceType')}
-              </Text>
-              <Text style={[styles.detailValue, {color: theme.text}]}>
-                {provider.specialization || (provider as any).specialty || 'Service Provider'}
-              </Text>
-            </View>
-          </View>
+          ) : null}
         </View>
 
         {/* Reviews Section */}
@@ -414,14 +383,20 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       {/* Login Confirmation Modal */}
       <ConfirmationModal
         visible={showLoginModal}
-        title={t('auth.loginRequired') || 'Login Required'}
-        message={t('providers.pleaseLoginToRequest')}
-        confirmText={t('auth.login')}
+        title={t('auth.verifyMobileToBook')}
+        message={t('auth.verifyMobileToBookMessage')}
+        confirmText={t('auth.verifyWithOtp')}
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setShowLoginModal(false);
           const serializableProvider = serializeDoctorForNavigation(provider as any);
-          setRedirectAfterLogin({route: 'ServiceRequest', params: {provider: serializableProvider}});
+          setRedirectAfterLogin({
+            route: 'ServiceRequest',
+            params: {
+              requestMode: 'specificProvider',
+              provider: serializableProvider,
+            },
+          });
           navigation.navigate('Login');
         }}
         onCancel={() => setShowLoginModal(false)}

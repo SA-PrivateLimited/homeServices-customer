@@ -1,49 +1,21 @@
 import React from 'react';
-import {View, Text, StyleSheet} from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import {useStore} from '../store';
-import {lightTheme, darkTheme} from '../utils/theme';
+import {EmptyState as PackageEmptyState, type EmptyStateProps} from 'sapvt-ltd-app-packages';
 
-interface EmptyStateProps {
-  icon: string;
-  title: string;
-  message: string;
-}
-
-const EmptyState: React.FC<EmptyStateProps> = ({icon, title, message}) => {
-  const {isDarkMode} = useStore();
-  const theme = isDarkMode ? darkTheme : lightTheme;
-
-  return (
-    <View style={styles.container}>
-      <Icon name={icon} size={80} color={theme.textSecondary} />
-      <Text style={[styles.title, {color: theme.text}]}>{title}</Text>
-      <Text style={[styles.message, {color: theme.textSecondary}]}>
-        {message}
-      </Text>
-    </View>
-  );
+const ICON_GLYPH: Record<string, string> = {
+  'person-remove-outline': '👤',
+  'people-outline': '👥',
+  'document-text-outline': '📄',
+  'calendar-outline': '📅',
+  'notifications-outline': '🔔',
+  'search-outline': '🔍',
+  inbox: '📭',
+  'inbox-outline': '📭',
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-});
+const EmptyState: React.FC<EmptyStateProps> = ({icon, iconGlyph, ...rest}) => {
+  const glyph =
+    iconGlyph || (icon ? ICON_GLYPH[icon] || '📭' : undefined);
+  return <PackageEmptyState {...rest} iconGlyph={glyph} />;
+};
 
 export default EmptyState;

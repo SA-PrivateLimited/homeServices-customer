@@ -4,7 +4,7 @@
  * Shows completed services with review option
  */
 
-import React, {useState, useEffect, useMemo} from 'react';
+import React, {useState, useEffect, useMemo, useCallback} from 'react';
 import {
   View,
   Text,
@@ -17,16 +17,18 @@ import {
   Linking,
   FlatList,
 } from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import AlertModal from '../components/AlertModal';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import auth from '@react-native-firebase/auth';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {getCustomerJobCards, JobCard} from '../services/jobCardService';
 import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
+import AdSlot from '../components/AdSlot';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import {providersApi} from '../services/api/providersApi';
+import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import useTranslation from '../hooks/useTranslation';
 
 type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed';
@@ -70,9 +72,14 @@ export default function ServiceHistoryScreen({navigation}: any) {
   });
 
   useEffect(() => {
-    loadJobCards();
     loadServiceCategories();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadHistory();
+    }, [currentUser?.id, currentUser?._id]),
+  );
 
   const loadServiceCategories = async () => {
     try {
@@ -83,98 +90,107 @@ export default function ServiceHistoryScreen({navigation}: any) {
     }
   };
 
-  const loadJobCards = async () => {
+  const serviceRequestToCard = (req: any): JobCard => {
+    const id = req._id || req.id || '';
+    return {
+      id: `sr_${id}`,
+      providerId: req.providerId || '',
+      providerName: req.providerName || '',
+      providerAddress: req.providerAddress || {
+        type: 'home',
+        address: '',
+        pincode: '',
+      },
+      customerId: req.customerId || '',
+      customerName: req.customerName || '',
+      customerPhone: req.customerPhone || '',
+      customerAddress: req.customerAddress || {
+        address: '',
+        pincode: '',
+      },
+      serviceType: req.serviceType || 'Service',
+      problem: req.problem,
+      consultationId: id,
+      bookingId: id,
+      status: req.status || 'pending',
+      scheduledTime: req.scheduledTime ? new Date(req.scheduledTime) : undefined,
+      createdAt: req.createdAt ? new Date(req.createdAt) : new Date(),
+      updatedAt: req.updatedAt ? new Date(req.updatedAt) : new Date(),
+      urgency: req.urgency,
+    } as JobCard & {urgency?: string};
+  };
+
+  const loadHistory = async () => {
     try {
-      const user = auth().currentUser;
-      if (!user) {
+      const userId = currentUser?.id || currentUser?._id;
+      if (!userId) {
+        setJobCards([]);
         setLoading(false);
+        setRefreshing(false);
         return;
       }
 
       setLoading(true);
-      console.log('📋 Loading job cards for customer:', user.uid);
 
-      // Fetch job cards by customerId
-      let cardsByCustomerId = await getCustomerJobCards(user.uid);
-      console.log(`✅ Loaded ${cardsByCustomerId.length} job cards by customerId`);
+      const [cardsByCustomerId, serviceRequests] = await Promise.all([
+        getCustomerJobCards(userId).catch((e) => {
+          console.warn('Job cards load failed:', e);
+          return [] as JobCard[];
+        }),
+        serviceRequestsApi.getAll().catch((e) => {
+          console.warn('Service requests load failed:', e);
+          return [] as any[];
+        }),
+      ]);
 
-      // Note: Job cards are now fetched via API which handles filtering by customerId
-      // Phone number filtering is handled by the backend API
-
-      // Use job cards from API (backend handles filtering by customerId and phone)
-      const cards = cardsByCustomerId;
-      console.log(`📊 Total cards loaded: ${cards.length}`);
-
-      // Debug: Log unique status values
-      const uniqueStatuses = new Set(cards.map(card => card.status));
-      console.log('📊 Unique status values:', Array.from(uniqueStatuses));
-
-      // Debug: Count by status
-      const statusCounts = {
-        pending: cards.filter(c => c.status === 'pending').length,
-        accepted: cards.filter(c => c.status === 'accepted').length,
-        'in-progress': cards.filter(c => c.status === 'in-progress').length,
-        completed: cards.filter(c => c.status === 'completed').length,
-      };
-      console.log('📈 Status counts (raw):', statusCounts);
-
-      // Debug: Log all accepted cards details
-      const acceptedCards = cards.filter(c => c.status === 'accepted');
-      console.log('✅ Accepted cards:', acceptedCards.length);
-      acceptedCards.forEach((card, index) => {
-        console.log(`  ${index + 1}. ID: ${card.id}, Status: "${card.status}", Provider: ${card.providerName || 'N/A'}`);
+      const cards = cardsByCustomerId || [];
+      const linkedIds = new Set<string>();
+      cards.forEach(card => {
+        if (card.consultationId) linkedIds.add(String(card.consultationId));
+        if (card.bookingId) linkedIds.add(String(card.bookingId));
+        if (card.id) linkedIds.add(String(card.id));
       });
 
-      // Debug: Log normalized status counts
-      const normalizedCounts = {
-        pending: cards.filter(c => normalizeStatus(c.status) === 'pending').length,
-        accepted: cards.filter(c => normalizeStatus(c.status) === 'accepted').length,
-        'in-progress': cards.filter(c => normalizeStatus(c.status) === 'in-progress').length,
-        completed: cards.filter(c => normalizeStatus(c.status) === 'completed').length,
-      };
-      console.log('📊 Status counts (normalized):', normalizedCounts);
+      // Include service requests that do not yet have a job card (e.g. pending)
+      const orphanRequests = (serviceRequests || [])
+        .filter(req => {
+          const id = String(req._id || req.id || '');
+          if (!id) return false;
+          return !linkedIds.has(id);
+        })
+        .map(serviceRequestToCard);
 
-      // Use job cards directly
-      const allCards = cards;
-      
-      // Sort by createdAt descending
+      const allCards = [...cards, ...orphanRequests];
       allCards.sort((a, b) => {
-        const aTime = a.createdAt.getTime();
-        const bTime = b.createdAt.getTime();
+        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
         return bTime - aTime;
       });
-      
-      // Fetch provider phones for all cards using API
+
       const phoneMap: Record<string, string> = {};
       const providerIds = new Set(allCards.map(card => card.providerId).filter(Boolean));
-      
+
       await Promise.all(
-        Array.from(providerIds).map(async (providerId) => {
-          if (providerId) {
-            try {
-              const provider = await providersApi.getById(providerId);
-              if (provider) {
-                const phone = provider.phoneNumber || (provider as any).phone || (provider as any).primaryPhone;
-                if (phone) {
-                  phoneMap[providerId] = phone;
-                  console.log(`✅ Fetched phone for provider ${providerId}: ${phone}`);
-                }
-              } else {
-                console.warn(`Provider not found: ${providerId}`);
-              }
-            } catch (error) {
-              console.error(`Error fetching phone for provider ${providerId}:`, error);
+        Array.from(providerIds).map(async providerId => {
+          if (!providerId) return;
+          try {
+            const provider = await providersApi.getById(providerId);
+            if (provider) {
+              const phone =
+                provider.phoneNumber ||
+                (provider as any).phone ||
+                (provider as any).primaryPhone;
+              if (phone) phoneMap[providerId] = phone;
             }
+          } catch (error) {
+            console.error(`Error fetching phone for provider ${providerId}:`, error);
           }
-        })
+        }),
       );
-      console.log(`✅ Fetched ${Object.keys(phoneMap).length} provider phone numbers`);
       setProviderPhones(phoneMap);
-      
-      console.log(`✅ Total cards to display: ${allCards.length}`);
       setJobCards(allCards);
     } catch (error: any) {
-      console.error('❌ Error loading job cards:', error);
+      console.error('❌ Error loading history:', error);
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -190,7 +206,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadJobCards();
+    void loadHistory();
   };
 
   const loadProviderDetailsAndReview = async (jobCard: JobCard) => {
@@ -471,21 +487,27 @@ export default function ServiceHistoryScreen({navigation}: any) {
     }
   };
 
+  const openServiceDetails = (jobCard: JobCard) => {
+    if (jobCard.status === 'completed') {
+      setSelectedCompletedService(jobCard);
+      setShowCompletedServiceModal(true);
+      return;
+    }
+    navigation.navigate('ActiveService', {
+      serviceRequestId: jobCard.consultationId || jobCard.bookingId,
+      // Synthetic ids (sr_*) are pending service requests without a real job card yet
+      ...(!String(jobCard.id || '').startsWith('sr_')
+        ? {jobCardId: jobCard.id}
+        : {}),
+    });
+  };
+
   const renderServiceCard = (jobCard: JobCard) => (
     <TouchableOpacity
       key={jobCard.id}
       style={[styles.jobCard, {backgroundColor: theme.card}]}
-      onPress={() => {
-        if (jobCard.status === 'completed') {
-          setSelectedCompletedService(jobCard);
-          setShowCompletedServiceModal(true);
-        } else {
-          navigation.navigate('ActiveService', {
-            serviceRequestId: jobCard.consultationId || jobCard.bookingId,
-            jobCardId: jobCard.id,
-          });
-        }
-      }}>
+      activeOpacity={0.85}
+      onPress={() => openServiceDetails(jobCard)}>
       {/* Header */}
       <View style={styles.jobCardHeader}>
         <View style={styles.serviceTypeContainer}>
@@ -621,7 +643,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
             <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.viewButton}>
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            openServiceDetails(jobCard);
+          }}>
           <Text style={[styles.viewButtonText, {color: theme.primary}]}>
             {t('jobCard.viewDetails')}
           </Text>
@@ -795,6 +822,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          ListFooterComponent={<AdSlot size="banner" />}
         />
       )}
 
@@ -923,7 +951,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
           onReviewSubmitted={() => {
             setShowReviewModal(false);
             setSelectedJobCard(null);
-            loadJobCards(); // Refresh to show review status
+            loadHistory(); // Refresh to show review status
           }}
           onSkip={() => {
             setShowReviewModal(false);

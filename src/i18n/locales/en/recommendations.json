@@ -6,7 +6,7 @@
   "providerName": "Provider Name",
   "providerNamePlaceholder": "Enter provider's name",
   "providerPhone": "Provider Phone",
-  "providerPhonePlaceholder": "Enter 10-digit phone number",
+  "providerPhonePlaceholder": "10-digit mobile",
   "address": "Address",
   "addressPlaceholder": "Enter provider's address (optional)",
   "submit": "Submit Recommendation",

@@ -8,16 +8,15 @@ import {
   ActivityIndicator,
   ScrollView,
   Switch,
-  Modal,
   Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import auth from '@react-native-firebase/auth';
-import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
+import {Select} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import authService from '../services/authService';
+import {getStoredJwt, logoutCustomer} from '../services/session';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
@@ -37,12 +36,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const [name, setName] = useState(currentUser?.name || '');
-  const [email, setEmail] = useState(currentUser?.email || '');
-  const [phone, setPhone] = useState(currentUser?.phone || '');
+  const [phone, setPhone] = useState(
+    currentUser?.phone || currentUser?.phoneNumber || '',
+  );
   const [secondaryPhone, setSecondaryPhone] = useState(currentUser?.secondaryPhone || '');
   const [gender, setGender] = useState(currentUser?.gender || '');
-  const [bloodGroup, setBloodGroup] = useState(currentUser?.bloodGroup || '');
-  
   // Address fields
   const [homeAddress, setHomeAddress] = useState({
     address: currentUser?.homeAddress?.address || '',
@@ -57,8 +55,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     pincode: currentUser?.officeAddress?.pincode || '',
   });
   const [sameAsHomeAddress, setSameAsHomeAddress] = useState(false);
-  const [sendingEmailVerification, setSendingEmailVerification] = useState(false);
-  const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(currentUser?.profileImage || null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -78,6 +74,31 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   
   const genderOptions = [t('profile.male'), t('profile.female'), t('profile.other')];
 
+  const formatAddress = (addr: {
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  }) => {
+    if (!addr?.address && !addr?.city && !addr?.state && !addr?.pincode) {
+      return '';
+    }
+    const base = (addr.address || '').trim();
+    const lower = base.toLowerCase();
+    const parts: string[] = base ? [base] : [];
+    if (addr.city && !lower.includes(addr.city.toLowerCase())) {
+      parts.push(addr.city);
+    }
+    if (addr.state && !lower.includes(addr.state.toLowerCase())) {
+      parts.push(addr.state);
+    }
+    if (addr.pincode && !lower.includes(addr.pincode)) {
+      parts.push(addr.pincode);
+    }
+    return parts.join(', ');
+  };
+
+
   const pickImage = () => {
     launchImageLibrary({mediaType: 'photo', quality: 0.8}, response => {
       if (response.assets && response.assets[0].uri) {
@@ -87,112 +108,70 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     });
   };
 
-  const uploadImage = async (uri: string): Promise<string> => {
-    const filename = `users/${auth().currentUser?.uid || 'profile'}/${Date.now()}.jpg`;
-    const reference = storage().ref(filename);
-    await reference.putFile(uri);
-    return await reference.getDownloadURL();
+  const applyUserToForm = (user: User) => {
+    setName(user.name || '');
+    setPhone(user.phone || user.phoneNumber || '');
+    setSecondaryPhone(user.secondaryPhone || '');
+    setGender(user.gender || '');
+    setHomeAddress({
+      address: user.homeAddress?.address || '',
+      city: user.homeAddress?.city || '',
+      state: user.homeAddress?.state || '',
+      pincode: user.homeAddress?.pincode || '',
+    });
+    setOfficeAddress({
+      address: user.officeAddress?.address || '',
+      city: user.officeAddress?.city || '',
+      state: user.officeAddress?.state || '',
+      pincode: user.officeAddress?.pincode || '',
+    });
+    setSameAsHomeAddress(
+      !!(
+        user.homeAddress?.address &&
+        user.officeAddress?.address &&
+        user.homeAddress.address === user.officeAddress.address
+      ),
+    );
+    const existingImage = user.profileImage;
+    if (
+      existingImage &&
+      typeof existingImage === 'string' &&
+      existingImage.trim() !== '' &&
+      (existingImage.startsWith('http://') ||
+        existingImage.startsWith('https://') ||
+        existingImage.startsWith('file://') ||
+        existingImage.startsWith('content://'))
+    ) {
+      setProfileImage(existingImage.trim());
+    } else {
+      setProfileImage(null);
+    }
+    setImageError(false);
   };
 
-  // Load customer profile from API if not in store
+  // Load customer profile from Mongo/JWT session
   useEffect(() => {
     const loadCustomerProfile = async () => {
-      const authUser = auth().currentUser;
-      if (!authUser) {
+      const jwt = await getStoredJwt();
+      if (!jwt) {
         setProfileLoading(false);
         return;
       }
 
-      // If currentUser is already loaded, use it
-      if (currentUser && currentUser.id === authUser.uid) {
-        setName(currentUser.name || '');
-        setEmail(currentUser.email || authUser.email || '');
-        setPhone(currentUser.phone || authUser.phoneNumber || '');
-        setSecondaryPhone(currentUser.secondaryPhone || '');
-        setGender(currentUser.gender || '');
-        setBloodGroup(currentUser.bloodGroup || '');
-        setHomeAddress({
-          address: currentUser.homeAddress?.address || '',
-          city: currentUser.homeAddress?.city || '',
-          state: currentUser.homeAddress?.state || '',
-          pincode: currentUser.homeAddress?.pincode || '',
-        });
-        setOfficeAddress({
-          address: currentUser.officeAddress?.address || '',
-          city: currentUser.officeAddress?.city || '',
-          state: currentUser.officeAddress?.state || '',
-          pincode: currentUser.officeAddress?.pincode || '',
-        });
-        setSameAsHomeAddress(
-          !!(currentUser.homeAddress?.address && 
-          currentUser.officeAddress?.address &&
-          currentUser.homeAddress.address === currentUser.officeAddress.address)
-        );
-        const existingImage = currentUser.profileImage;
-        if (existingImage && typeof existingImage === 'string' && existingImage.trim() !== '' && 
-            (existingImage.startsWith('http://') || existingImage.startsWith('https://') || 
-             existingImage.startsWith('file://') || existingImage.startsWith('content://'))) {
-          setProfileImage(existingImage.trim());
-        } else {
-          setProfileImage(null);
-        }
-        setImageError(false);
+      if (currentUser?.id || currentUser?._id) {
+        applyUserToForm(currentUser);
         setProfileLoading(false);
         return;
       }
 
-      // Otherwise, fetch from API via authService
       try {
         const user = await authService.getCurrentUser();
         if (user) {
-          setName(user.name || authUser.displayName || '');
-          setEmail(user.email || authUser.email || '');
-          setPhone(user.phone || authUser.phoneNumber || '');
-          setSecondaryPhone((user as any).secondaryPhone || '');
-          setGender((user as any).gender || '');
-          setBloodGroup((user as any).bloodGroup || '');
-          setHomeAddress({
-            address: (user as any).homeAddress?.address || '',
-            city: (user as any).homeAddress?.city || '',
-            state: (user as any).homeAddress?.state || '',
-            pincode: (user as any).homeAddress?.pincode || '',
-          });
-          setOfficeAddress({
-            address: (user as any).officeAddress?.address || '',
-            city: (user as any).officeAddress?.city || '',
-            state: (user as any).officeAddress?.state || '',
-            pincode: (user as any).officeAddress?.pincode || '',
-          });
-          setSameAsHomeAddress(
-            !!((user as any).homeAddress?.address && 
-            (user as any).officeAddress?.address &&
-            (user as any).homeAddress.address === (user as any).officeAddress.address)
-          );
-          
-          const existingImage = (user as any).profileImage;
-          if (existingImage && typeof existingImage === 'string' && existingImage.trim() !== '' && 
-              (existingImage.startsWith('http://') || existingImage.startsWith('https://') || 
-               existingImage.startsWith('file://') || existingImage.startsWith('content://'))) {
-            setProfileImage(existingImage.trim());
-          } else {
-            setProfileImage(null);
-          }
-          setImageError(false);
-          
-          // Update store with fetched user
+          applyUserToForm(user);
           await setCurrentUser(user);
-        } else {
-          // User document doesn't exist, use auth user data
-          setName(authUser.displayName || '');
-          setEmail(authUser.email || '');
-          setPhone(authUser.phoneNumber || '');
         }
       } catch (error) {
         console.error('Error loading customer profile:', error);
-        // Fallback to auth user data
-        setName(authUser.displayName || '');
-        setEmail(authUser.email || '');
-        setPhone(authUser.phoneNumber || '');
       } finally {
         setProfileLoading(false);
       }
@@ -204,11 +183,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   useEffect(() => {
     if (currentUser) {
       setName(currentUser.name || '');
-      setEmail(currentUser.email || '');
-      setPhone(currentUser.phone || '');
+      setPhone(currentUser.phone || currentUser.phoneNumber || '');
       setSecondaryPhone(currentUser.secondaryPhone || '');
       setGender(currentUser.gender || '');
-      setBloodGroup(currentUser.bloodGroup || '');
       setHomeAddress({
         address: currentUser.homeAddress?.address || '',
         city: currentUser.homeAddress?.city || '',
@@ -240,174 +217,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     }
   }, [sameAsHomeAddress, homeAddress, isEditing]);
 
-  const handleSendEmailVerification = async () => {
-    const authUser = auth().currentUser;
-    if (!authUser) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: t('profile.mustBeLoggedIn'),
-        type: 'error',
-      });
-      return;
-    }
-
-    if (!email.trim()) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: t('profile.pleaseEnterEmail'),
-        type: 'error',
-      });
-      return;
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: t('profile.pleaseEnterValidEmail'),
-        type: 'error',
-      });
-      return;
-    }
-
-    setSendingEmailVerification(true);
-    try {
-      const emailToVerify = email.trim();
-      const currentEmail = authUser.email;
-      
-      // Check if user is authenticated with email/password (email verification only works for email/password users)
-      const providerData = authUser.providerData || [];
-      const hasEmailPassword = providerData.some((provider: any) => provider.providerId === 'password');
-      const isPhoneAuth = providerData.some((provider: any) => provider.providerId === 'phone');
-      
-      // For phone-authenticated users, we can't use sendEmailVerification()
-      if (isPhoneAuth && !hasEmailPassword) {
-        // Update email via API (can't verify via Firebase Auth)
-        if (currentEmail && emailToVerify !== currentEmail) {
-          try {
-            await authService.updateUserProfile(authUser.uid, {
-              email: emailToVerify,
-              emailVerified: false,
-            } as any);
-          } catch (error) {
-            console.warn('Could not update email:', error);
-          }
-        }
-        setAlertModal({
-          visible: true,
-          title: t('profile.emailUpdated'),
-          message: t('profile.emailUpdatedMessage'),
-          type: 'info',
-        });
-        setSendingEmailVerification(false);
-        return;
-      }
-      
-      // Only update email if it's different from current email (for email/password users)
-      if (currentEmail && emailToVerify !== currentEmail) {
-        try {
-          await authUser.updateEmail(emailToVerify);
-          // Update email via API after successful update
-          try {
-            await authService.updateUserProfile(authUser.uid, {
-              email: emailToVerify,
-              emailVerified: false,
-            } as any);
-          } catch (apiError) {
-            console.warn('Could not update email in API:', apiError);
-          }
-        } catch (updateError: any) {
-          if (updateError.code === 'auth/requires-recent-login') {
-            setAlertModal({
-              visible: true,
-              title: t('profile.reauthRequired'),
-              message: t('profile.reauthRequiredMessage'),
-              type: 'error',
-            });
-            setSendingEmailVerification(false);
-            return;
-          } else if (updateError.code === 'auth/email-already-in-use') {
-            setAlertModal({
-              visible: true,
-              title: t('common.error'),
-              message: t('profile.emailAlreadyInUse'),
-              type: 'error',
-            });
-            setSendingEmailVerification(false);
-            return;
-          } else if (updateError.code === 'auth/operation-not-allowed') {
-            setAlertModal({
-              visible: true,
-              title: t('profile.operationNotAllowed'),
-              message: t('profile.operationNotAllowedMessage'),
-              type: 'error',
-            });
-            setSendingEmailVerification(false);
-            return;
-          }
-          throw updateError;
-        }
-      }
-      
-      // Reload user to get latest email
-      await authUser.reload();
-      
-      // Send verification email (only works for email/password users)
-      try {
-        await authUser.sendEmailVerification();
-      } catch (verifyError: any) {
-        // If operation-not-allowed, it means email verification is disabled or not available
-        if (verifyError.code === 'auth/operation-not-allowed') {
-          setAlertModal({
-            visible: true,
-            title: t('profile.emailVerificationUnavailable'),
-            message: t('profile.emailVerificationUnavailableMessage'),
-            type: 'error',
-          });
-          setSendingEmailVerification(false);
-          return;
-        }
-        throw verifyError;
-      }
-
-      setAlertModal({
-        visible: true,
-        title: t('profile.verificationEmailSent'),
-        message: t('profile.verificationEmailSentMessage'),
-        type: 'success',
-      });
-    } catch (error: any) {
-      console.error('Error sending email verification:', error);
-      let errorMessage = 'Failed to send verification email. Please try again.';
-      
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already in use by another account';
-      } else if (error.code === 'auth/requires-recent-login') {
-        errorMessage = 'Please logout and login again to change your email';
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = 'Email verification is currently disabled. Please enable Email/Password provider in Firebase Console > Authentication > Sign-in method.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setAlertModal({
-        visible: true,
-        title: 'Error',
-        message: errorMessage,
-        type: 'error',
-      });
-    } finally {
-      setSendingEmailVerification(false);
-    }
-  };
-
   const handleSaveProfile = async () => {
-    const authUser = auth().currentUser;
-    if (!authUser) {
+    if (!(await getStoredJwt())) {
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -427,83 +238,46 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       return;
     }
 
-    // Validate email format
-    if (email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) {
-        setAlertModal({
-          visible: true,
-          title: 'Error',
-          message: 'Please enter a valid email address',
-          type: 'error',
-        });
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      const userId = currentUser?.id || authUser.uid;
-      
-      // Prepare office address - if same as home, use home address
+      const userId = currentUser?.id || currentUser?._id || '';
       const finalOfficeAddress = sameAsHomeAddress ? homeAddress : officeAddress;
-      
-      // Upload profile image if it's a local file
+
       let imageUrl = currentUser?.profileImage || '';
-      if (profileImage && (profileImage.startsWith('file://') || profileImage.startsWith('content://'))) {
-        try {
-          setUploadingImage(true);
-          imageUrl = await uploadImage(profileImage);
-        } catch (uploadError: any) {
-          console.error('Error uploading profile image:', uploadError);
-          setAlertModal({
-            visible: true,
-            title: t('common.warning'),
-            message: t('profile.failedToUploadImage'),
-            type: 'warning',
-          });
-          // Continue without image update
-        } finally {
-          setUploadingImage(false);
-        }
-      } else if (profileImage && (profileImage.startsWith('http://') || profileImage.startsWith('https://'))) {
-        // If it's already a URL, use it as is
+      if (
+        profileImage &&
+        (profileImage.startsWith('file://') ||
+          profileImage.startsWith('content://'))
+      ) {
+        // Profile image upload to cloud storage is not available without Firebase.
+        // Keep previous remote URL if any.
+        setAlertModal({
+          visible: true,
+          title: t('common.warning') || 'Warning',
+          message:
+            t('profile.failedToUploadImage') ||
+            'Profile photo upload is unavailable. Other profile fields will still be saved.',
+          type: 'warning',
+        });
+      } else if (
+        profileImage &&
+        (profileImage.startsWith('http://') ||
+          profileImage.startsWith('https://'))
+      ) {
         imageUrl = profileImage;
       }
-      
+
       const updates: any = {
         name,
-        email: email.trim() || authUser.email || '',
         gender,
-        bloodGroup,
-        homeAddress: homeAddress.address ? homeAddress : null,
-        officeAddress: finalOfficeAddress.address ? finalOfficeAddress : null,
+        homeAddress:
+          homeAddress.address || homeAddress.pincode ? homeAddress : null,
+        officeAddress:
+          finalOfficeAddress.address || finalOfficeAddress.pincode
+            ? finalOfficeAddress
+            : null,
         profileImage: imageUrl || null,
-        // updatedAt will be set by API
       };
-
-      // Update email in Firebase Auth if changed
-      if (email.trim() && email.trim() !== authUser.email) {
-        try {
-          await authUser.updateEmail(email.trim());
-          updates.emailVerified = false; // Reset verification status
-        } catch (error: any) {
-          if (error.code === 'auth/requires-recent-login') {
-            setAlertModal({
-              visible: true,
-              title: t('profile.emailUpdateRequiresReauth') || 'Email Update Requires Re-authentication',
-              message: t('profile.emailUpdateRequiresReauthMessage') || 'Please logout and login again to change your email address.',
-              type: 'warning',
-            });
-            return;
-          }
-          throw error;
-        }
-      }
-
-      // Check email verification status from Firebase Auth
-      await authUser.reload();
-      updates.emailVerified = authUser.emailVerified;
 
       const updatedUser = await authService.updateUserProfile(userId, updates);
       await setCurrentUser(updatedUser);
@@ -532,19 +306,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   const handleConfirmLogout = async () => {
     setShowLogoutModal(false);
     try {
-      await authService.logout();
+      await logoutCustomer();
       await setCurrentUser(null);
-      // Navigate to Login screen
       navigation.reset({
         index: 0,
-        routes: [{name: 'Login'}],
+        routes: [{name: 'Main'}],
       });
     } catch (error: any) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: error.message,
-        type: 'error',
+      try {
+        await setCurrentUser(null);
+      } catch {
+        // ignore
+      }
+      navigation.reset({
+        index: 0,
+        routes: [{name: 'Main'}],
       });
     }
   };
@@ -565,8 +341,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     );
   }
 
-  const authUser = auth().currentUser;
-  if (!authUser && !currentUser) {
+  if (!currentUser) {
     return (
       <View
         style={[
@@ -587,14 +362,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
     );
   }
 
-  const isEmailVerified = authUser?.emailVerified || currentUser?.emailVerified || false;
+  const displayPhone =
+    phone || currentUser?.phone || currentUser?.phoneNumber || '';
+  const displayInitial = (
+    name && name.trim() ? name.charAt(0) : displayPhone.charAt(0) || 'U'
+  ).toUpperCase();
 
   return (
     <ScrollView
       style={[styles.container, {backgroundColor: theme.background}]}
       contentContainerStyle={styles.scrollContent}>
       {/* Header */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.card,
+            ...commonStyles.shadowSmall,
+          },
+        ]}>
         <TouchableOpacity
           onPress={isEditing ? pickImage : undefined}
           disabled={!isEditing || uploadingImage}
@@ -630,9 +416,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             
             return (
               <View style={[styles.avatarContainer, {backgroundColor: theme.primary}]}>
-                <Text style={styles.avatarText}>
-                  {name && name.trim() ? name.charAt(0).toUpperCase() : ((authUser?.displayName || authUser?.email || 'U').charAt(0).toUpperCase())}
-                </Text>
+                <Text style={styles.avatarText}>{displayInitial}</Text>
                 {isEditing && (
                   <View style={styles.avatarOverlay}>
                     <Icon name="camera" size={24} color="#fff" />
@@ -648,15 +432,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           })()}
         </TouchableOpacity>
         <Text style={[styles.userName, {color: theme.text}]}>
-          {name || authUser?.displayName || authUser?.email || 'User'}
+          {name || t('profile.user') || 'User'}
         </Text>
-        <Text style={[styles.userEmail, {color: theme.textSecondary}]}>
-          {email || authUser?.email || t('profile.notAvailable')}
+        <Text style={[styles.userEmail, {color: theme.primary}]}>
+          {displayPhone || t('profile.notAvailable')}
         </Text>
       </View>
 
       {/* Profile Info */}
-      <View style={styles.section}>
+      <View
+        style={[
+          styles.section,
+          {
+            backgroundColor: theme.card,
+            ...commonStyles.shadowSmall,
+          },
+        ]}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
             {t('profile.personalInformation')}
@@ -675,7 +466,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         {/* Name */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="person-outline" size={20} color={theme.textSecondary} />
+            <Icon name="person-outline" size={20} color={theme.primary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
               {t('profile.fullName')}
             </Text>
@@ -699,86 +490,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           )}
         </View>
 
-        {/* Email */}
-        <View style={styles.infoRow}>
-          <View style={styles.infoLabel}>
-            <Icon name="mail-outline" size={20} color={theme.textSecondary} />
-            <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-              <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-                {t('profile.email')}
-              </Text>
-              {isEmailVerified && (
-                <Icon name="checkmark-circle" size={16} color="#4CAF50" />
-              )}
-            </View>
-          </View>
-          {isEditing ? (
-            <View style={{flex: 1}}>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={!loading}
-              />
-              {!isEmailVerified && (
-                <TouchableOpacity
-                  onPress={handleSendEmailVerification}
-                  disabled={sendingEmailVerification || loading}
-                  style={styles.verifyEmailButton}>
-                  {sendingEmailVerification ? (
-                    <ActivityIndicator size="small" color={theme.primary} />
-                  ) : (
-                    <>
-                      <Icon name="mail-outline" size={16} color={theme.primary} />
-                      <Text style={[styles.verifyEmailText, {color: theme.primary}]}>
-                        {t('profile.verifyEmail')}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-              {isEmailVerified && (
-                <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                  {t('profile.verified')}
-                </Text>
-              )}
-            </View>
-          ) : (
-            <View style={{flex: 1, alignItems: 'flex-end'}}>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                <Text style={[styles.infoValue, {color: email ? theme.text : theme.textSecondary}]}>
-                  {email || 'Not set'}
-                </Text>
-                {isEmailVerified && (
-                  <Icon name="checkmark-circle" size={16} color="#4CAF50" />
-                )}
-              </View>
-              {isEmailVerified ? (
-                <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                  {t('profile.verified')}
-                </Text>
-              ) : (
-                <Text style={[styles.verifiedBadge, {color: theme.textSecondary}]}>
-                  {t('profile.notVerified')}
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-
         {/* Primary Phone - Not editable if logged in with phone */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="call-outline" size={20} color={theme.textSecondary} />
+            <Icon name="call-outline" size={20} color={theme.primary} />
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
               <Text style={[styles.labelText, {color: theme.textSecondary}]}>
                 {t('profile.primaryPhone')}
@@ -793,22 +508,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
               <Text style={[styles.infoValue, {color: phone ? theme.text : theme.textSecondary}]}>
                 {phone || 'Not set'}
               </Text>
-              {(() => {
-                const currentAuthUser = auth().currentUser;
-                const loggedInWithPhone = currentAuthUser?.phoneNumber && currentUser?.phoneVerified;
-                if (loggedInWithPhone) {
-                  return <Icon name="lock-closed" size={16} color={theme.textSecondary} />;
-                }
-                return null;
-              })()}
+              {currentUser?.phoneVerified ? (
+                <Icon name="lock-closed" size={16} color={theme.textSecondary} />
+              ) : null}
             </View>
             {currentUser?.phoneVerified && (
               <Text style={[styles.verifiedBadge, {color: '#4CAF50'}]}>
-                {t('profile.verified')} {(() => {
-                  const currentAuthUser = auth().currentUser;
-                  const loggedInWithPhone = currentAuthUser?.phoneNumber && currentUser?.phoneVerified;
-                  return loggedInWithPhone ? `(${t('profile.cannotBeChanged')})` : '';
-                })()}
+                {t('profile.verified')} ({t('profile.cannotBeChanged')})
               </Text>
             )}
             {!currentUser?.phoneVerified && phone && (
@@ -822,7 +528,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         {/* Secondary Phone */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="call-outline" size={20} color={theme.textSecondary} />
+            <Icon name="call-outline" size={20} color={theme.primary} />
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
               <Text style={[styles.labelText, {color: theme.textSecondary}]}>
                 {t('profile.secondaryPhone')}
@@ -897,7 +603,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   style={[styles.addButton, {borderColor: theme.primary}]}>
                   <Icon name="add-circle-outline" size={20} color={theme.primary} />
                   <Text style={[styles.addButtonText, {color: theme.primary}]}>
-                    Add Secondary Phone
+                    {t('profile.addSecondaryPhone') || '+ Add Secondary Phone'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -934,79 +640,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         {/* Gender */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="male-female-outline" size={20} color={theme.textSecondary} />
+            <Icon name="male-female-outline" size={20} color={theme.primary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              Gender
+              {t('profile.gender')}
             </Text>
           </View>
           {isEditing ? (
-            <>
-              <TouchableOpacity
-                style={[
-                  styles.pickerContainer,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-                onPress={() => setShowGenderPicker(true)}>
-                <Text style={[styles.pickerText, {color: gender ? theme.text : theme.textSecondary}]}>
-                  {gender || t('profile.selectGender')}
-                </Text>
-                <Icon name="chevron-down" size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
-              
-              <Modal
-                visible={showGenderPicker}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowGenderPicker(false)}>
-                <TouchableOpacity
-                  style={styles.modalOverlay}
-                  activeOpacity={1}
-                  onPress={() => setShowGenderPicker(false)}>
-                  <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
-                    <View style={[styles.modalHeader, {borderBottomColor: theme.border}]}>
-                      <Text style={[styles.modalTitle, {color: theme.text}]}>
-                        {t('profile.selectGender')}
-                      </Text>
-                      <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
-                        <Icon name="close" size={24} color={theme.text} />
-                      </TouchableOpacity>
-                    </View>
-                    {genderOptions.map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        style={[
-                          styles.modalOption,
-                          {
-                            backgroundColor:
-                              gender === option ? theme.primary + '20' : 'transparent',
-                          },
-                        ]}
-                        onPress={() => {
-                          setGender(option);
-                          setShowGenderPicker(false);
-                        }}>
-                        <Text
-                          style={[
-                            styles.modalOptionText,
-                            {
-                              color: gender === option ? theme.primary : theme.text,
-                              fontWeight: gender === option ? '600' : '400',
-                            },
-                          ]}>
-                          {option}
-                        </Text>
-                        {gender === option && (
-                          <Icon name="checkmark" size={20} color={theme.primary} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </TouchableOpacity>
-              </Modal>
-            </>
+            <Select
+              options={genderOptions.map(o => ({value: o, label: o}))}
+              value={gender}
+              onChange={setGender}
+              placeholder={t('profile.selectGender')}
+              title={t('profile.selectGender')}
+              style={{flex: 1, marginBottom: 0}}
+            />
           ) : (
             <Text style={[styles.infoValue, {color: theme.text}]}>
               {gender || t('profile.notSet')}
@@ -1014,41 +661,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           )}
         </View>
 
-        {/* Blood Group */}
-        <View style={styles.infoRow}>
-          <View style={styles.infoLabel}>
-            <Icon name="water-outline" size={20} color={theme.textSecondary} />
-            <Text style={[styles.labelText, {color: theme.textSecondary}]}>
-              {t('profile.bloodGroup')}
-            </Text>
-          </View>
-          {isEditing ? (
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: theme.text,
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                },
-              ]}
-              value={bloodGroup}
-              onChangeText={setBloodGroup}
-              placeholder={t('profile.bloodGroupPlaceholder')}
-              placeholderTextColor={theme.textSecondary}
-              editable={!loading}
-            />
-          ) : (
-            <Text style={[styles.infoValue, {color: theme.text}]}>
-              {bloodGroup || t('profile.notSet')}
-            </Text>
-          )}
-        </View>
-
         {/* Home Address */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="home-outline" size={20} color={theme.textSecondary} />
+            <Icon name="home-outline" size={20} color={theme.primary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
               {t('profile.homeAddress')}
             </Text>
@@ -1069,42 +685,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                 onChangeText={(text) => setHomeAddress({...homeAddress, address: text})}
                 placeholder={t('profile.streetAddress')}
                 placeholderTextColor={theme.textSecondary}
+                multiline
                 editable={!loading}
               />
-              <View style={styles.addressRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.addressInputHalf,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.card,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  value={homeAddress.city}
-                  onChangeText={(text) => setHomeAddress({...homeAddress, city: text})}
-                  placeholder={t('profile.city')}
-                  placeholderTextColor={theme.textSecondary}
-                  editable={!loading}
-                />
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.addressInputHalf,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.card,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  value={homeAddress.state}
-                  onChangeText={(text) => setHomeAddress({...homeAddress, state: text})}
-                  placeholder={t('profile.state')}
-                  placeholderTextColor={theme.textSecondary}
-                  editable={!loading}
-                />
-              </View>
               <TextInput
                 style={[
                   styles.input,
@@ -1112,24 +695,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                     color: theme.text,
                     backgroundColor: theme.card,
                     borderColor: theme.border,
+                    marginTop: 8,
                   },
                 ]}
                 value={homeAddress.pincode}
-                onChangeText={(text) => setHomeAddress({...homeAddress, pincode: text})}
+                onChangeText={(text) =>
+                  setHomeAddress({...homeAddress, pincode: text})
+                }
                 placeholder={t('profile.pincode')}
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="numeric"
+                maxLength={6}
                 editable={!loading}
               />
             </View>
           ) : (
             <View style={{flex: 1, alignItems: 'flex-end'}}>
-              {homeAddress.address ? (
+              {formatAddress(homeAddress) ? (
                 <Text style={[styles.infoValue, {color: theme.text, textAlign: 'right'}]}>
-                  {homeAddress.address}
-                  {homeAddress.city && `, ${homeAddress.city}`}
-                  {homeAddress.state && `, ${homeAddress.state}`}
-                  {homeAddress.pincode && ` - ${homeAddress.pincode}`}
+                  {formatAddress(homeAddress)}
                 </Text>
               ) : (
                 <Text style={[styles.infoValue, {color: theme.textSecondary}]}>
@@ -1143,7 +727,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         {/* Office Address */}
         <View style={styles.infoRow}>
           <View style={styles.infoLabel}>
-            <Icon name="business-outline" size={20} color={theme.textSecondary} />
+            <Icon name="business-outline" size={20} color={theme.primary} />
             <Text style={[styles.labelText, {color: theme.textSecondary}]}>
               {t('profile.officeAddress')}
             </Text>
@@ -1174,45 +758,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                       },
                     ]}
                     value={officeAddress.address}
-                    onChangeText={(text) => setOfficeAddress({...officeAddress, address: text})}
+                    onChangeText={(text) =>
+                      setOfficeAddress({...officeAddress, address: text})
+                    }
                     placeholder={t('profile.streetAddress')}
                     placeholderTextColor={theme.textSecondary}
+                    multiline
                     editable={!loading}
                   />
-                  <View style={styles.addressRow}>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.addressInputHalf,
-                        {
-                          color: theme.text,
-                          backgroundColor: theme.card,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                      value={officeAddress.city}
-                      onChangeText={(text) => setOfficeAddress({...officeAddress, city: text})}
-                      placeholder={t('profile.city')}
-                      placeholderTextColor={theme.textSecondary}
-                      editable={!loading}
-                    />
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.addressInputHalf,
-                        {
-                          color: theme.text,
-                          backgroundColor: theme.card,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                      value={officeAddress.state}
-                      onChangeText={(text) => setOfficeAddress({...officeAddress, state: text})}
-                      placeholder={t('profile.state')}
-                      placeholderTextColor={theme.textSecondary}
-                      editable={!loading}
-                    />
-                  </View>
                   <TextInput
                     style={[
                       styles.input,
@@ -1220,13 +773,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                         color: theme.text,
                         backgroundColor: theme.card,
                         borderColor: theme.border,
+                        marginTop: 8,
                       },
                     ]}
                     value={officeAddress.pincode}
-                    onChangeText={(text) => setOfficeAddress({...officeAddress, pincode: text})}
+                    onChangeText={(text) =>
+                      setOfficeAddress({...officeAddress, pincode: text})
+                    }
                     placeholder={t('profile.pincode')}
                     placeholderTextColor={theme.textSecondary}
                     keyboardType="numeric"
+                    maxLength={6}
                     editable={!loading}
                   />
                 </>
@@ -1234,12 +791,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             </View>
           ) : (
             <View style={{flex: 1, alignItems: 'flex-end'}}>
-              {officeAddress.address ? (
+              {formatAddress(officeAddress) ? (
                 <Text style={[styles.infoValue, {color: theme.text, textAlign: 'right'}]}>
-                  {officeAddress.address}
-                  {officeAddress.city && `, ${officeAddress.city}`}
-                  {officeAddress.state && `, ${officeAddress.state}`}
-                  {officeAddress.pincode && ` - ${officeAddress.pincode}`}
+                  {formatAddress(officeAddress)}
                 </Text>
               ) : (
                 <Text style={[styles.infoValue, {color: theme.textSecondary}]}>
@@ -1270,16 +824,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       </View>
 
       {/* Account Actions */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, {color: theme.text}]}>
+      <View
+        style={[
+          styles.section,
+          {
+            backgroundColor: theme.card,
+            ...commonStyles.shadowSmall,
+          },
+        ]}>
+        <Text style={[styles.sectionTitle, {color: theme.text, marginBottom: 15}]}>
           {t('profile.account')}
         </Text>
 
         <TouchableOpacity
-          style={[styles.actionButton, {backgroundColor: theme.card}]}
+          style={[
+            styles.actionButton,
+            {backgroundColor: theme.background, borderColor: theme.border},
+          ]}
           onPress={handleLogout}>
-          <Icon name="log-out-outline" size={20} color="#ff4444" />
-          <Text style={[styles.actionButtonText, {color: '#ff4444'}]}>
+          <Icon name="log-out-outline" size={20} color={theme.primary} />
+          <Text style={[styles.actionButtonText, {color: theme.primary}]}>
             {t('auth.logout')}
           </Text>
         </TouchableOpacity>
@@ -1329,15 +893,18 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    borderRadius: 12,
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -1378,7 +945,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   section: {
-    marginBottom: 30,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1407,15 +976,19 @@ const styles = StyleSheet.create({
     marginLeft: 28,
   },
   input: {
-    height: 40,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     fontSize: 16,
-    marginLeft: 28,
+    marginLeft: 0,
   },
   addressInput: {
     marginBottom: 8,
+    minHeight: 72,
+    height: undefined,
+    paddingVertical: 10,
+    textAlignVertical: 'top',
   },
   addressInputHalf: {
     flex: 1,
@@ -1424,7 +997,7 @@ const styles = StyleSheet.create({
   addressRow: {
     flexDirection: 'row',
     marginBottom: 8,
-    marginLeft: 28,
+    marginLeft: 0,
   },
   pickerContainer: {
     height: 40,
@@ -1502,7 +1075,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderRadius: 10,
-    marginBottom: 10,
+    marginBottom: 0,
+    borderWidth: 1,
   },
   actionButtonText: {
     fontSize: 16,
@@ -1525,17 +1099,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     marginLeft: 28,
-  },
-  verifyEmailButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginLeft: 28,
-    paddingVertical: 4,
-  },
-  verifyEmailText: {
-    fontSize: 14,
-    marginLeft: 4,
   },
   verifyLink: {
     fontSize: 14,

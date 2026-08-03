@@ -10,6 +10,7 @@ react {
 
 def enableProguardInReleaseBuilds = true
 def jscFlavor = 'org.webkit:android-jsc:+'
+def flipperVersion = findProperty("FLIPPER_VERSION") ?: "0.273.0"
 
 // Read Google Maps API key from .env file
 def getGoogleMapsApiKey = { ->
@@ -132,6 +133,12 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Flipper (debug only) — registers the app with Flipper Desktop
+    debugImplementation("com.facebook.flipper:flipper:${flipperVersion}") {
+        exclude group: 'com.facebook.fbjni'
+    }
+    debugImplementation "com.facebook.flipper:flipper-network-plugin:${flipperVersion}"
     
     // Explicitly include react-native-maps (autolinking should handle this, but ensuring it's included)
     implementation project(':react-native-maps')
@@ -144,5 +151,5 @@ afterEvaluate {
     }
 }
 
-// Apply Google Services plugin for Firebase
-apply plugin: 'com.google.gms.google-services'
+// Google Services / Firebase removed — app uses MongoDB + JWT only
+// apply plugin: 'com.google.gms.google-services'

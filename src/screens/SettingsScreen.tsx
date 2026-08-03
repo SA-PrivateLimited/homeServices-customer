@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,42 @@ import {
   Image,
   Linking,
   Modal,
+  TextInput,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Pressable,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {Select} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
-import authService from '../services/authService';
-import auth from '@react-native-firebase/auth';
+import {logoutCustomer} from '../services/session';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
+import ServiceAddressFields, {
+  type ServiceAddressValue,
+} from '../components/ServiceAddressFields';
+import {updateUserProfile} from '../services/authService';
 import useTranslation from '../hooks/useTranslation';
+
+const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);
 
 interface SettingsScreenProps {
   navigation: any;
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
-  const {isDarkMode, toggleTheme, currentUser, setCurrentUser, language, setLanguage} = useStore();
+  const {
+    isDarkMode,
+    toggleTheme,
+    currentUser,
+    setCurrentUser,
+    language,
+    setLanguage,
+  } = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
@@ -44,14 +62,85 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const [showHelpSupportModal, setShowHelpSupportModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [sidebarX] = useState(() => new Animated.Value(DRAWER_WIDTH));
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [name, setName] = useState(currentUser?.name || '');
+  const [gender, setGender] = useState(currentUser?.gender || '');
+  const [serviceAddress, setServiceAddress] = useState<ServiceAddressValue>({
+    address: currentUser?.homeAddress?.address || '',
+    landmark: (currentUser?.homeAddress as any)?.landmark || '',
+    city:
+      currentUser?.homeAddress?.city ||
+      (currentUser?.homeAddress as any)?.district ||
+      '',
+    district:
+      (currentUser?.homeAddress as any)?.district ||
+      currentUser?.homeAddress?.city ||
+      '',
+    state: currentUser?.homeAddress?.state || '',
+    stateId: (currentUser?.homeAddress as any)?.stateId || '',
+    districtId: (currentUser?.homeAddress as any)?.districtId || '',
+    pincode: currentUser?.homeAddress?.pincode || '',
+  });
+
+  const genderOptions = [
+    t('profile.male'),
+    t('profile.female'),
+    t('profile.other'),
+  ];
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setName(currentUser.name || '');
+    setGender(currentUser.gender || '');
+    setServiceAddress({
+      address: currentUser.homeAddress?.address || '',
+      landmark: (currentUser.homeAddress as any)?.landmark || '',
+      city:
+        currentUser.homeAddress?.city ||
+        (currentUser.homeAddress as any)?.district ||
+        '',
+      district:
+        (currentUser.homeAddress as any)?.district ||
+        currentUser.homeAddress?.city ||
+        '',
+      state: currentUser.homeAddress?.state || '',
+      stateId: (currentUser.homeAddress as any)?.stateId || '',
+      districtId: (currentUser.homeAddress as any)?.districtId || '',
+      pincode: currentUser.homeAddress?.pincode || '',
+    });
+  }, [currentUser]);
+
+  const openSidebar = () => {
+    setShowSidebar(true);
+    Animated.timing(sidebarX, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeSidebar = () => {
+    Animated.timing(sidebarX, {
+      toValue: DRAWER_WIDTH,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(({finished}) => {
+      if (finished) setShowSidebar(false);
+    });
+  };
 
   const handleHelpSupport = () => {
+    closeSidebar();
     setShowHelpSupportModal(true);
   };
 
   const handleEmailSupport = () => {
-    const email = 'support@sa-privatelimited.com';
-    Linking.openURL(`mailto:${email}`).catch(() => {
+    Linking.openURL('mailto:support@sa-privatelimited.com').catch(() => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -62,8 +151,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const handleCallSupport = () => {
-    const phoneNumber = '+918210900726';
-    Linking.openURL(`tel:${phoneNumber}`).catch(() => {
+    Linking.openURL('tel:+918210900726').catch(() => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -74,15 +162,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const handleAbout = () => {
+    closeSidebar();
     setAlertModal({
       visible: true,
       title: t('settings.aboutHomeServices'),
-      message: t('settings.aboutMessage', {version: '1.0.0', copyright: COPYRIGHT_OWNER || 'SA-PrivateLimited'}),
+      message: t('settings.aboutMessage', {
+        version: '1.0.0',
+        copyright: COPYRIGHT_OWNER || 'SA-PrivateLimited',
+      }),
       type: 'info',
     });
   };
 
   const handlePrivacy = () => {
+    closeSidebar();
     setAlertModal({
       visible: true,
       title: t('settings.privacyPolicy'),
@@ -92,6 +185,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const handleTerms = () => {
+    closeSidebar();
     setAlertModal({
       visible: true,
       title: t('settings.termsOfService'),
@@ -100,32 +194,75 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     });
   };
 
-  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
-
-  const handleLogout = () => {
-    setShowLogoutModal(true);
-  };
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleConfirmLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     setShowLogoutModal(false);
     try {
-      await authService.logout();
-      setCurrentUser(null);
-      // Navigate to Login screen
-      navigation.reset({
-        index: 0,
-        routes: [{name: 'Login'}],
+      await logoutCustomer();
+      await setCurrentUser(null);
+      navigation.reset({index: 0, routes: [{name: 'Main'}]});
+    } catch {
+      try {
+        await setCurrentUser(null);
+      } catch {
+        // ignore
+      }
+      navigation.reset({index: 0, routes: [{name: 'Main'}]});
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!currentUser) return;
+    if (!name.trim()) {
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('profile.pleaseEnterName'),
+        type: 'error',
       });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const userId = currentUser.id || currentUser._id || '';
+      const homeAddress =
+        serviceAddress.address || serviceAddress.pincode
+          ? {
+              address: serviceAddress.address || '',
+              landmark: serviceAddress.landmark || '',
+              city: serviceAddress.district || serviceAddress.city || '',
+              district: serviceAddress.district || serviceAddress.city || '',
+              state: serviceAddress.state || '',
+              stateId: serviceAddress.stateId || '',
+              districtId: serviceAddress.districtId || '',
+              pincode: serviceAddress.pincode || '',
+            }
+          : null;
+      const updatedUser = await updateUserProfile(userId, {
+        name: name.trim(),
+        gender: gender || undefined,
+        homeAddress,
+      });
+      await setCurrentUser(updatedUser);
+      setIsEditing(false);
+      setSuccessMessage(t('profile.profileUpdated') || 'Profile updated');
+      setShowSuccessModal(true);
     } catch (error: any) {
       setAlertModal({
         visible: true,
         title: t('common.error'),
-        message: error.message,
+        message: error.message || 'Failed to update profile',
         type: 'error',
       });
+    } finally {
+      setSavingProfile(false);
     }
   };
-
 
   const SettingItem = ({
     icon,
@@ -147,285 +284,375 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
       <View style={styles.settingLeft}>
         <Icon name={icon} size={22} color={theme.primary} />
         <View style={styles.settingText}>
-          <Text style={[styles.settingTitle, {color: theme.text}]}>
-            {title}
-          </Text>
-          {subtitle && (
+          <Text style={[styles.settingTitle, {color: theme.text}]}>{title}</Text>
+          {subtitle ? (
             <Text style={[styles.settingSubtitle, {color: theme.textSecondary}]}>
               {subtitle}
             </Text>
-          )}
+          ) : null}
         </View>
       </View>
-      {rightComponent || (
-        onPress && <Icon name="chevron-forward" size={20} color={theme.textSecondary} />
-      )}
+      {rightComponent ||
+        (onPress ? (
+          <Icon name="chevron-forward" size={20} color={theme.textSecondary} />
+        ) : null)}
     </TouchableOpacity>
   );
 
-  const getInitials = (name: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
+  const getInitials = (n: string) => {
+    if (!n) return 'U';
+    const parts = n.trim().split(' ');
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
-    return name.charAt(0).toUpperCase();
+    return n.charAt(0).toUpperCase();
   };
 
-  const [imageError, setImageError] = React.useState(false);
+  const [imageError, setImageError] = useState(false);
+  const phoneDisplay =
+    currentUser?.phone || currentUser?.phoneNumber || t('profile.notAvailable');
+
+  const formatAddr = (a: ServiceAddressValue) =>
+    [a.address, a.landmark, a.district || a.city, a.state, a.pincode]
+      .filter(Boolean)
+      .join(', ');
 
   return (
-    <ScrollView
-      style={[styles.container, {backgroundColor: theme.background}]}
-      contentContainerStyle={styles.content}>
-      {/* Profile Header - Similar to Doctor Profile */}
-      {currentUser && (
-        <TouchableOpacity 
-          style={[styles.profileHeader, {backgroundColor: theme.card}]}
-          onPress={() => {
-            // Navigate to Profile screen
-            navigation.navigate('Profile');
-          }}
-          activeOpacity={0.7}>
-          {(() => {
-            const imageUrl = (currentUser.profileImage || '').trim();
-            const hasValidImage = imageUrl !== '' && !imageError && 
-              (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || 
-               imageUrl.startsWith('file://') || imageUrl.startsWith('content://'));
-            
-            if (hasValidImage) {
-              return (
-                <Image
-                  source={{uri: imageUrl}}
-                  style={styles.profileHeaderImage}
-                  onError={() => setImageError(true)}
-                  resizeMode="cover"
-                />
-              );
-            }
-            
-            return (
-              <View style={[styles.profileHeaderImage, styles.profileHeaderImagePlaceholder, {backgroundColor: theme.primary}]}>
-                {currentUser.name && currentUser.name.trim() !== '' ? (
-                  <Text style={styles.profileHeaderInitials}>
-                    {getInitials(currentUser.name)}
-                  </Text>
-                ) : (
-                  <Icon name="person" size={50} color="#fff" />
-                )}
-              </View>
-            );
-          })()}
-          <Text style={[styles.profileHeaderName, {color: theme.text}]}>
-            {currentUser.name}
-          </Text>
-          <Text style={[styles.profileHeaderEmail, {color: theme.textSecondary}]}>
-            Email: {currentUser.email || auth().currentUser?.email || 'Not available'}
-          </Text>
-          {currentUser.phone && (
-            <Text style={[styles.profileHeaderPhone, {color: theme.textSecondary}]}>
-              {t('settings.phone')}: {currentUser.phone}
-            </Text>
-          )}
-          {(() => {
-            const address = currentUser.homeAddress?.address || currentUser.officeAddress?.address;
-            const city = currentUser.homeAddress?.city || currentUser.officeAddress?.city;
-            const state = currentUser.homeAddress?.state || currentUser.officeAddress?.state;
-            const pincode = currentUser.homeAddress?.pincode || currentUser.officeAddress?.pincode;
-            
-            if (address || city || state || pincode) {
-              const addressParts = [];
-              if (address) addressParts.push(address);
-              if (city) addressParts.push(city);
-              if (state) addressParts.push(state);
-              if (pincode) addressParts.push(pincode);
-              
-              return (
-                <Text style={[styles.profileHeaderAddress, {color: theme.textSecondary}]}>
-                  {addressParts.join(', ')}
-                </Text>
-              );
-            }
-            return null;
-          })()}
+    <View style={[styles.root, {backgroundColor: theme.background}]}>
+      <View
+        style={[
+          styles.topBar,
+          {backgroundColor: theme.card, borderBottomColor: theme.border},
+        ]}>
+        <Text style={[styles.topBarTitle, {color: theme.text}]}>
+          {t('settings.title') || 'Settings'}
+        </Text>
+        <TouchableOpacity onPress={openSidebar} style={styles.menuBtn}>
+          <Icon name="menu" size={26} color={theme.text} />
         </TouchableOpacity>
-      )}
+      </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          ACCOUNT
-        </Text>
-        {currentUser && (
-          <SettingItem
-            icon="person-circle"
-            title={t('settings.profile')}
-            subtitle={currentUser.name}
-            onPress={() => {
-              // Navigate to Profile screen
-              navigation.navigate('Profile');
-            }}
-          />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {!currentUser ? (
+          <TouchableOpacity
+            style={[styles.profileHeader, {backgroundColor: theme.card}]}
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}>
+            <View
+              style={[
+                styles.profileHeaderImage,
+                styles.profileHeaderImagePlaceholder,
+                {backgroundColor: theme.primary},
+              ]}>
+              <Icon name="person" size={50} color="#fff" />
+            </View>
+            <Text style={[styles.profileHeaderName, {color: theme.text}]}>
+              {t('auth.continueAsGuest')}
+            </Text>
+            <Text style={[styles.profileHeaderPhone, {color: theme.primary}]}>
+              {t('auth.loginWithMobile')}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.profileHeader, {backgroundColor: theme.card}]}>
+            {(() => {
+              const imageUrl = (currentUser.profileImage || '').trim();
+              const hasValidImage =
+                imageUrl !== '' &&
+                !imageError &&
+                (imageUrl.startsWith('http') ||
+                  imageUrl.startsWith('file://') ||
+                  imageUrl.startsWith('content://'));
+              if (hasValidImage) {
+                return (
+                  <Image
+                    source={{uri: imageUrl}}
+                    style={styles.profileHeaderImage}
+                    onError={() => setImageError(true)}
+                    resizeMode="cover"
+                  />
+                );
+              }
+              return (
+                <View
+                  style={[
+                    styles.profileHeaderImage,
+                    styles.profileHeaderImagePlaceholder,
+                    {backgroundColor: theme.primary},
+                  ]}>
+                  <Text style={styles.profileHeaderInitials}>
+                    {getInitials(currentUser.name || '')}
+                  </Text>
+                </View>
+              );
+            })()}
+            <Text style={[styles.profileHeaderName, {color: theme.text}]}>
+              {currentUser.name}
+            </Text>
+            <Text style={[styles.profileHeaderPhone, {color: theme.primary}]}>
+              {phoneDisplay}
+            </Text>
+          </View>
         )}
-        <SettingItem
-          icon="log-out-outline"
-          title={t('auth.logout')}
-          subtitle={t('auth.logout')}
-          onPress={handleLogout}
-        />
-      </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          {t('settings.theme').toUpperCase()}
-        </Text>
-        <SettingItem
-          icon="moon"
-          title={t('settings.darkMode')}
-          subtitle={isDarkMode ? t('settings.darkMode') : t('settings.lightMode')}
-          rightComponent={
-            <Switch
-              value={isDarkMode}
-              onValueChange={toggleTheme}
-              trackColor={{false: theme.border, true: theme.primary}}
-              thumbColor="#FFFFFF"
-            />
-          }
-        />
-        <SettingItem
-          icon="language"
-          title={t('settings.language')}
-          subtitle={language === 'en' ? t('settings.english') : t('settings.hindi')}
-          onPress={async () => {
-            const newLanguage = language === 'en' ? 'hi' : 'en';
-            await setLanguage(newLanguage);
-            setSuccessMessage(t('settings.languageChanged'));
-            setShowSuccessModal(true);
-          }}
-        />
-      </View>
+        {currentUser ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitleInline, {color: theme.textSecondary}]}>
+                {(t('profile.personalInformation') || 'PERSONAL INFORMATION').toUpperCase()}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (isEditing) void handleSaveProfile();
+                  else setIsEditing(true);
+                }}
+                style={styles.editBtn}
+                disabled={savingProfile}>
+                {savingProfile ? (
+                  <ActivityIndicator size="small" color={theme.primary} />
+                ) : (
+                  <Icon
+                    name={isEditing ? 'checkmark' : 'create-outline'}
+                    size={22}
+                    color={theme.primary}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          {t('settings.support')}
-        </Text>
-        <SettingItem
-          icon="person-add"
-          title={t('recommendations.shareContact')}
-          subtitle={t('recommendations.shareContactSubtitle')}
-          onPress={() => navigation.navigate('ShareContactRecommendation')}
-        />
-        <SettingItem
-          icon="help-circle"
-          title={t('settings.helpSupport')}
-          subtitle={t('settings.contactUsForAssistance')}
-          onPress={handleHelpSupport}
-        />
-      
-      </View>
+            <View style={[styles.infoCard, {backgroundColor: theme.card}]}>
+              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
+                {t('profile.fullName') || 'Full Name'}
+              </Text>
+              {isEditing ? (
+                <TextInput
+                  style={[
+                    styles.fieldInput,
+                    {color: theme.text, borderColor: theme.border},
+                  ]}
+                  value={name}
+                  onChangeText={setName}
+                />
+              ) : (
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {name || '—'}
+                </Text>
+              )}
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-          {t('settings.information')}
-        </Text>
-        <SettingItem
-          icon="information-circle"
-          title={t('settings.about')}
-          subtitle={t('settings.appVersionAndInfo')}
-          onPress={handleAbout}
-        />
-        <SettingItem
-          icon="shield-checkmark"
-          title={t('settings.privacyPolicy')}
-          onPress={handlePrivacy}
-        />
-        <SettingItem
-          icon="document-text"
-          title={t('settings.termsOfService')}
-          onPress={handleTerms}
-        />
-      </View>
+              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
+                {t('profile.primaryPhone') || 'Primary Phone'}
+              </Text>
+              <View style={styles.lockedRow}>
+                <Text style={[styles.fieldValue, {color: theme.text, flex: 1}]}>
+                  {phoneDisplay}
+                </Text>
+                <Icon name="lock-closed" size={16} color={theme.textSecondary} />
+              </View>
+              <Text style={styles.verifiedHint}>
+                {t('profile.verifiedCannotChange') ||
+                  'Verified (Cannot be changed)'}
+              </Text>
 
-      <View style={styles.footer}>
-        <Icon name="construct" size={32} color={theme.primary} />
-        <Text style={[styles.appName, {color: theme.text}]}>HomeServices</Text>
-        <Text style={[styles.version, {color: theme.textSecondary}]}>
-          Version 1.0.0
-        </Text>
-        <Text style={[styles.copyright, {color: theme.textSecondary}]}>
-          © 2025 {COPYRIGHT_OWNER || 'SA-PrivateLimited'}
-        </Text>
-        <Text style={[styles.copyright, {color: theme.textSecondary}]}>
-          {t('settings.allRightsReserved')}
-        </Text>
-        <View style={styles.disclaimer}>
-          <Icon name="alert-circle-outline" size={16} color={theme.textSecondary} />
-          <Text style={[styles.disclaimerText, {color: theme.textSecondary}]}>
-            {t('settings.disclaimer')}
+              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
+                {t('profile.gender') || 'Gender'}
+              </Text>
+              {isEditing ? (
+                <Select
+                  options={genderOptions.map((o) => ({value: o, label: o}))}
+                  value={gender}
+                  placeholder={t('profile.selectGender') || 'Select gender'}
+                  onChange={setGender}
+                />
+              ) : (
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {gender || '—'}
+                </Text>
+              )}
+
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  {color: theme.textSecondary, marginTop: 12},
+                ]}>
+                {t('profile.serviceAddress') || 'Service Address'}
+              </Text>
+              {isEditing ? (
+                <ServiceAddressFields
+                  value={serviceAddress}
+                  onChange={setServiceAddress}
+                  theme={theme}
+                  editable
+                />
+              ) : (
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {formatAddr(serviceAddress) || '—'}
+                </Text>
+              )}
+
+              {isEditing ? (
+                <View style={styles.editActions}>
+                  <TouchableOpacity
+                    style={[styles.cancelBtn, {borderColor: theme.border}]}
+                    onPress={() => setIsEditing(false)}>
+                    <Text style={{color: theme.text}}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, {backgroundColor: theme.primary}]}
+                    onPress={() => void handleSaveProfile()}
+                    disabled={savingProfile}>
+                    <Text style={{color: '#fff', fontWeight: '600'}}>
+                      {t('common.save')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
+            ACCOUNT
           </Text>
+          {currentUser ? (
+            <SettingItem
+              icon="log-out-outline"
+              title={t('auth.logout')}
+              subtitle={t('settings.logoutSubtitle')}
+              onPress={() => setShowLogoutModal(true)}
+            />
+          ) : (
+            <SettingItem
+              icon="log-in-outline"
+              title={t('auth.login')}
+              subtitle={t('auth.loginWithPinLead')}
+              onPress={() => navigation.navigate('Login')}
+            />
+          )}
         </View>
-      </View>
-      
+      </ScrollView>
+
+      {showSidebar ? (
+        <View style={styles.sidebarRoot} pointerEvents="box-none">
+          <Pressable style={styles.sidebarBackdrop} onPress={closeSidebar} />
+          <Animated.View
+            style={[
+              styles.sidebar,
+              {
+                backgroundColor: theme.card,
+                transform: [{translateX: sidebarX}],
+              },
+            ]}>
+            <View style={styles.sidebarHeader}>
+              <Text style={[styles.sidebarTitle, {color: theme.text}]}>
+                {t('settings.menu') || 'Menu'}
+              </Text>
+              <TouchableOpacity onPress={closeSidebar}>
+                <Icon name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              <Text style={[styles.sidebarSection, {color: theme.textSecondary}]}>
+                {t('settings.theme').toUpperCase()}
+              </Text>
+              <SettingItem
+                icon="moon"
+                title={t('settings.darkMode')}
+                rightComponent={
+                  <Switch
+                    value={isDarkMode}
+                    onValueChange={toggleTheme}
+                    trackColor={{false: theme.border, true: theme.primary}}
+                    thumbColor="#FFFFFF"
+                  />
+                }
+              />
+              <SettingItem
+                icon="language"
+                title={t('settings.language')}
+                subtitle={
+                  language === 'en' ? t('settings.english') : t('settings.hindi')
+                }
+                onPress={async () => {
+                  await setLanguage(language === 'en' ? 'hi' : 'en');
+                  setSuccessMessage(t('settings.languageChanged'));
+                  setShowSuccessModal(true);
+                }}
+              />
+              <Text style={[styles.sidebarSection, {color: theme.textSecondary}]}>
+                {t('settings.support')}
+              </Text>
+              <SettingItem
+                icon="person-add"
+                title={t('recommendations.shareContact')}
+                onPress={() => {
+                  closeSidebar();
+                  navigation.navigate('ShareContactRecommendation');
+                }}
+              />
+              <SettingItem
+                icon="help-circle"
+                title={t('settings.helpSupport')}
+                onPress={handleHelpSupport}
+              />
+              <Text style={[styles.sidebarSection, {color: theme.textSecondary}]}>
+                {t('settings.information')}
+              </Text>
+              <SettingItem
+                icon="information-circle"
+                title={t('settings.about')}
+                onPress={handleAbout}
+              />
+              <SettingItem
+                icon="shield-checkmark"
+                title={t('settings.privacyPolicy')}
+                onPress={handlePrivacy}
+              />
+              <SettingItem
+                icon="document-text"
+                title={t('settings.termsOfService')}
+                onPress={handleTerms}
+              />
+            </ScrollView>
+          </Animated.View>
+        </View>
+      ) : null}
+
       <LogoutConfirmationModal
         visible={showLogoutModal}
         onConfirm={handleConfirmLogout}
         onCancel={() => setShowLogoutModal(false)}
       />
 
-      {/* Help & Support Modal */}
       <Modal
         visible={showHelpSupportModal}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setShowHelpSupportModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>{t('settings.helpSupport')}</Text>
-              <TouchableOpacity
-                onPress={() => setShowHelpSupportModal(false)}
-                style={styles.modalCloseButton}>
+              <Text style={[styles.modalTitle, {color: theme.text}]}>
+                {t('settings.helpSupport')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowHelpSupportModal(false)}>
                 <Icon name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
-            
-            <View style={styles.supportInfo}>
-              <View style={styles.supportItem}>
-                <Icon name="mail-outline" size={24} color={theme.primary} />
-                <View style={styles.supportDetails}>
-                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>{t('settings.email')}</Text>
-                  <Text style={[styles.supportValue, {color: theme.text}]}>support@sa-privatelimited.com</Text>
-                </View>
-              </View>
-              
-              <View style={styles.supportItem}>
-                <Icon name="call-outline" size={24} color={theme.primary} />
-                <View style={styles.supportDetails}>
-                  <Text style={[styles.supportLabel, {color: theme.textSecondary}]}>{t('settings.phone')}</Text>
-                  <Text style={[styles.supportValue, {color: theme.text}]}>+91 8210900726</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, {backgroundColor: theme.primary}]}
-                onPress={handleEmailSupport}>
-                <Icon name="mail" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>{t('settings.emailUs')}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.actionButton, styles.callButton, {backgroundColor: '#4CAF50'}]}
-                onPress={handleCallSupport}>
-                <Icon name="call" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>{t('settings.callUs')}</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.actionButton, {backgroundColor: theme.primary}]}
+              onPress={handleEmailSupport}>
+              <Text style={styles.actionButtonText}>{t('settings.emailUs')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, {backgroundColor: '#4CAF50'}]}
+              onPress={handleCallSupport}>
+              <Text style={styles.actionButtonText}>{t('settings.callUs')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -433,27 +660,37 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         type={alertModal.type}
         onClose={() => setAlertModal({...alertModal, visible: false})}
       />
-
-      {/* Success Modal */}
       <SuccessModal
         visible={showSuccessModal}
         title="Success"
         message={successMessage}
         onClose={() => setShowSuccessModal(false)}
       />
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  root: {flex: 1},
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  content: {
-    paddingVertical: 20,
-  },
-  section: {
-    marginBottom: 24,
+  topBarTitle: {fontSize: 18, fontWeight: '700'},
+  menuBtn: {padding: 4},
+  container: {flex: 1},
+  content: {paddingVertical: 16},
+  section: {marginBottom: 20},
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 12,
@@ -462,175 +699,124 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 8,
   },
+  sectionTitleInline: {fontSize: 12, fontWeight: '600', letterSpacing: 1},
+  editBtn: {padding: 4},
+  infoCard: {
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 16,
+    ...commonStyles.shadowSmall,
+  },
+  fieldLabel: {fontSize: 12, fontWeight: '600', marginTop: 10, marginBottom: 4},
+  fieldValue: {fontSize: 15, lineHeight: 22},
+  fieldInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  lockedRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  verifiedHint: {fontSize: 12, marginTop: 2, color: '#2F855A'},
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  saveBtn: {borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10},
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    ...commonStyles.shadowSmall,
-    marginHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 12,
     marginVertical: 4,
     borderRadius: 12,
+    ...commonStyles.shadowSmall,
   },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  settingSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 12,
-  },
-  version: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  copyright: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  disclaimer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingHorizontal: 20,
-  },
-  disclaimerText: {
-    flex: 1,
-    fontSize: 11,
-    marginLeft: 8,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
+  settingLeft: {flexDirection: 'row', alignItems: 'center', flex: 1},
+  settingText: {marginLeft: 12, flex: 1},
+  settingTitle: {fontSize: 15, fontWeight: '500'},
+  settingSubtitle: {fontSize: 12, marginTop: 2},
   profileHeader: {
     alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    marginBottom: 24,
+    paddingVertical: 24,
+    marginBottom: 16,
     marginHorizontal: 20,
     borderRadius: 12,
     ...commonStyles.shadowSmall,
   },
   profileHeaderImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: 12,
   },
   profileHeaderImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profileHeaderInitials: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#fff',
+  profileHeaderInitials: {fontSize: 36, fontWeight: 'bold', color: '#fff'},
+  profileHeaderName: {fontSize: 22, fontWeight: 'bold', marginBottom: 4},
+  profileHeaderPhone: {fontSize: 14, marginTop: 4},
+  sidebarRoot: {...StyleSheet.absoluteFillObject, zIndex: 40},
+  sidebarBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  profileHeaderName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  sidebar: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: DRAWER_WIDTH,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
-  profileHeaderEmail: {
-    fontSize: 14,
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  profileHeaderPhone: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  profileHeaderAddress: {
-    fontSize: 12,
-    marginTop: 4,
+  sidebarTitle: {fontSize: 18, fontWeight: '700'},
+  sidebarSection: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    paddingHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 6,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
-    padding: 20,
-    ...commonStyles.shadowLarge,
-  },
+  modalContent: {borderRadius: 16, padding: 20, gap: 10},
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  supportInfo: {
-    marginBottom: 24,
-  },
-  supportItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  supportDetails: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  supportLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  supportValue: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
+  modalTitle: {fontSize: 18, fontWeight: '700'},
   actionButton: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  callButton: {
-    marginLeft: 0,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  actionButtonText: {color: '#fff', fontWeight: '600'},
 });
 
 export default SettingsScreen;

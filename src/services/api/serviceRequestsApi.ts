@@ -21,7 +21,7 @@ export interface ServiceRequest {
   };
   serviceType: string;
   problem?: string;
-  status: 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled' | 'rejected';
   urgency?: 'immediate' | 'scheduled';
   scheduledTime?: string | Date;
   providerId?: string;
@@ -36,6 +36,8 @@ export interface ServiceRequest {
   questionnaireAnswers?: any;
   photos?: string[];
   cancellationReason?: string;
+  rejectionReason?: string;
+  rejectedAt?: string | Date;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

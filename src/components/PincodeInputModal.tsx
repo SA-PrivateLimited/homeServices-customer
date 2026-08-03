@@ -12,9 +12,9 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import GeolocationService from '../services/geolocationService';
+import {usersApi} from '../services/api/usersApi';
+import {getStoredJwt} from '../services/session';
 
 interface PincodeInputModalProps {
   visible: boolean;
@@ -43,37 +43,27 @@ const PincodeInputModal: React.FC<PincodeInputModalProps> = ({
     if (visible && currentUser) {
       const loadUserLocation = async () => {
         try {
-          const userDoc = await firestore()
-            .collection('users')
-            .doc(currentUser.id)
-            .get();
-          
-          if (userDoc.exists) {
-            const userData = userDoc.data();
-            const location = userData?.location;
-            
-            if (location?.pincode) {
-              setPincode(location.pincode);
-              
-              // Build address from location data
-              if (location.address) {
-                setAddress(location.address);
-              } else if (location.city || location.state) {
-                const addressParts = [];
-                if (location.city) addressParts.push(location.city);
-                if (location.state) addressParts.push(location.state);
-                if (location.pincode) addressParts.push(location.pincode);
-                setAddress(addressParts.join(', '));
-              }
+          const location =
+            currentUser.location || (await usersApi.getMe())?.location;
+          if (location?.pincode) {
+            setPincode(location.pincode);
+            if (location.address) {
+              setAddress(location.address);
+            } else if (location.city || location.state) {
+              const addressParts = [];
+              if (location.city) addressParts.push(location.city);
+              if (location.state) addressParts.push(location.state);
+              if (location.pincode) addressParts.push(location.pincode);
+              setAddress(addressParts.join(', '));
             }
           }
-        } catch (error) {
+        } catch {
+          // ignore
         }
       };
-      
+
       loadUserLocation();
     } else if (!visible) {
-      // Reset when modal closes
       setPincode('');
       setAddress('');
     }
@@ -116,61 +106,46 @@ const PincodeInputModal: React.FC<PincodeInputModalProps> = ({
       return;
     }
 
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
+    if (!(await getStoredJwt())) {
       Alert.alert('Error', 'Please login to save your pincode');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Get address data if available
-      let addressData: any = {
+      const addressData: any = {
         pincode: pincode.trim(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
-      // Try to fetch address if not already set
       if (!address) {
-        const geocodeData = await GeolocationService.geocodePincode(pincode.trim());
+        const geocodeData = await GeolocationService.geocodePincode(
+          pincode.trim(),
+        );
         if (geocodeData.address) {
           addressData.address = geocodeData.address;
           addressData.city = geocodeData.city;
           addressData.state = geocodeData.state;
           addressData.country = geocodeData.country;
           if (geocodeData.latitude) addressData.latitude = geocodeData.latitude;
-          if (geocodeData.longitude) addressData.longitude = geocodeData.longitude;
+          if (geocodeData.longitude)
+            addressData.longitude = geocodeData.longitude;
         }
       } else {
-        // Use existing address if available
-        const userDoc = await firestore()
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-        const userData = userDoc.data();
-        const location = userData?.location;
+        const me = await usersApi.getMe();
+        const location = me?.location || currentUser?.location;
         if (location) {
           if (location.address) addressData.address = location.address;
           if (location.city) addressData.city = location.city;
           if (location.state) addressData.state = location.state;
-          if (location.country) addressData.country = location.country;
           if (location.latitude) addressData.latitude = location.latitude;
           if (location.longitude) addressData.longitude = location.longitude;
+        } else {
+          addressData.address = address;
         }
       }
 
-      // Save pincode and address to user profile
-      await firestore()
-        .collection('users')
-        .doc(currentUser.uid)
-        .set(
-          {
-            location: addressData,
-          },
-          {merge: true},
-        );
+      await usersApi.updateMe({location: addressData});
 
-      // Notify parent component (PincodeHeader) to show success modal
       onSuccess(pincode.trim());
       setPincode('');
       setAddress('');

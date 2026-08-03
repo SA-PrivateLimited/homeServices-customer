@@ -52,9 +52,6 @@ try {
   Marker = null;
   Polyline = null;
 }
-import database from '@react-native-firebase/database';
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason, getJobCardById} from '../services/jobCardService';
@@ -69,6 +66,7 @@ import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import {providersApi, Provider} from '../services/api/providersApi';
 import WebSocketService from '../services/websocketService';
 import useTranslation from '../hooks/useTranslation';
+import {getUserId} from '../services/session';
 
 interface ActiveServiceScreenProps {
   navigation: any;
@@ -85,13 +83,16 @@ export default function ActiveServiceScreen({
   route,
 }: ActiveServiceScreenProps) {
   const {serviceRequestId, jobCardId} = route.params;
-  const {isDarkMode} = useStore();
+  const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
-  const currentUser = auth().currentUser;
   const {t} = useTranslation();
 
   const [serviceRequest, setServiceRequest] = useState<any>(null);
   const [jobCard, setJobCard] = useState<any>(null);
+  const customerUserId =
+    getUserId(currentUser) ||
+    (serviceRequest?.customerId ? String(serviceRequest.customerId) : '') ||
+    '';
   const [providerLocation, setProviderLocation] = useState<any>(null);
   const [providerProfile, setProviderProfile] = useState<any>(null);
   const [status, setStatus] = useState<string>('pending');
@@ -222,9 +223,9 @@ export default function ActiveServiceScreen({
     loadServiceData();
     
     // Connect to WebSocket and join customer room
-    if (currentUser?.uid) {
+    if (customerUserId) {
       console.log('🔌 [CUSTOMER] Initializing WebSocket connection for customer:', {
-        userId: currentUser.uid,
+        userId: customerUserId,
         serviceRequestId,
         jobCardId,
         timestamp: new Date().toISOString(),
@@ -301,7 +302,7 @@ export default function ActiveServiceScreen({
         
         if (isConnected && socket?.connected) {
           console.log('✅ [CUSTOMER] WebSocket connected, joining customer room');
-          WebSocketService.joinCustomerRoom(currentUser.uid);
+          WebSocketService.joinCustomerRoom(customerUserId);
         } else if (retryCount < maxRetries) {
           console.log(`⏳ [CUSTOMER] WebSocket not connected yet, retrying in 1 second... (${retryCount}/${maxRetries})`);
           // Ensure connection is attempted
@@ -324,7 +325,7 @@ export default function ActiveServiceScreen({
       if (socket) {
         socket.once('connect', () => {
           console.log('✅ [CUSTOMER] WebSocket connected event received, joining customer room');
-          WebSocketService.joinCustomerRoom(currentUser.uid);
+          WebSocketService.joinCustomerRoom(customerUserId);
         });
       } else {
         // Socket doesn't exist yet - connect() will create it
@@ -336,10 +337,9 @@ export default function ActiveServiceScreen({
         clearTimeout(connectTimeout);
         unsubscribe();
       };
-    } else {
-      console.warn('⚠️ [CUSTOMER] Cannot initialize WebSocket - no currentUser.uid');
     }
-  }, [serviceRequestId, jobCardId, currentUser?.uid]);
+    // Wait until we have a customer id (from session or loaded service request)
+  }, [serviceRequestId, jobCardId, customerUserId]);
   
   // Update customer location periodically for immediate services
   useEffect(() => {
@@ -356,7 +356,7 @@ export default function ActiveServiceScreen({
     return () => clearInterval(locationInterval);
   }, [isImmediateService]);
 
-  // Poll for service request updates to detect when provider accepts
+  // Poll for service request updates to detect when provider accepts / rejects
   useEffect(() => {
     if (!serviceRequestId || !currentUser) return;
 
@@ -372,6 +372,14 @@ export default function ActiveServiceScreen({
           if (newStatus === 'accepted' && newProviderId && status !== 'accepted') {
             console.log('✅ Provider accepted, reloading service data...', newProviderId);
             loadServiceData();
+          }
+
+          if (newStatus === 'rejected' && status !== 'rejected') {
+            setServiceRequest((prev: any) => ({
+              ...(prev || {}),
+              ...request,
+              rejectionReason: (request as any).rejectionReason,
+            }));
           }
 
           setStatus(newStatus);
@@ -419,27 +427,28 @@ export default function ActiveServiceScreen({
       return () => unsubscribe();
   }, [jobCardId]);
 
-  // Subscribe to provider location updates when provider is assigned
-  // Initial fetch from backend API, then subscribe to Firebase Realtime DB for real-time updates
+  // Poll provider location from Mongo/backend API (no Firebase RTDB)
   useEffect(() => {
     const providerId = jobCard?.providerId || serviceRequest?.providerId;
-    
+
     if (!providerId) {
-      // Clear location if no provider
       setProviderLocation(null);
       return;
     }
 
-    console.log('Setting up provider location tracking for:', providerId);
-    
-    // Initial fetch from backend API (which reads from Firebase Realtime DB)
-    const fetchInitialLocation = async () => {
+    console.log('Setting up provider location polling for:', providerId);
+
+    const fetchLocation = async () => {
       try {
         const provider = await providersApi.getById(providerId);
         if (provider) {
-          // Backend returns location in currentLocation field (from Firebase Realtime DB)
-          const locationData = (provider as any).currentLocation || provider.location;
-          if (locationData && locationData.latitude && locationData.longitude) {
+          const locationData =
+            (provider as any).currentLocation || provider.location;
+          if (
+            locationData &&
+            locationData.latitude &&
+            locationData.longitude
+          ) {
             const location = {
               latitude: locationData.latitude,
               longitude: locationData.longitude,
@@ -449,43 +458,30 @@ export default function ActiveServiceScreen({
               pincode: locationData.pincode || provider.location?.pincode,
               updatedAt: locationData.updatedAt || Date.now(),
             };
-            console.log('Provider location fetched from backend API (via Firebase Realtime DB):', location);
             setProviderLocation(location);
             calculateDistanceAndETA(location);
           }
         }
       } catch (error) {
-        console.error('Error fetching initial provider location from backend API:', error);
+        console.error('Error fetching provider location from API:', error);
       }
     };
 
-    // Fetch initial location from backend
-    fetchInitialLocation();
-
-    // Subscribe to Firebase Realtime Database for real-time updates
-    // Location is stored in Firebase Realtime DB, so we subscribe directly for efficiency
-    const locationRef = database().ref(`providers/${providerId}/location`);
-    
-    const unsubscribe = locationRef.on('value', snapshot => {
-      if (snapshot.exists()) {
-        const location = snapshot.val();
-        console.log('Provider location updated from Firebase Realtime DB:', location);
-        setProviderLocation(location);
-        calculateDistanceAndETA(location);
-      } else {
-        console.log('Provider location not available in Firebase Realtime DB');
-      }
-    });
-
-    return () => {
-      console.log('Unsubscribing from provider location');
-      locationRef.off('value', unsubscribe);
-    };
+    fetchLocation();
+    const interval = setInterval(fetchLocation, 10000);
+    return () => clearInterval(interval);
   }, [jobCard?.providerId, serviceRequest?.providerId]);
 
   // Check if re-request is allowed (10 minutes after creation and status is pending)
+  // Only for open (broadcast) requests — specific-provider requests stay pending until accept/reject.
   useEffect(() => {
     const checkCanReRequest = () => {
+      // Targeted to a specific provider: do not offer re-request / auto-cancel
+      if (serviceRequest?.providerId) {
+        setCanReRequest(false);
+        return;
+      }
+
       // Only allow re-request if status is pending
       if (status !== 'pending') {
         setCanReRequest(false);
@@ -518,11 +514,17 @@ export default function ActiveServiceScreen({
     const interval = setInterval(checkCanReRequest, 60000); // Check every 60 seconds
 
     return () => clearInterval(interval);
-  }, [status, requestCreatedAt]);
+  }, [status, requestCreatedAt, serviceRequest?.providerId]);
 
-  // Fetch available providers when status is pending
+  // Fetch available providers when status is pending (open requests only)
   useEffect(() => {
     const fetchAvailableProviders = async () => {
+      // Targeted requests already have a providerId — don't list other providers
+      if (serviceRequest?.providerId) {
+        setAvailableProviders([]);
+        setLoadingProviders(false);
+        return;
+      }
       if (status === 'pending' && serviceRequest?.serviceType) {
         try {
           setLoadingProviders(true);
@@ -583,10 +585,10 @@ export default function ActiveServiceScreen({
 
       if (requestData) {
         // Verify user has permission to view this consultation
-        const userId = currentUser?.uid;
+        const userId = getUserId(currentUser);
         const customerId = requestData?.customerId;
         
-        if (userId && customerId !== userId) {
+        if (userId && customerId && customerId !== userId) {
           // Check if user is the provider
           const providerId = requestData?.providerId;
           if (providerId !== userId) {
@@ -663,8 +665,8 @@ export default function ActiveServiceScreen({
         }
       }
 
-      // Load job card if ID provided
-      if (jobCardId) {
+      // Load job card if ID provided (skip synthetic sr_* ids from pending requests)
+      if (jobCardId && !String(jobCardId).startsWith('sr_')) {
         const jobCardData = await jobCardsApi.getById(jobCardId);
 
         if (jobCardData) {
@@ -823,7 +825,7 @@ export default function ActiveServiceScreen({
         jobCardIdFromState: jobCard?.id,
         serviceRequestId,
         status,
-        currentUserId: currentUser?.uid,
+        currentUserId: getUserId(currentUser),
       });
 
       // If review was dismissed and user hasn't submitted, don't show again automatically
@@ -841,7 +843,7 @@ export default function ActiveServiceScreen({
         // Try to find jobCard by consultationId using API
         try {
           const jobCards = await jobCardsApi.getAll({
-            customerId: currentUser?.uid,
+            customerId: getUserId(currentUser) || undefined,
             limit: 10,
           });
           
@@ -946,9 +948,21 @@ export default function ActiveServiceScreen({
         return;
       }
 
-      // Create a new service request with the same data
-      const authUser = auth().currentUser;
-      if (!authUser) {
+      // Specific-provider requests must not be cancelled via re-request
+      if (serviceRequest.providerId) {
+        setAlertModalConfig({
+          title: t('common.info'),
+          message:
+            t('activeService.specificProviderNoReRequest') ||
+            'This request is waiting for the selected provider. You can cancel it, or choose another provider from Browse.',
+          type: 'info',
+        });
+        setShowAlertModal(true);
+        setLoading(false);
+        return;
+      }
+
+      if (!customerUserId) {
         setAlertModalConfig({
           title: t('common.error'),
           message: t('activeService.pleaseLoginToReRequest'),
@@ -967,14 +981,16 @@ export default function ActiveServiceScreen({
         );
       } catch (error) {
         console.warn('Could not cancel old request:', error);
-        // Continue anyway
       }
 
-      // Create new service request
       const newServiceRequestData: any = {
-        customerId: authUser.uid,
-        customerName: serviceRequest.customerName || (currentUser as any)?.name || 'Customer',
-        customerPhone: serviceRequest.customerPhone || (currentUser as any)?.phone || '',
+        customerId: customerUserId,
+        customerName: serviceRequest.customerName || currentUser?.name || 'Customer',
+        customerPhone:
+          serviceRequest.customerPhone ||
+          currentUser?.phone ||
+          currentUser?.phoneNumber ||
+          '',
         customerAddress: serviceRequest.customerAddress,
         serviceType: serviceRequest.serviceType,
         problem: serviceRequest.problem || '',
@@ -984,9 +1000,10 @@ export default function ActiveServiceScreen({
       };
 
       if (serviceRequest.scheduledTime) {
-        const scheduledTime = serviceRequest.scheduledTime instanceof Date 
-          ? serviceRequest.scheduledTime 
-          : new Date(serviceRequest.scheduledTime);
+        const scheduledTime =
+          serviceRequest.scheduledTime instanceof Date
+            ? serviceRequest.scheduledTime
+            : new Date(serviceRequest.scheduledTime);
         newServiceRequestData.scheduledTime = scheduledTime.toISOString();
       }
 
@@ -994,35 +1011,16 @@ export default function ActiveServiceScreen({
         newServiceRequestData.photos = serviceRequest.photos;
       }
 
-      // Create service request in Firestore (PRIMARY) - ensures provider can always find it
-      const firestoreData = {
-        ...newServiceRequestData,
-        customerId: currentUser?.uid || '',
-        status: 'pending',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
+      const created = await serviceRequestsApi.create(newServiceRequestData);
+      const newServiceRequestId =
+        (created as any)?._id ||
+        (created as any)?.id ||
+        (created as any)?.consultationId;
 
-      // Create document with auto-generated ID
-      const docRef = await firestore()
-        .collection('serviceRequests')
-        .add(firestoreData);
-
-      const newServiceRequestId = docRef.id;
-      console.log('✅ Service request created in Firestore:', newServiceRequestId);
-
-      // Also try to sync to MongoDB (optional, for backend consistency)
-      try {
-        await serviceRequestsApi.create({
-          ...newServiceRequestData,
-          _id: newServiceRequestId, // Use Firestore ID
-          consultationId: newServiceRequestId,
-        });
-        console.log('✅ Service request also synced to MongoDB:', newServiceRequestId);
-      } catch (apiError: any) {
-        // MongoDB sync is optional - Firestore is primary
-        console.warn('⚠️ MongoDB sync failed (service request is in Firestore):', apiError.message);
+      if (!newServiceRequestId) {
+        throw new Error('Failed to create service request');
       }
+      console.log('✅ Service request created in MongoDB:', newServiceRequestId);
 
       // Notify providers via WebSocket
       try {
@@ -1101,25 +1099,42 @@ export default function ActiveServiceScreen({
       setShowCancelReasonModal(false);
       
       let cancelled = false;
-      
-      // Cancel job card if it exists (this will notify provider)
-      if (jobCardId) {
+      const trimmedReason = reason.trim();
+      const realJobCardId =
+        jobCardId && !String(jobCardId).startsWith('sr_')
+          ? jobCardId
+          : jobCard?.id && !String(jobCard.id).startsWith('sr_')
+            ? jobCard.id
+            : null;
+
+      // Cancel job card only when a real job card exists (accepted / in-progress).
+      // Pending specific-provider requests have no job card yet.
+      if (realJobCardId) {
         try {
-          await cancelTaskWithReason(jobCardId, reason);
+          await cancelTaskWithReason(realJobCardId, trimmedReason);
           cancelled = true;
         } catch (error: any) {
-          console.error('Error cancelling job card:', error);
-          // Continue to try consultation cancellation
+          const msg = String(error?.message || error || '');
+          if (!/not found|404/i.test(msg)) {
+            console.warn('Error cancelling job card:', msg);
+          }
+          // Continue — still cancel the service request below
         }
       }
       
-      // Also cancel the consultation/service request if it exists
+      // Cancel the service request (covers pending / not-yet-accepted cases)
       if (serviceRequestId) {
         try {
-          await serviceRequestsApi.cancel(serviceRequestId, reason.trim());
+          await serviceRequestsApi.cancel(serviceRequestId, trimmedReason);
           cancelled = true;
+          setStatus('cancelled');
+          setServiceRequest((prev: any) =>
+            prev
+              ? {...prev, status: 'cancelled', cancellationReason: trimmedReason}
+              : prev,
+          );
         } catch (error: any) {
-          console.error('Error cancelling service request:', error);
+          console.warn('Error cancelling service request:', error?.message || error);
         }
       }
       
@@ -1131,7 +1146,6 @@ export default function ActiveServiceScreen({
         });
         setShowAlertModal(true);
       } else {
-        // If neither document exists, show a different message
         setAlertModalConfig({
           title: t('common.info'),
           message: t('activeService.serviceRequestNotFoundInfo'),
@@ -1140,7 +1154,7 @@ export default function ActiveServiceScreen({
         setShowAlertModal(true);
       }
     } catch (error: any) {
-      console.error('Error cancelling service:', error);
+      console.warn('Error cancelling service:', error?.message || error);
       setAlertModalConfig({
         title: t('common.error'),
         message: error.message || t('activeService.failedToCancelService'),
@@ -1204,6 +1218,8 @@ export default function ActiveServiceScreen({
         return '#34C759';
       case 'cancelled':
         return '#FF3B30';
+      case 'rejected':
+        return '#FF3B30';
       default:
         return '#8E8E93';
     }
@@ -1221,10 +1237,30 @@ export default function ActiveServiceScreen({
         return t('activeService.serviceCompleted');
       case 'cancelled':
         return t('activeService.cancelled');
+      case 'rejected':
+        return t('activeService.providerDeclined');
       default:
         return statusValue;
     }
   };
+
+  const providerDisplayName =
+    providerProfile?.name ||
+    serviceRequest?.providerName ||
+    t('activeService.providerDetails') ||
+    'Provider';
+
+  const waitingForProviderMessage = serviceRequest?.providerId
+    ? String(t('activeService.waitingForSpecificProvider') || 'Waiting for {{name}} to accept your request').replace(
+        '{{name}}',
+        providerDisplayName,
+      )
+    : t('activeService.waitingForProviderToAccept');
+
+  const providerNotReadyMessage = String(
+    t('activeService.providerNotReadyMessage') ||
+      '{{name}} declined this request. You can choose another provider or request the service again.',
+  ).replace('{{name}}', providerDisplayName);
 
   if (loading) {
     return (
@@ -1475,6 +1511,18 @@ export default function ActiveServiceScreen({
                   {t('activeService.cancelled')}
                 </Text>
               </>
+            ) : status === 'rejected' ? (
+              <>
+                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF3B30' + '20'}]}>
+                  <Icon name="person-off" size={48} color="#FF3B30" />
+                </View>
+                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
+                  {t('activeService.providerNotReady')}
+                </Text>
+                <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
+                  {providerNotReadyMessage}
+                </Text>
+              </>
             ) : providerLocation && distance ? (
               <>
                 <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
@@ -1558,7 +1606,7 @@ export default function ActiveServiceScreen({
                   {t('activeService.waitingForProvider')}
                 </Text>
                 <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
-                  {t('activeService.waitingForProviderToAccept')}
+                  {waitingForProviderMessage}
                 </Text>
               </>
             ) : status === 'accepted' ? (
@@ -1689,7 +1737,7 @@ export default function ActiveServiceScreen({
             {status === 'pending' && (
               <View>
                 <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                  {t('activeService.waitingForProviderToAccept')}
+                  {waitingForProviderMessage}
                 </Text>
                 {loadingProviders ? (
                   <View style={styles.providersLoadingContainer}>
@@ -1808,14 +1856,6 @@ export default function ActiveServiceScreen({
                   </Text>
                   <Icon name="chevron-right" size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
-                {(providerProfile?.email || serviceRequest?.providerEmail) && (
-                  <View style={styles.contactRow}>
-                    <Icon name="email" size={20} color={theme.textSecondary} />
-                    <Text style={[styles.contactValue, {color: theme.text}]}>
-                      {providerProfile.email}
-                    </Text>
-                  </View>
-                )}
               </View>
             )}
 
@@ -1939,6 +1979,30 @@ export default function ActiveServiceScreen({
                   disabled={loading}>
                   <Icon name="cancel" size={20} color="#fff" />
                   <Text style={styles.actionButtonText}>{t('activeService.cancelService')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {status === 'rejected' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                  onPress={() => navigation.navigate('Providers')}>
+                  <Icon name="people" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>
+                    {t('activeService.chooseAnotherProvider')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                  onPress={() =>
+                    navigation.navigate('Services', {
+                      screen: 'ServiceRequest',
+                      params: {requestMode: 'open'},
+                    })
+                  }>
+                  <Icon name="refresh" size={20} color="#fff" />
+                  <Text style={styles.actionButtonText}>{t('activeService.requestAgain')}</Text>
                 </TouchableOpacity>
               </>
             )}

@@ -1,6 +1,8 @@
 {
   "title": "Settings",
+  "menu": "Menu",
   "profile": "Profile",
+  "logoutSubtitle": "Sign out. Your number stays saved so you only enter PIN next time.",
   "notifications": "Notifications",
   "language": "Language",
   "theme": "Theme",

@@ -2,22 +2,15 @@ import React, {useState, useEffect} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {View, ActivityIndicator, StyleSheet} from 'react-native';
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
-import NotificationService from '../services/notificationService';
 import useTranslation from '../hooks/useTranslation';
+import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
 
-// Screens
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
-
-// Tab Navigators
-import MainTabs from './MainTabs'; // Customer tabs
-
-// Shared screens
+import MainTabs from './MainTabs';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
@@ -27,72 +20,35 @@ const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [phoneVerified, setPhoneVerified] = useState<boolean | null>(null);
   const {isDarkMode, setCurrentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (authUser) => {
-      if (authUser) {
-        try {
-          // Initialize FCM and save token for push notifications
-          // Force reinit to ensure handlers are set up after login
-          try {
-            console.log('🔄 FCM: Initializing FCM for customer:', authUser.uid);
-            const token = await NotificationService.initializeAndSaveToken(true);
-            if (token) {
-            console.log('✅ FCM token initialized and saved for customer:', authUser.uid);
-              console.log('📱 FCM Token:', token.substring(0, 30) + '...');
-            } else {
-              console.warn('⚠️ FCM: No token received after initialization');
-            }
-          } catch (fcmError: any) {
-            console.error('❌ Failed to initialize FCM token:', fcmError.message || fcmError);
-            // Don't block app initialization if FCM fails, but log the error
-          }
+    let mounted = true;
 
-          const userDoc = await firestore()
-            .collection('users')
-            .doc(authUser.uid)
-            .get();
-
-          if (userDoc.exists) {
-            const userData = userDoc.data();
-            // HomeServices app is for customers only - set role to customer
-            const userRoleFromDoc = userData?.role || 'customer';
-            setUserRole(userRoleFromDoc);
-            setPhoneVerified(userData?.phoneVerified === true);
-            
-            // Update store with user data
-            setCurrentUser({
-              id: userDoc.id,
-              ...userData,
-              createdAt: userData?.createdAt?.toDate(),
-              phoneVerified: userData?.phoneVerified === true,
-            } as any);
-          } else {
-            // New user - set as customer for HomeServices app
-            setUserRole('customer');
-            setPhoneVerified(false);
-          }
-        } catch (error) {
-          setUserRole(null);
-          setPhoneVerified(null);
+    const boot = async () => {
+      try {
+        const jwt = await getStoredJwt();
+        const storedUser = await readStoredUser();
+        if (jwt && storedUser && mounted) {
+          setCurrentUser(normalizeUser(storedUser) as any);
+        } else if (mounted) {
+          setCurrentUser(null);
         }
-      } else {
-        setUserRole(null);
-        setPhoneVerified(null);
+      } catch (e) {
+        console.warn('App boot failed:', e);
+        if (mounted) setCurrentUser(null);
+      } finally {
+        if (mounted) setInitializing(false);
       }
+    };
 
-      setUser(authUser);
-      if (initializing) setInitializing(false);
-    });
-
-    return unsubscribe;
-  }, [initializing]);
+    void boot();
+    return () => {
+      mounted = false;
+    };
+  }, [setCurrentUser]);
 
   if (initializing) {
     return (
@@ -101,18 +57,6 @@ export default function AppNavigator() {
       </View>
     );
   }
-
-  const getInitialRoute = () => {
-    if (!user) return 'Login';
-    
-    // Check if phone is verified - if not, redirect to phone verification
-    if (phoneVerified === false) {
-      return 'PhoneVerification';
-    }
-    
-    // HomeServices app is for customers only - always go to Main
-    return 'Main';
-  };
 
   return (
     <NavigationContainer
@@ -128,24 +72,16 @@ export default function AppNavigator() {
         },
       }}>
       <Stack.Navigator
-        initialRouteName={getInitialRoute()}
+        initialRouteName="Main"
         screenOptions={{headerShown: false}}>
-        {/* Authentication */}
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen 
-          name="PhoneVerification" 
+        <Stack.Screen
+          name="PhoneVerification"
           component={PhoneVerificationScreen}
-          options={{
-            headerShown: false,
-            gestureEnabled: false, // Prevent back navigation
-          }}
+          options={{headerShown: false}}
         />
-
-        {/* Customer Navigation */}
         <Stack.Screen name="Main" component={MainTabs} />
-
-        {/* Shared Screens */}
         <Stack.Screen
           name="ServiceRequest"
           component={ServiceRequestScreen}
@@ -179,9 +115,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="HelpSupport"
           component={HelpSupportScreen}
-          options={{
-            headerShown: false,
-          }}
+          options={{headerShown: false}}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -1,12 +1,8 @@
 /**
- * Job Card Service (Customer App)
- * Uses HomeServicesBackend API for all database operations
- * Firebase is only used for real-time subscriptions and push notifications
+ * Job Card Service (Customer App) — MongoDB + JWT only.
  */
 
-import database from '@react-native-firebase/database';
-import auth from '@react-native-firebase/auth';
-import pushNotificationService from './pushNotificationService';
+import {getStoredJwt} from './session';
 import {jobCardsApi, type JobCard as JobCardApi} from './api/jobCardsApi';
 
 export interface JobCard {
@@ -53,113 +49,69 @@ export interface JobCard {
   updatedAt: Date;
 }
 
-/**
- * Get job card by ID
- * Uses backend API
- */
-export const getJobCardById = async (jobCardId: string): Promise<JobCard | null> => {
+function mapJobCard(jobCard: JobCardApi): JobCard {
+  return {
+    id: jobCard._id || jobCard.id,
+    ...jobCard,
+    createdAt:
+      jobCard.createdAt instanceof Date
+        ? jobCard.createdAt
+        : new Date(jobCard.createdAt),
+    updatedAt:
+      jobCard.updatedAt instanceof Date
+        ? jobCard.updatedAt
+        : new Date(jobCard.updatedAt),
+    scheduledTime: jobCard.scheduledTime
+      ? jobCard.scheduledTime instanceof Date
+        ? jobCard.scheduledTime
+        : new Date(jobCard.scheduledTime)
+      : undefined,
+    pinGeneratedAt: jobCard.pinGeneratedAt
+      ? jobCard.pinGeneratedAt instanceof Date
+        ? jobCard.pinGeneratedAt
+        : new Date(jobCard.pinGeneratedAt)
+      : undefined,
+  } as JobCard;
+}
+
+export const getJobCardById = async (
+  jobCardId: string,
+): Promise<JobCard | null> => {
   try {
     const jobCard = await jobCardsApi.getById(jobCardId);
-    if (!jobCard) {
-      return null;
-    }
-
-    // Convert API response to app format
-    return {
-      id: jobCard._id || jobCard.id,
-      ...jobCard,
-      createdAt: jobCard.createdAt instanceof Date ? jobCard.createdAt : new Date(jobCard.createdAt),
-      updatedAt: jobCard.updatedAt instanceof Date ? jobCard.updatedAt : new Date(jobCard.updatedAt),
-      scheduledTime: jobCard.scheduledTime ? (jobCard.scheduledTime instanceof Date ? jobCard.scheduledTime : new Date(jobCard.scheduledTime)) : undefined,
-      pinGeneratedAt: jobCard.pinGeneratedAt ? (jobCard.pinGeneratedAt instanceof Date ? jobCard.pinGeneratedAt : new Date(jobCard.pinGeneratedAt)) : undefined,
-    } as JobCard;
+    if (!jobCard) return null;
+    return mapJobCard(jobCard);
   } catch (error) {
     console.error('Error fetching job card:', error);
     return null;
   }
 };
 
-/**
- * Get all job cards for a customer
- * Uses backend API
- */
-export const getCustomerJobCards = async (customerId: string): Promise<JobCard[]> => {
+export const getCustomerJobCards = async (
+  customerId: string,
+): Promise<JobCard[]> => {
   try {
     const jobCards = await jobCardsApi.getCustomerJobCards(customerId);
-
-    // Convert API response to app format - include all statuses (including completed)
-    return jobCards.map((jobCard: JobCardApi) => ({
-      id: jobCard._id || jobCard.id,
-      ...jobCard,
-      createdAt: jobCard.createdAt instanceof Date ? jobCard.createdAt : new Date(jobCard.createdAt),
-      updatedAt: jobCard.updatedAt instanceof Date ? jobCard.updatedAt : new Date(jobCard.updatedAt),
-      scheduledTime: jobCard.scheduledTime ? (jobCard.scheduledTime instanceof Date ? jobCard.scheduledTime : new Date(jobCard.scheduledTime)) : undefined,
-      pinGeneratedAt: jobCard.pinGeneratedAt ? (jobCard.pinGeneratedAt instanceof Date ? jobCard.pinGeneratedAt : new Date(jobCard.pinGeneratedAt)) : undefined,
-    })) as JobCard[];
+    return jobCards.map(mapJobCard);
   } catch (error: any) {
     console.error('Error fetching customer job cards:', error);
-    throw new Error(`Failed to fetch job cards: ${error.message || 'Unknown error'}`);
+    throw new Error(
+      `Failed to fetch job cards: ${error.message || 'Unknown error'}`,
+    );
   }
 };
 
-/**
- * Cancel task with reason (Customer cancels)
- * Uses backend API for database update
- * Firebase used only for notifications
- */
 export const cancelTaskWithReason = async (
   jobCardId: string,
   cancellationReason: string,
 ): Promise<void> => {
   try {
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
+    const jwt = await getStoredJwt();
+    if (!jwt) {
       throw new Error('User not authenticated');
     }
 
-    // Get job card data from API to get provider info
-    const jobCard = await jobCardsApi.getById(jobCardId);
-    if (!jobCard) {
-      throw new Error('Job card not found');
-    }
-
-    const providerId = jobCard.providerId;
-    const bookingId = jobCard.bookingId;
-    const customerName = jobCard.customerName || 'Customer';
-    const serviceType = jobCard.serviceType || 'service';
-
-    // Update job card via backend API
     await jobCardsApi.cancel(jobCardId, cancellationReason);
-
-    // Update Realtime Database for real-time status (Firebase - keep for real-time)
-    try {
-      await database()
-        .ref(`jobCards/${jobCardId}`)
-        .update({
-          status: 'cancelled',
-          updatedAt: Date.now(),
-        });
-    } catch (rtdbError) {
-      console.warn('⚠️ Could not update Realtime DB:', rtdbError);
-    }
-
-    // Send notification to provider (Firebase FCM - keep for push notifications)
-    if (providerId) {
-      try {
-        await pushNotificationService.sendToProvider(providerId, {
-          title: 'Service Cancelled',
-          body: `${customerName} has cancelled the ${serviceType} service. Reason: ${cancellationReason.trim()}`,
-          type: 'service',
-          consultationId: bookingId || '',
-          status: 'cancelled',
-          cancellationReason: cancellationReason.trim(),
-        });
-        console.log('✅ Notification sent to provider:', providerId);
-      } catch (notificationError) {
-        console.error('Error sending cancellation notification to provider:', notificationError);
-        // Don't throw - notification failure shouldn't block cancellation
-      }
-    }
   } catch (error: any) {
     console.error('Error cancelling task:', error);
     throw new Error(error.message || 'Failed to cancel task');
@@ -167,45 +119,54 @@ export const cancelTaskWithReason = async (
 };
 
 /**
- * Subscribe to real-time job card status updates
- * Uses Firebase Realtime Database for real-time updates (keep Firebase for real-time)
- * Returns unsubscribe function
+ * Poll-based status subscription (replaces Firebase RTDB).
  */
 export const subscribeToJobCardStatus = (
   jobCardId: string,
   callback: (status: JobCard['status'], updatedAt: number) => void,
 ): (() => void) => {
-  const statusRef = database().ref(`jobCards/${jobCardId}/status`);
+  let cancelled = false;
+  let lastStatus: string | null = null;
 
-  const onStatusChange = statusRef.on('value', (snapshot) => {
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      callback(data.status, data.updatedAt);
+  const poll = async () => {
+    if (cancelled) return;
+    try {
+      const jobCard = await jobCardsApi.getById(jobCardId);
+      if (!jobCard || cancelled) return;
+      const status = (jobCard.status || 'pending') as JobCard['status'];
+      const updatedAt = jobCard.updatedAt
+        ? new Date(jobCard.updatedAt).getTime()
+        : Date.now();
+      if (status !== lastStatus) {
+        lastStatus = status;
+        callback(status, updatedAt);
+      }
+    } catch (e) {
+      console.warn('Job card status poll failed:', e);
     }
-  });
+  };
 
-  // Return unsubscribe function
+  void poll();
+  const interval = setInterval(poll, 5000);
+
   return () => {
-    statusRef.off('value', onStatusChange);
+    cancelled = true;
+    clearInterval(interval);
   };
 };
 
-/**
- * Verify task completion (customer side)
- * Uses backend API
- * Note: The backend should handle customer verification when status is set to 'completed'
- */
-export const verifyTaskCompletion = async (jobCardId: string): Promise<void> => {
+export const verifyTaskCompletion = async (
+  jobCardId: string,
+): Promise<void> => {
   try {
-    // For now, we just verify by confirming the job card is completed
-    // Backend can track customer verification separately if needed
     const jobCard = await jobCardsApi.getById(jobCardId);
-    if (!jobCard || jobCard.status !== 'completed') {
-      throw new Error('Job card is not completed');
+    if (!jobCard) {
+      throw new Error('Job card not found');
     }
-    // Backend will handle customer verification logic
-  } catch (error) {
-    console.error('Error verifying task completion:', error);
-    throw new Error('Failed to verify task completion');
+    if (jobCard.status !== 'completed') {
+      throw new Error('Job card is not completed yet');
+    }
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to verify task completion');
   }
 };

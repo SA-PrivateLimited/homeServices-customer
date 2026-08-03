@@ -69,3 +69,4 @@ web-build/
 
 # Testing
 /coverage
+agent-context/

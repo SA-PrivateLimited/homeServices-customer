@@ -3,24 +3,19 @@
  * Centralized configuration for backend API base URL
  */
 
-// Determine API base URL based on environment
+import {Platform} from 'react-native';
+
+// Production backend
+const PRODUCTION_URL = 'https://homeservices-backend-2vag.vercel.app/api';
+
+// Local backend: Android emulator must use 10.0.2.2 (emulator's alias for host), not localhost
 const getApiBaseUrl = (): string => {
   if (__DEV__) {
-    // Development - local backend server
-    // For Android emulator: use 10.0.2.2 instead of localhost
-    // For iOS simulator: use localhost
-    // For real device: use your computer's IP address
-    const platform = require('react-native').Platform.OS;
-    
-    if (platform === 'android') {
-      return 'http://10.0.2.2:3000/api'; // Android emulator
-    }
-
-    return 'http://localhost:3000/api'; // iOS simulator or web
+    return Platform.OS === 'android'
+      ? 'http://10.0.2.2:3001/api'
+      : 'http://localhost:3001/api';
   }
-  
-  // Production - replace with your production backend URL
-  return 'https://homeservices-backend-htasuiwr2.vercel.app/api';
+  return PRODUCTION_URL;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

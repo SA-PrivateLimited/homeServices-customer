@@ -11,7 +11,6 @@ import {
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import Icon from 'react-native-vector-icons/Ionicons';
-import auth from '@react-native-firebase/auth';
 
 const {width, height} = Dimensions.get('window');
 
@@ -146,27 +145,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation, route}) 
   };
 
   const handleComplete = async () => {
-    try {
-      const currentUser = auth().currentUser;
-      // Note: Onboarding completion is now handled by the backend API
-      // The user will be redirected to the main screen
-
-      // Navigate to appropriate main screen based on role
-      if (userRole === 'customer') {
-        navigation.replace('Main');
-      } else if (userRole === 'provider') {
-        // Navigate to provider main screen
-        // Profile setup will be handled by the provider app
-        navigation.replace('Main');
-      }
-    } catch (error) {
-      // Navigate anyway to not block the user
-      if (userRole === 'customer') {
-        navigation.replace('Main');
-      } else {
-        navigation.replace('Main');
-      }
-    }
+    navigation.replace('Main');
   };
 
   const handleScroll = (event: any) => {

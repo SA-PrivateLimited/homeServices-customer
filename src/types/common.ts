@@ -8,14 +8,18 @@ export interface UserLocation {
   latitude?: number;
   longitude?: number;
   address?: string;
+  landmark?: string;
   city?: string;
+  district?: string;
   state?: string;
+  stateId?: string;
+  districtId?: string;
   pincode?: string;
   country?: string;
 }
 
 // Service Request Status type
-export type ServiceRequestStatus = 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
+export type ServiceRequestStatus = 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled' | 'rejected';
 
 // User Role type
 export type UserRole = 'customer' | 'provider' | 'admin';

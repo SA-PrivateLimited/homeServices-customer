@@ -74,7 +74,7 @@ export async function getJobCardById(jobCardId: string): Promise<JobCard | null>
 }
 
 /**
- * Get all job cards with optional filters
+ * Get all job cards with optional filters (Customer app: uses /customer/jobCards)
  */
 export async function getJobCards(filters?: JobCardFilters): Promise<JobCard[]> {
   try {
@@ -88,11 +88,11 @@ export async function getJobCards(filters?: JobCardFilters): Promise<JobCard[]> 
     }
 
     const queryString = params.toString();
-    const endpoint = queryString ? `/jobCards?${queryString}` : '/jobCards';
+    const endpoint = queryString
+      ? `/customer/jobCards?${queryString}`
+      : '/customer/jobCards';
 
     const response = await apiGet<{data: JobCard[]; count: number}>(endpoint);
-    // Backend returns {data: [...], count: number}, but we expect array
-    // Check if response is array or object with data property
     if (Array.isArray(response)) {
       return response;
     }

@@ -26,7 +26,10 @@ export interface Provider {
     longitude?: number;
     address?: string;
     city?: string;
+    district?: string;
     state?: string;
+    stateId?: string;
+    districtId?: string;
     pincode?: string;
   };
   currentLocation?: {
@@ -34,6 +37,7 @@ export interface Provider {
     longitude?: number;
     address?: string;
     city?: string;
+    district?: string;
     state?: string;
     pincode?: string;
     updatedAt?: string | number | Date;
@@ -47,6 +51,9 @@ export interface ProviderFilters {
   serviceType?: string;
   city?: string;
   state?: string;
+  district?: string;
+  stateId?: string;
+  districtId?: string;
   isOnline?: boolean;
   minRating?: number;
   limit?: number;
@@ -70,7 +77,11 @@ export async function getProviders(filters?: ProviderFilters): Promise<Provider[
     const queryString = params.toString();
     const endpoint = queryString ? `/providers?${queryString}` : '/providers';
 
-    const response = await apiGet<{data: Provider[]; count: number}>(endpoint);
+    // Public browse — guests can list providers without JWT
+    const response = await apiGet<Provider[] | {data: Provider[]; count: number}>(
+      endpoint,
+      {skipAuth: true},
+    );
     if (Array.isArray(response)) {
       return response;
     }
@@ -86,7 +97,7 @@ export async function getProviders(filters?: ProviderFilters): Promise<Provider[
  */
 export async function getProviderById(providerId: string): Promise<Provider | null> {
   try {
-    return await apiGet<Provider>(`/providers/${providerId}`);
+    return await apiGet<Provider>(`/providers/${providerId}`, {skipAuth: true});
   } catch (error: any) {
     if (error.message?.includes('not found') || error.message?.includes('404')) {
       return null;

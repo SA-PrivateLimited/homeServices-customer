@@ -15,7 +15,24 @@ export interface Theme {
   placeholder: string;
 }
 
-export const lightTheme: Theme = {
+/** Remote themeColors / colorPalette shape (subset used by mobile Theme). */
+export interface ColorPalette {
+  primary: string;
+  primaryDark: string;
+  secondary?: string;
+  secondaryDark?: string;
+  background?: string;
+  surface?: string;
+  text?: string;
+  textSecondary?: string;
+  border?: string;
+  error?: string;
+  success?: string;
+  warning?: string;
+  [key: string]: string | undefined;
+}
+
+const defaultLight: Theme = {
   background: '#F5F7FA',
   card: '#FFFFFF',
   text: '#1A202C',
@@ -32,7 +49,7 @@ export const lightTheme: Theme = {
   placeholder: '#A0AEC0',
 };
 
-export const darkTheme: Theme = {
+const defaultDark: Theme = {
   background: '#1A202C',
   card: '#2D3748',
   text: '#F7FAFC',
@@ -48,6 +65,47 @@ export const darkTheme: Theme = {
   tabBar: '#2D3748',
   placeholder: '#718096',
 };
+
+/** Mutable — applyColorPalette updates in place before first paint. */
+export const lightTheme: Theme = {...defaultLight};
+export const darkTheme: Theme = {...defaultDark};
+
+/**
+ * Apply remote themeColors as colorPalette.
+ * Light: brand + layout tokens. Dark: brand accents only (keep surfaces local).
+ */
+export function applyColorPalette(colorPalette: ColorPalette): void {
+  if (!colorPalette?.primary) return;
+
+  lightTheme.primary = colorPalette.primary;
+  lightTheme.primaryDark = colorPalette.primaryDark || colorPalette.primary;
+  if (colorPalette.secondary) lightTheme.secondary = colorPalette.secondary;
+  if (colorPalette.background) lightTheme.background = colorPalette.background;
+  if (colorPalette.surface) {
+    lightTheme.card = colorPalette.surface;
+    lightTheme.tabBar = colorPalette.surface;
+  }
+  if (colorPalette.text) lightTheme.text = colorPalette.text;
+  if (colorPalette.textSecondary) {
+    lightTheme.textSecondary = colorPalette.textSecondary;
+  }
+  if (colorPalette.border) lightTheme.border = colorPalette.border;
+  if (colorPalette.error) lightTheme.error = colorPalette.error;
+  if (colorPalette.success) lightTheme.success = colorPalette.success;
+  if (colorPalette.warning) lightTheme.warning = colorPalette.warning;
+
+  darkTheme.primary = colorPalette.primary;
+  darkTheme.primaryDark = colorPalette.primaryDark || colorPalette.primary;
+  if (colorPalette.secondary) darkTheme.secondary = colorPalette.secondary;
+  if (colorPalette.error) darkTheme.error = colorPalette.error;
+  if (colorPalette.success) darkTheme.success = colorPalette.success;
+  if (colorPalette.warning) darkTheme.warning = colorPalette.warning;
+}
+
+export function resetThemesToDefaults(): void {
+  Object.assign(lightTheme, defaultLight);
+  Object.assign(darkTheme, defaultDark);
+}
 
 export const commonStyles = {
   shadowSmall: {

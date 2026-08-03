@@ -129,7 +129,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
     const supportEmail = 'support@sa-privatelimited.com';
     const subject = encodeURIComponent('HomeServices Support Request');
     const body = encodeURIComponent(
-      `Dear Support Team,\n\nI need assistance with the following:\n\n[Please describe your issue here]\n\nThank you.\n\n---\nPatient: ${currentUser?.name || 'User'}\nEmail: ${currentUser?.email || 'N/A'}`
+      `Dear Support Team,\n\nI need assistance with the following:\n\n[Please describe your issue here]\n\nThank you.\n\n---\nCustomer: ${currentUser?.name || 'User'}\nPhone: ${currentUser?.phone || currentUser?.phoneNumber || 'N/A'}`
     );
     const mailtoLink = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
 

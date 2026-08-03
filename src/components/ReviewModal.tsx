@@ -19,7 +19,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
-import storage from '@react-native-firebase/storage';
 import {createReview} from '../services/reviewService';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {useStore} from '../store';
@@ -131,27 +130,16 @@ export default function ReviewModal({
         return;
       }
 
-      setUploading(true);
-      const uploadedUrls: string[] = [];
-
-      for (const asset of result.assets) {
-        if (asset.uri) {
-          const filename = `review_photos/${jobCardId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-          const reference = storage().ref(filename);
-          await reference.putFile(asset.uri);
-          const url = await reference.getDownloadURL();
-          uploadedUrls.push(url);
-        }
-      }
-
-      setPhotos([...photos, ...uploadedUrls]);
-      setUploading(false);
+      // Keep local URIs for preview; cloud upload removed with Firebase.
+      const localUris = result.assets
+        .map(a => a.uri)
+        .filter((uri): uri is string => !!uri);
+      setPhotos([...photos, ...localUris].slice(0, 3));
     } catch (error: any) {
-      setUploading(false);
       setAlertModal({
         visible: true,
         title: 'Error',
-        message: 'Failed to upload photo. Please try again.',
+        message: 'Failed to add photo. Please try again.',
         type: 'error',
       });
     }
@@ -186,11 +174,14 @@ export default function ReviewModal({
         }
       }
       
+      const remotePhotos = photos.filter(
+        p => p.startsWith('http://') || p.startsWith('https://'),
+      );
       await createReview(
-        jobCardId, 
-        rating, 
-        finalComment || undefined, 
-        photos.length > 0 ? photos : undefined
+        jobCardId,
+        rating,
+        finalComment || undefined,
+        remotePhotos.length > 0 ? remotePhotos : undefined,
       );
       setAlertModal({
         visible: true,

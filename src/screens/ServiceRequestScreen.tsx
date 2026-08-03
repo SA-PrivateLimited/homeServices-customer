@@ -20,9 +20,6 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import auth from '@react-native-firebase/auth';
-import messaging from '@react-native-firebase/messaging';
-import firestore from '@react-native-firebase/firestore';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
@@ -41,6 +38,10 @@ import Toast from '../components/Toast';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import ServiceAddressFields, {
+  type ServiceAddressValue,
+} from '../components/ServiceAddressFields';
+import {Select, MultiSelect} from 'sapvt-ltd-app-packages';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import {usersApi} from '../services/api/usersApi';
 import {providersApi} from '../services/api/providersApi';
@@ -50,6 +51,12 @@ interface ServiceRequestScreenProps {
   route?: {
     params?: {
       serviceType?: string;
+      /**
+       * Only set when navigating from a specific provider's details.
+       * Default / Services-tab flow stays open (any provider can accept).
+       */
+      requestMode?: 'open' | 'specificProvider';
+      provider?: any;
     };
   };
 }
@@ -58,10 +65,40 @@ export default function ServiceRequestScreen({
   navigation,
   route,
 }: ServiceRequestScreenProps) {
-  const {isDarkMode, currentUser, currentPincode, language} = useStore();
+  const {
+    isDarkMode,
+    currentUser,
+    currentPincode,
+    language,
+    setRedirectAfterLogin,
+    addServiceRequest,
+  } = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
-  
+
+  // Two distinct flows:
+  // 1) Services tab (open): no requestMode / 'open' → broadcast, any provider can accept
+  // 2) Provider details (specific): requestMode === 'specificProvider' → only that provider
+  const targetedProvider =
+    route?.params?.requestMode === 'specificProvider'
+      ? route?.params?.provider || null
+      : null;
+  const targetedProviderId =
+    targetedProvider?.id ||
+    targetedProvider?._id ||
+    targetedProvider?.uid ||
+    null;
+  const isTargetedRequest =
+    route?.params?.requestMode === 'specificProvider' && !!targetedProviderId;
+  const lockedServiceType =
+    (isTargetedRequest &&
+      (route?.params?.serviceType ||
+        targetedProvider?.specialization ||
+        targetedProvider?.specialty ||
+        targetedProvider?.serviceType ||
+        '')) ||
+    '';
+
   // Helper function to get question text based on language preference
   const getQuestionText = (q: QuestionnaireQuestion): string => {
     if (language === 'hi' && q.questionHi) {
@@ -97,6 +134,9 @@ export default function ServiceRequestScreen({
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, any>>({});
   const [problem, setProblem] = useState('');
   const [selectedAddress, setSelectedAddress] = useState<UserLocation | null>(null);
+  const [saveAddressForFuture, setSaveAddressForFuture] = useState(true);
+  const [secondaryMobile, setSecondaryMobile] = useState('');
+  const [fillingCurrentAddress, setFillingCurrentAddress] = useState(false);
   const [urgency, setUrgency] = useState<'immediate' | 'scheduled'>('immediate');
   const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
   const [scheduledTime, setScheduledTime] = useState<string>('');
@@ -243,11 +283,31 @@ export default function ServiceRequestScreen({
       
       setServiceCategories(categories);
 
-      // If service type was pre-selected, load its questionnaire
-      if (route?.params?.serviceType) {
-        const category = categories.find(cat => cat.name === route.params.serviceType);
+      // Prefill service type (locked for specific-provider requests)
+      const preferredType =
+        lockedServiceType || route?.params?.serviceType || '';
+      if (preferredType) {
+        const normalized = String(preferredType).trim().toLowerCase();
+        const category =
+          categories.find(cat => cat.name === preferredType) ||
+          categories.find(cat => cat.name?.toLowerCase() === normalized) ||
+          categories.find(
+            cat =>
+              cat.nameHi?.toLowerCase() === normalized ||
+              (cat as any).nameEn?.toLowerCase() === normalized,
+          );
         if (category) {
-          handleSelectServiceType(category);
+          applyServiceType(category);
+        } else if (isTargetedRequest) {
+          // Provider profession not in catalog — still lock the label for submit
+          setSelectedServiceType(preferredType);
+          setSelectedCategory({
+            id: 'locked',
+            name: preferredType,
+            icon: 'build',
+            color: theme.primary,
+            questionnaire: [],
+          } as ServiceCategory);
         }
       }
     } catch (error: any) {
@@ -261,6 +321,26 @@ export default function ServiceRequestScreen({
       })) as ServiceCategory[];
       
       setServiceCategories(defaultCategories);
+
+      const preferredType =
+        lockedServiceType || route?.params?.serviceType || '';
+      if (preferredType) {
+        const category = defaultCategories.find(
+          cat => cat.name === preferredType || cat.name?.toLowerCase() === preferredType.toLowerCase(),
+        );
+        if (category) {
+          applyServiceType(category);
+        } else if (isTargetedRequest) {
+          setSelectedServiceType(preferredType);
+          setSelectedCategory({
+            id: 'locked',
+            name: preferredType,
+            icon: 'build',
+            color: theme.primary,
+            questionnaire: [],
+          } as ServiceCategory);
+        }
+      }
       
       // Only show error if it's not a timeout (timeout means we're using defaults)
       if (error.message !== 'Timeout loading service categories') {
@@ -276,10 +356,23 @@ export default function ServiceRequestScreen({
     }
   };
 
+  const applyServiceType = (category: ServiceCategory) => {
+    setSelectedServiceType(category.name);
+    setSelectedCategory(category);
+    setQuestionnaire(category.questionnaire || []);
+    setQuestionnaireAnswers({});
+    setShowServiceTypeModal(false);
+  };
+
   const handleSelectServiceType = (category: ServiceCategory) => {
+    // Specific-provider flow: service type is fixed to the provider's profession
+    if (isTargetedRequest) {
+      return;
+    }
+
     const count = providerCounts[category.name] || 0;
     
-    // Check if provider count is zero
+    // Open requests require at least one online provider
     if (count === 0) {
       const serviceName = language === 'hi' && category.nameHi ? category.nameHi : category.name;
       const messageTemplate = String(t('services.providerNotAvailableMessage'));
@@ -293,11 +386,7 @@ export default function ServiceRequestScreen({
       return;
     }
     
-    setSelectedServiceType(category.name);
-    setSelectedCategory(category);
-    setQuestionnaire(category.questionnaire || []);
-    setQuestionnaireAnswers({});
-    setShowServiceTypeModal(false);
+    applyServiceType(category);
   };
 
   const handleQuestionnaireAnswer = (questionId: string, answer: any) => {
@@ -323,6 +412,12 @@ export default function ServiceRequestScreen({
     if (address.city !== undefined && address.city !== null && address.city !== '') {
       cleaned.city = address.city;
     }
+    const anyAddr = address as ServiceAddressValue;
+    if (anyAddr.district) cleaned.district = anyAddr.district;
+    if (anyAddr.landmark) cleaned.landmark = anyAddr.landmark;
+    if (anyAddr.stateId) cleaned.stateId = anyAddr.stateId;
+    if (anyAddr.districtId) cleaned.districtId = anyAddr.districtId;
+    if (anyAddr.district && !cleaned.city) cleaned.city = anyAddr.district;
     if (address.state !== undefined && address.state !== null && address.state !== '') {
       cleaned.state = address.state;
     }
@@ -749,70 +844,28 @@ export default function ServiceRequestScreen({
     setPhotos(photos.filter((_, i) => i !== index));
   };
 
+  const requirePhoneLogin = () => {
+    setRedirectAfterLogin({
+      route: 'ServiceRequest',
+      params: route.params,
+    });
+    setAlertModal({
+      visible: true,
+      title: t('auth.verifyMobileToBook'),
+      message: t('auth.verifyMobileToBookMessage'),
+      type: 'warning',
+    });
+    navigation.navigate('Login');
+  };
+
   const handleSubmit = async () => {
-    if (!currentUser) {
-      setAlertModal({
-        visible: true,
-        title: t('auth.login'),
-        message: t('services.loginRequired'),
-        type: 'warning',
-      });
-      navigation.navigate('Login');
+    const customerId = currentUser?.id || currentUser?._id;
+    const isPhoneVerified = currentUser?.phoneVerified === true;
+
+    // Guests must set/enter PIN before booking (backend JWT session)
+    if (!currentUser || !customerId || !isPhoneVerified) {
+      requirePhoneLogin();
       return;
-    }
-
-    // Check phone verification status
-    // First check from store (fast), then verify via API if needed
-    const authUser = auth().currentUser;
-    if (!authUser) {
-      setAlertModal({
-        visible: true,
-        title: t('auth.login'),
-        message: t('services.loginRequired'),
-        type: 'warning',
-      });
-      navigation.navigate('Login');
-      return;
-    }
-
-    // If user logged in with phone, phone is verified
-    const isPhoneAuth = !!authUser.phoneNumber;
-    const phoneVerifiedFromStore = currentUser.phoneVerified === true;
-
-    // If phone is verified in store or user logged in with phone, proceed
-    if (!phoneVerifiedFromStore && !isPhoneAuth) {
-      // Phone not verified - require verification
-      if (!currentUser.phone) {
-        setConfirmationModal({
-          visible: true,
-          title: t('common.phoneVerificationRequired'),
-          message: t('common.phoneVerificationMessage'),
-          type: 'warning',
-          onConfirm: () => {
-            setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}});
-            navigation.navigate('Settings');
-          },
-        });
-        return;
-      }
-      
-      // Try to update phone verification via API
-      try {
-        await usersApi.updateMe({
-          phoneVerified: true,
-          phone: currentUser.phone,
-        });
-        // Continue with request after update
-      } catch (error: any) {
-        console.error('Error updating phone verification:', error);
-        setAlertModal({
-          visible: true,
-          title: t('common.verificationError'),
-          message: t('common.verificationErrorMessage'),
-          type: 'error',
-        });
-        return;
-      }
     }
 
     if (!selectedServiceType) {
@@ -825,20 +878,22 @@ export default function ServiceRequestScreen({
       return;
     }
 
-    // Check if selected service type has available providers
-    const providerCount = providerCounts[selectedServiceType] || 0;
-    if (providerCount === 0) {
-      const selectedCategory = serviceCategories.find(cat => cat.name === selectedServiceType);
-      const serviceName = language === 'hi' && selectedCategory?.nameHi ? selectedCategory.nameHi : selectedServiceType;
-      const messageTemplate = String(t('services.providerNotAvailableMessage'));
-      const message = messageTemplate.replace('{{serviceType}}', serviceName);
-      setAlertModal({
-        visible: true,
-        title: String(t('services.providerNotAvailable')),
-        message: message,
-        type: 'warning',
-      });
-      return;
+    // Check if selected service type has available providers (skip for targeted requests)
+    if (!isTargetedRequest) {
+      const providerCount = providerCounts[selectedServiceType] || 0;
+      if (providerCount === 0) {
+        const selectedCategory = serviceCategories.find(cat => cat.name === selectedServiceType);
+        const serviceName = language === 'hi' && selectedCategory?.nameHi ? selectedCategory.nameHi : selectedServiceType;
+        const messageTemplate = String(t('services.providerNotAvailableMessage'));
+        const message = messageTemplate.replace('{{serviceType}}', serviceName);
+        setAlertModal({
+          visible: true,
+          title: String(t('services.providerNotAvailable')),
+          message: message,
+          type: 'warning',
+        });
+        return;
+      }
     }
 
     // Validate questionnaire answers
@@ -900,34 +955,24 @@ export default function ServiceRequestScreen({
 
     setLoading(true);
     try {
-      // Ensure user is authenticated
-      const authUser = auth().currentUser;
-      if (!authUser) {
-        setAlertModal({
-          visible: true,
-          title: t('auth.login'),
-          message: t('services.loginRequired'),
-          type: 'warning',
-        });
-        navigation.navigate('Login');
+      const customerId = currentUser.id || currentUser._id || '';
+      if (!customerId || currentUser.phoneVerified !== true) {
+        requirePhoneLogin();
         setLoading(false);
         return;
       }
 
-      // Ensure user profile exists with phoneVerified = true via API
       try {
-        const user = await usersApi.getMe();
-        if (!user || !user.phoneVerified) {
-          // Update user profile to ensure phoneVerified is true
-          await usersApi.updateMe({
-            phoneVerified: true,
-            phone: authUser.phoneNumber || currentUser.phone || '',
-            role: 'customer',
-          });
-        }
+        await usersApi.updateMe({
+          phoneVerified: true,
+          phone:
+            currentUser.phone ||
+            currentUser.phoneNumber ||
+            '',
+          role: 'customer',
+        });
       } catch (userError: any) {
-        console.error('Error ensuring user profile:', userError);
-        // Continue anyway - backend will validate
+        console.error('Error syncing user profile:', userError);
       }
 
       // Clean address object - remove undefined and null values
@@ -947,15 +992,82 @@ export default function ServiceRequestScreen({
       // Create service request via API
       // Build service request data - ensure no undefined values
       const serviceRequestDataRaw: any = {
-        customerId: authUser.uid,
+        customerId,
         customerName: currentUser.name || 'Customer',
-        customerPhone: currentUser.phone || '',
+        customerPhone:
+          currentUser.phone ||
+          currentUser.phoneNumber ||
+          '',
         customerAddress: cleanAddress,
         serviceType: selectedServiceType,
         problem: problem.trim(),
         status: 'pending',
         urgency: urgency,
       };
+
+      if (secondaryMobile.trim().length === 10) {
+        serviceRequestDataRaw.secondaryPhone = `+91${secondaryMobile.trim()}`;
+      }
+
+      if (saveAddressForFuture && cleanAddress) {
+        try {
+          await usersApi.updateMe({
+            homeAddress: {
+              address: cleanAddress.address,
+              landmark: cleanAddress.landmark,
+              city: cleanAddress.district || cleanAddress.city,
+              district: cleanAddress.district || cleanAddress.city,
+              state: cleanAddress.state,
+              stateId: cleanAddress.stateId,
+              districtId: cleanAddress.districtId,
+              pincode: cleanAddress.pincode,
+            },
+          });
+        } catch (saveErr) {
+          console.warn('Could not save address for future', saveErr);
+        }
+      }
+
+      // Direct request to a specific provider (from Provider Details only).
+      // Open Services-tab requests must NOT set providerId — any provider can accept.
+      if (isTargetedRequest && targetedProviderId) {
+        serviceRequestDataRaw.providerId = String(targetedProviderId);
+        serviceRequestDataRaw.providerName = targetedProvider?.name || '';
+        const phone =
+          targetedProvider?.phone ||
+          targetedProvider?.phoneNumber ||
+          targetedProvider?.primaryPhone ||
+          '';
+        if (phone) {
+          serviceRequestDataRaw.providerPhone = phone;
+        }
+        const specialization =
+          targetedProvider?.specialization ||
+          targetedProvider?.specialty ||
+          targetedProvider?.serviceType ||
+          selectedServiceType;
+        if (specialization) {
+          serviceRequestDataRaw.providerSpecialization = specialization;
+        }
+        if (targetedProvider?.rating != null) {
+          serviceRequestDataRaw.providerRating = targetedProvider.rating;
+        }
+        const image =
+          targetedProvider?.image ||
+          targetedProvider?.photoURL ||
+          targetedProvider?.profileImage;
+        if (image) {
+          serviceRequestDataRaw.providerImage = image;
+        }
+      } else {
+        // Explicitly keep open requests unassigned until a provider accepts
+        delete serviceRequestDataRaw.providerId;
+        delete serviceRequestDataRaw.providerName;
+        delete serviceRequestDataRaw.providerPhone;
+        delete serviceRequestDataRaw.providerSpecialization;
+        delete serviceRequestDataRaw.providerRating;
+        delete serviceRequestDataRaw.providerImage;
+      }
 
       // Handle scheduledTime
       if (urgency === 'scheduled' && scheduledDate) {
@@ -978,55 +1090,52 @@ export default function ServiceRequestScreen({
       // Remove all undefined values before saving
       const serviceRequestData = removeUndefinedValues(serviceRequestDataRaw);
 
-      // Create service request in Firestore (PRIMARY) - ensures provider can always find it
-      const firestoreData = {
+      // Create service request in MongoDB (primary)
+      const created = await serviceRequestsApi.create({
         ...serviceRequestData,
-        customerId: currentUser.id,
-        status: 'pending',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
+      });
+      const serviceRequestId =
+        (created as any)?._id ||
+        (created as any)?.id ||
+        (created as any)?.consultationId ||
+        '';
+      console.log('✅ Service request created in MongoDB:', serviceRequestId);
 
-      // Create document with auto-generated ID
-      const docRef = await firestore()
-        .collection('serviceRequests')
-        .add(firestoreData);
-
-      const serviceRequestId = docRef.id;
-      console.log('✅ Service request created in Firestore:', serviceRequestId);
-
-      // Also try to sync to MongoDB (optional, for backend consistency)
-      try {
-        await serviceRequestsApi.create({
-          ...serviceRequestData,
-          _id: serviceRequestId, // Use Firestore ID
-          consultationId: serviceRequestId,
-        });
-        console.log('✅ Service request also synced to MongoDB:', serviceRequestId);
-      } catch (apiError: any) {
-        // MongoDB sync is optional - Firestore is primary
-        console.warn('⚠️ MongoDB sync failed (service request is in Firestore):', apiError.message);
+      if (!serviceRequestId) {
+        throw new Error('Service request created but no id returned');
       }
 
-      // Notify nearby online providers via WebSocket
       try {
-        // Find online providers for this service type using API
-        const onlineProviders = await providersApi.getAll({
-          serviceType: selectedServiceType,
-          isOnline: true,
-          limit: 50,
-        });
+        await addServiceRequest(created as any);
+      } catch (e) {
+        console.warn('Could not cache service request locally:', e);
+      }
 
-        // Filter approved providers
-        const allProviderIds = onlineProviders
-          .filter(p => p.approvalStatus === 'approved')
-          .map(p => p._id || p.id)
-          .filter((id): id is string => !!id);
+      // Notify providers via WebSocket (targeted = only that provider; else nearby online)
+      try {
+        let providerIdsToNotify: string[] = [];
 
-        console.log(`📢 Notifying ${allProviderIds.length} provider(s) about service request: ${serviceRequestId}`);
+        if (isTargetedRequest && targetedProviderId) {
+          providerIdsToNotify = [String(targetedProviderId)];
+        } else {
+          const onlineProviders = await providersApi.getAll({
+            serviceType: selectedServiceType,
+            isOnline: true,
+            limit: 50,
+          });
+
+          providerIdsToNotify = onlineProviders
+            .filter(p => p.approvalStatus === 'approved')
+            .map(p => p._id || p.id)
+            .filter((id): id is string => !!id);
+        }
+
+        console.log(
+          `📢 Notifying ${providerIdsToNotify.length} provider(s) about service request: ${serviceRequestId}`,
+        );
 
         // Emit WebSocket notification to each provider
-        const notificationPromises = Array.from(allProviderIds).map(providerId => {
+        const notificationPromises = Array.from(providerIdsToNotify).map(providerId => {
           console.log(`📤 Sending WebSocket notification to provider: ${providerId}`);
           
           // Build WebSocket payload
@@ -1044,6 +1153,8 @@ export default function ServiceRequestScreen({
             problem: problem.trim(),
             scheduledTime: urgency === 'scheduled' && scheduledDate ? scheduledDate : new Date(),
             consultationFee: 0, // Service requests don't have fees upfront
+            providerId: isTargetedRequest ? String(targetedProviderId) : undefined,
+            isTargeted: isTargetedRequest,
           };
 
           // Only include problem if it has a value AND there's no questionnaire
@@ -1072,7 +1183,7 @@ export default function ServiceRequestScreen({
         });
 
         await Promise.all(notificationPromises);
-        console.log(`✅ Notified ${allProviderIds.length} online provider(s) about new service request`);
+        console.log(`✅ Notified ${providerIdsToNotify.length} provider(s) about new service request`);
       } catch (websocketError) {
         console.error('Error notifying providers via WebSocket:', websocketError);
         // Don't fail the request if WebSocket notification fails
@@ -1080,7 +1191,11 @@ export default function ServiceRequestScreen({
 
       // Show toast notification
       setSubmittedServiceRequestId(serviceRequestId);
-      setToastMessage('Your service request has been submitted. Nearby providers will be notified.');
+      setToastMessage(
+        isTargetedRequest
+          ? String(t('services.requestSentToProvider') || `Your request has been sent to ${targetedProvider?.name || 'the provider'}.`)
+          : 'Your service request has been submitted. Nearby providers will be notified.',
+      );
       setShowToast(true);
       
       // Navigate to ActiveService after a short delay
@@ -1114,9 +1229,43 @@ export default function ServiceRequestScreen({
           {t('services.requestAService')}
         </Text>
         <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-          {t('services.describeProblemSubtitle')}
+          {isTargetedRequest
+            ? String(
+                t('services.requestSpecificProviderSubtitle') ||
+                  `Requesting ${targetedProvider?.name || 'this provider'}`,
+              )
+            : t('services.describeProblemSubtitle')}
         </Text>
       </View>
+
+      {isTargetedRequest && targetedProvider ? (
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 14,
+              marginHorizontal: 16,
+              marginBottom: 8,
+            },
+          ]}>
+          <Text style={[{color: theme.textSecondary, fontSize: 12, marginBottom: 4}]}>
+            {t('services.selectedProvider')}
+          </Text>
+          <Text style={[{color: theme.text, fontSize: 15, fontWeight: '600'}]}>
+            {targetedProvider.name || t('services.selectedProvider')}
+          </Text>
+          <Text style={[{color: theme.textSecondary, fontSize: 13, marginTop: 4}]}>
+            {String(
+              t('services.requestGoesToThisProvider') ||
+                'This request will be sent only to this provider, even if they are offline.',
+            )}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Service Type Selection */}
       <View style={styles.section}>
@@ -1126,18 +1275,28 @@ export default function ServiceRequestScreen({
         <TouchableOpacity
           style={[
             styles.serviceTypeButton,
-            {backgroundColor: theme.card, borderColor: theme.border},
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              opacity: isTargetedRequest ? 0.85 : 1,
+            },
           ]}
-          onPress={() => setShowServiceTypeModal(true)}>
-          {selectedCategory ? (
+          disabled={isTargetedRequest}
+          activeOpacity={isTargetedRequest ? 1 : 0.7}
+          onPress={() => {
+            if (!isTargetedRequest) {
+              setShowServiceTypeModal(true);
+            }
+          }}>
+          {selectedCategory || selectedServiceType ? (
             <View style={styles.selectedServiceType}>
               <Icon
-                name={selectedCategory.icon}
+                name={selectedCategory?.icon || 'build'}
                 size={24}
-                color={selectedCategory.color}
+                color={selectedCategory?.color || theme.primary}
               />
               <Text style={[styles.serviceTypeText, {color: theme.text}]}>
-                {selectedCategory.name}
+                {selectedCategory?.name || selectedServiceType}
               </Text>
             </View>
           ) : (
@@ -1145,8 +1304,20 @@ export default function ServiceRequestScreen({
               {t('services.selectServiceType')}
             </Text>
           )}
-          <Icon name="chevron-right" size={24} color={theme.textSecondary} />
+          <Icon
+            name={isTargetedRequest ? 'lock' : 'chevron-right'}
+            size={22}
+            color={theme.textSecondary}
+          />
         </TouchableOpacity>
+        {isTargetedRequest ? (
+          <Text style={[{color: theme.textSecondary, fontSize: 12, marginTop: 6}]}>
+            {String(
+              t('services.serviceTypeLockedForProvider') ||
+                'Service type is set from this provider and cannot be changed.',
+            )}
+          </Text>
+        ) : null}
       </View>
 
       {/* Questionnaire */}
@@ -1231,75 +1402,42 @@ export default function ServiceRequestScreen({
                 </View>
               )}
 
-              {/* Select (Single choice) */}
               {question.type === 'select' && getOptions(question).length > 0 && (
-                <View style={styles.selectOptions}>
-                  {getOptions(question).map((option, optIdx) => {
-                    // For Hindi options, use the English option as the value for backward compatibility
-                    const englishOption = question.options?.[optIdx] || option;
-                    return (
-                    <TouchableOpacity
-                      key={optIdx}
-                      style={[
-                        styles.selectOption,
-                        {borderColor: theme.border},
-                        questionnaireAnswers[question.id] === option && {
-                          backgroundColor: theme.primary + '20',
-                          borderColor: theme.primary,
-                        },
-                      ]}
-                      onPress={() => handleQuestionnaireAnswer(question.id, englishOption)}>
-                      <Icon
-                        name={questionnaireAnswers[question.id] === englishOption ? 'radio-button-checked' : 'radio-button-unchecked'}
-                        size={20}
-                        color={questionnaireAnswers[question.id] === englishOption ? theme.primary : theme.textSecondary}
-                      />
-                      <Text style={[styles.selectOptionText, {color: theme.text}]}>{option}</Text>
-                    </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                <Select
+                  options={getOptions(question).map((option, optIdx) => ({
+                    value: question.options?.[optIdx] || option,
+                    label: option,
+                  }))}
+                  value={
+                    typeof questionnaireAnswers[question.id] === 'string'
+                      ? questionnaireAnswers[question.id]
+                      : ''
+                  }
+                  onChange={value =>
+                    handleQuestionnaireAnswer(question.id, value)
+                  }
+                  placeholder={t('common.select') || 'Select…'}
+                />
               )}
 
-              {/* Multi-select */}
-              {question.type === 'multiselect' && getOptions(question).length > 0 && (
-                <View style={styles.selectOptions}>
-                  {getOptions(question).map((option, optIdx) => {
-                    // For Hindi options, use the English option as the value for backward compatibility
-                    const englishOption = question.options?.[optIdx] || option;
-                    const selectedOptions = questionnaireAnswers[question.id] || [];
-                    const isSelected = Array.isArray(selectedOptions) && selectedOptions.includes(englishOption);
-                    return (
-                      <TouchableOpacity
-                        key={optIdx}
-                        style={[
-                          styles.selectOption,
-                          {borderColor: theme.border},
-                          isSelected && {
-                            backgroundColor: theme.primary + '20',
-                            borderColor: theme.primary,
-                          },
-                        ]}
-                        onPress={() => {
-                          const current = questionnaireAnswers[question.id] || [];
-                          const updated = Array.isArray(current)
-                            ? isSelected
-                              ? current.filter(v => v !== englishOption)
-                              : [...current, englishOption]
-                            : [englishOption];
-                          handleQuestionnaireAnswer(question.id, updated);
-                        }}>
-                        <Icon
-                          name={isSelected ? 'check-box' : 'check-box-outline-blank'}
-                          size={20}
-                          color={isSelected ? theme.primary : theme.textSecondary}
-                        />
-                        <Text style={[styles.selectOptionText, {color: theme.text}]}>{option}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+              {question.type === 'multiselect' &&
+                getOptions(question).length > 0 && (
+                  <MultiSelect
+                    options={getOptions(question).map((option, optIdx) => ({
+                      value: question.options?.[optIdx] || option,
+                      label: option,
+                    }))}
+                    value={
+                      Array.isArray(questionnaireAnswers[question.id])
+                        ? questionnaireAnswers[question.id]
+                        : []
+                    }
+                    onChange={value =>
+                      handleQuestionnaireAnswer(question.id, value)
+                    }
+                    placeholder={t('common.select') || 'Select…'}
+                  />
+                )}
             </View>
           ))}
         </View>
@@ -1397,53 +1535,81 @@ export default function ServiceRequestScreen({
         )}
       </View>
 
-      {/* Address Selection */}
-      <View style={styles.section}>
+      {/* Service address — simplified fields */}
+      <View style={[styles.section, {backgroundColor: theme.card, borderRadius: 12, padding: 12}]}>
         <Text style={[styles.label, {color: theme.text}]}>
           {t('services.serviceAddress')} *
         </Text>
-        <TouchableOpacity
+        <ServiceAddressFields
+          value={(selectedAddress || {}) as ServiceAddressValue}
+          onChange={(next) => setSelectedAddress(next)}
+          theme={theme}
+          showSaveForFuture
+          saveForFuture={saveAddressForFuture}
+          onSaveForFutureChange={setSaveAddressForFuture}
+          currentAddressLoading={fillingCurrentAddress}
+          onUseCurrentAddress={async () => {
+            setFillingCurrentAddress(true);
+            try {
+              const hasPermission =
+                await GeolocationService.requestLocationPermission();
+              if (hasPermission !== 'granted') {
+                setAlertModal({
+                  visible: true,
+                  title: t('common.error'),
+                  message:
+                    t('services.locationPermissionRequired') ||
+                    'Location permission is required.',
+                  type: 'warning',
+                });
+                return;
+              }
+              const location = await GeolocationService.getCurrentLocation();
+              setSelectedAddress({
+                ...(selectedAddress || {}),
+                address: location.address || selectedAddress?.address || '',
+                city: location.city || '',
+                district: location.city || (selectedAddress as any)?.district || '',
+                state: location.state || '',
+                pincode: location.pincode || '',
+                latitude: location.latitude,
+                longitude: location.longitude,
+                country: 'IN',
+              });
+            } catch (err: any) {
+              setAlertModal({
+                visible: true,
+                title: t('common.error'),
+                message: err?.message || t('services.addressSaveError'),
+                type: 'error',
+              });
+            } finally {
+              setFillingCurrentAddress(false);
+            }
+          }}
+        />
+        <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
+          Secondary mobile (optional)
+        </Text>
+        <TextInput
           style={[
-            styles.addressButton,
-            {backgroundColor: theme.card, borderColor: theme.border},
+            styles.problemInput,
+            {
+              color: theme.text,
+              borderColor: theme.border,
+              backgroundColor: theme.background,
+              minHeight: 44,
+            },
           ]}
-          onPress={() => setShowAddressModal(true)}>
-          {selectedAddress ? (
-            <View style={styles.addressContent}>
-              <Icon
-                name={
-                  (selectedAddress as SavedAddress).label
-                    ? getAddressLabelIcon((selectedAddress as SavedAddress).label)
-                    : 'location-on'
-                }
-                size={24}
-                color={theme.primary}
-              />
-              <View style={styles.addressText}>
-                {(selectedAddress as SavedAddress).label && (
-                  <Text style={[styles.addressLabel, {color: theme.primary}]}>
-                    {getAddressLabelText(selectedAddress as SavedAddress)}
-                  </Text>
-                )}
-                <Text style={[styles.addressLine, {color: theme.text}]}>
-                  {selectedAddress.address}
-                </Text>
-                <Text style={[styles.addressDetails, {color: theme.textSecondary}]}>
-                  {selectedAddress.pincode}
-                  {selectedAddress.city && `, ${selectedAddress.city}`}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.addressContent}>
-              <Icon name="add-location" size={24} color={theme.textSecondary} />
-              <Text style={[styles.placeholderText, {color: theme.textSecondary}]}>
-                Select or add address
-              </Text>
-            </View>
-          )}
-          <Icon name="chevron-right" size={24} color={theme.textSecondary} />
-        </TouchableOpacity>
+          value={secondaryMobile}
+          onChangeText={(text) =>
+            setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
+          }
+          placeholder="10-digit mobile"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="phone-pad"
+          maxLength={10}
+        />
       </View>
 
       {/* Urgency Selection */}

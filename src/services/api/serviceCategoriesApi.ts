@@ -40,7 +40,10 @@ export interface ServiceCategory {
  */
 export async function getServiceCategories(): Promise<ServiceCategory[]> {
   try {
-    const response = await apiGet<{data: ServiceCategory[]; count: number}>('/serviceCategories');
+    const response = await apiGet<{data: ServiceCategory[]; count: number}>(
+      '/serviceCategories',
+      {skipAuth: true},
+    );
     if (Array.isArray(response)) {
       return response;
     }

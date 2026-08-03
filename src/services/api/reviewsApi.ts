@@ -36,6 +36,7 @@ export interface CreateReviewData {
 export async function getReviews(filters?: {
   providerId?: string;
   customerId?: string;
+  jobCardId?: string;
   limit?: number;
   offset?: number;
 }): Promise<Review[]> {
@@ -97,11 +98,8 @@ export async function getReviewById(reviewId: string): Promise<Review | null> {
  */
 export async function getJobCardReview(jobCardId: string): Promise<Review | null> {
   try {
-    const reviews = await getReviews({customerId: ''}); // Get all, filter client-side
-    // Or backend could support filtering by jobCardId
-    // For now, get customer reviews and filter
-    const review = reviews.find(r => r.jobCardId === jobCardId);
-    return review || null;
+    const reviews = await getReviews({jobCardId});
+    return reviews.length > 0 ? reviews[0] : null;
   } catch (error) {
     console.error('Error fetching job card review:', error);
     return null;

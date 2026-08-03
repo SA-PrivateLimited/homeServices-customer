@@ -12,16 +12,17 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Modal,
-  FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {Select} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import {contactRecommendationsApi} from '../services/api/contactRecommendationsApi';
+import PhoneNumberInput from '../components/PhoneNumberInput';
+import {localTenDigits, toE164} from '../utils/phone';
 
 interface ShareContactRecommendationScreenProps {
   navigation: any;
@@ -41,7 +42,6 @@ export default function ShareContactRecommendationScreen({
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -76,15 +76,17 @@ export default function ShareContactRecommendationScreen({
     }
   };
 
-  const handleSelectServiceType = (category: ServiceCategory) => {
-    setSelectedServiceType(category.name);
-    setShowServiceTypeModal(false);
+  const handleSelectServiceType = (categoryName: string) => {
+    setSelectedServiceType(categoryName);
   };
 
+  const serviceTypeOptions = serviceCategories.map(cat => ({
+    value: cat.name,
+    label: language === 'hi' && cat.nameHi ? cat.nameHi : cat.name,
+  }));
+
   const validatePhone = (phone: string): boolean => {
-    // Basic phone validation - 10 digits
-    const cleaned = phone.replace(/\D/g, '');
-    return cleaned.length === 10;
+    return localTenDigits(phone).length === 10;
   };
 
   const handleSubmit = async () => {
@@ -144,7 +146,7 @@ export default function ShareContactRecommendationScreen({
     try {
       const response = await contactRecommendationsApi.create({
         recommendedProviderName: providerName.trim(),
-        recommendedProviderPhone: providerPhone.trim(),
+        recommendedProviderPhone: toE164(providerPhone),
         serviceType: selectedServiceType,
         address: address.trim() || undefined,
       });
@@ -179,8 +181,6 @@ export default function ShareContactRecommendationScreen({
     }
   };
 
-  const selectedCategory = serviceCategories.find(cat => cat.name === selectedServiceType);
-
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       <ScrollView
@@ -202,29 +202,15 @@ export default function ShareContactRecommendationScreen({
         <View style={[styles.form, {backgroundColor: theme.card}]}>
           {/* Service Type */}
           <View style={styles.formGroup}>
-            <Text style={[styles.label, {color: theme.text}]}>
-              {t('recommendations.serviceType')} *
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.input,
-                styles.selectInput,
-                {borderColor: theme.border, backgroundColor: theme.background},
-              ]}
-              onPress={() => setShowServiceTypeModal(true)}>
-              <Text
-                style={[
-                  styles.selectInputText,
-                  {color: selectedServiceType ? theme.text : theme.textSecondary},
-                ]}>
-                {selectedServiceType
-                  ? (language === 'hi' && selectedCategory?.nameHi
-                      ? selectedCategory.nameHi
-                      : selectedServiceType)
-                  : t('recommendations.selectServiceType')}
-              </Text>
-              <Icon name="arrow-drop-down" size={24} color={theme.textSecondary} />
-            </TouchableOpacity>
+            <Select
+              label={`${t('recommendations.serviceType')} *`}
+              options={serviceTypeOptions}
+              value={selectedServiceType}
+              onChange={handleSelectServiceType}
+              placeholder={String(t('recommendations.selectServiceType'))}
+              title={String(t('services.selectServiceType'))}
+              disabled={loadingCategories}
+            />
           </View>
 
           {/* Provider Name */}
@@ -246,14 +232,18 @@ export default function ShareContactRecommendationScreen({
             <Text style={[styles.label, {color: theme.text}]}>
               {t('recommendations.providerPhone')} *
             </Text>
-            <TextInput
-              style={[styles.input, {borderColor: theme.border, color: theme.text}]}
-              placeholder={t('recommendations.providerPhonePlaceholder')}
-              placeholderTextColor={theme.textSecondary}
+            <PhoneNumberInput
               value={providerPhone}
               onChangeText={setProviderPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
+              placeholder={String(
+                t('recommendations.providerPhonePlaceholder') ||
+                  '10-digit mobile',
+              )}
+              borderColor={theme.border}
+              backgroundColor={theme.card}
+              prefixBackgroundColor={isDarkMode ? theme.border : '#F5F5F5'}
+              textColor={theme.text}
+              placeholderTextColor={theme.textSecondary}
             />
           </View>
 
@@ -304,65 +294,6 @@ export default function ShareContactRecommendationScreen({
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Service Type Modal */}
-      <Modal
-        visible={showServiceTypeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowServiceTypeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>
-                {t('services.selectServiceType')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowServiceTypeModal(false)}>
-                <Icon name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            {loadingCategories ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.primary} />
-              </View>
-            ) : (
-              <FlatList
-                data={serviceCategories}
-                keyExtractor={item => item.id}
-                renderItem={({item}) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.categoryItem,
-                      {
-                        backgroundColor:
-                          selectedServiceType === item.name
-                            ? theme.primary + '20'
-                            : 'transparent',
-                      },
-                    ]}
-                    onPress={() => handleSelectServiceType(item)}>
-                    <View
-                      style={[
-                        styles.categoryIcon,
-                        {backgroundColor: item.color + '20'},
-                      ]}>
-                      <Icon name={item.icon} size={24} color={item.color} />
-                    </View>
-                    <View style={styles.categoryText}>
-                      <Text style={[styles.categoryName, {color: theme.text}]}>
-                        {language === 'hi' && item.nameHi ? item.nameHi : item.name}
-                      </Text>
-                    </View>
-                    {selectedServiceType === item.name && (
-                      <Icon name="check-circle" size={24} color={theme.primary} />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
 
       {/* Alert Modal */}
       <AlertModal

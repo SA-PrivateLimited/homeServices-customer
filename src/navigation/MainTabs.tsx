@@ -1,18 +1,16 @@
 import React from 'react';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {TouchableOpacity, View} from 'react-native';
+import {TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
 
-// Screens - Settings (kept for profile management)
 import SettingsScreen from '../screens/SettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ShareContactRecommendationScreen from '../screens/ShareContactRecommendationScreen';
 
-// Screens - Services
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 import ActiveServiceScreen from '../screens/ActiveServiceScreen';
@@ -20,9 +18,7 @@ import ProvidersListScreen from '../screens/ProvidersListScreen';
 import ProviderDetailsScreen from '../screens/ProviderDetailsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 
-// Components
 import NotificationIcon from '../components/NotificationIcon';
-import PincodeHeader from '../components/PincodeHeader';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -36,13 +32,9 @@ const ServicesStack = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: true,
-        headerStyle: {
-          backgroundColor: theme.card,
-        },
+        headerStyle: {backgroundColor: theme.card},
         headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerTitleStyle: {fontWeight: '600'},
       }}>
       <Stack.Screen
         name="ServiceRequest"
@@ -81,10 +73,34 @@ const ServicesStack = () => {
         })}
       />
       <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{title: t('notifications.title')}}
+      />
+    </Stack.Navigator>
+  );
+};
+
+/** Browse tab: profession list → provider details (back returns to list). */
+const ProvidersStack = () => {
+  const {isDarkMode} = useStore();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+
+  return (
+    <Stack.Navigator
+      initialRouteName="ProvidersList"
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {backgroundColor: theme.card},
+        headerTintColor: theme.text,
+        headerTitleStyle: {fontWeight: '600'},
+      }}>
+      <Stack.Screen
         name="ProvidersList"
         component={ProvidersListScreen}
         options={({navigation}) => ({
-          title: t('providers.browseProviders'),
+          title: t('providers.selectProfession') || t('providers.browseProviders'),
           headerRight: () => (
             <NotificationIcon
               onPress={() => navigation.navigate('Notifications')}
@@ -116,13 +132,9 @@ const SettingsStack = React.memo(() => {
       initialRouteName="SettingsMain"
       screenOptions={{
         headerShown: true,
-        headerStyle: {
-          backgroundColor: theme.card,
-        },
+        headerStyle: {backgroundColor: theme.card},
         headerTintColor: theme.text,
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerTitleStyle: {fontWeight: '600'},
       }}>
       <Stack.Screen
         name="SettingsMain"
@@ -132,23 +144,59 @@ const SettingsStack = React.memo(() => {
       <Stack.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{title: 'My Profile'}}
+        options={{
+          title: t('profile.title'),
+          headerTintColor: theme.primary,
+          headerTitleStyle: {fontWeight: '600', color: theme.text},
+        }}
       />
       <Stack.Screen
         name="ShareContactRecommendation"
         component={ShareContactRecommendationScreen}
-        options={{
-          title: t('recommendations.shareContact'),
-        }}
+        options={{title: t('recommendations.shareContact')}}
       />
     </Stack.Navigator>
   );
 });
 
-const MainTabs = () => {
+/** Guest: providers list only (login CTA lives in that screen). */
+const GuestStack = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {backgroundColor: theme.card},
+        headerTintColor: theme.text,
+        headerTitleStyle: {fontWeight: '600'},
+        contentStyle: {backgroundColor: theme.background},
+      }}>
+      <Stack.Screen
+        name="GuestProviders"
+        component={ProvidersListScreen}
+        options={{title: t('providers.selectProfession') || t('providers.browseProviders')}}
+      />
+      <Stack.Screen
+        name="ProviderDetails"
+        component={ProviderDetailsScreen}
+        options={{title: t('providers.providerDetails')}}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const MainTabs = () => {
+  const {isDarkMode, currentUser} = useStore();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  const isGuest = !currentUser?.id && !currentUser?._id;
+
+  if (isGuest) {
+    return <GuestStack />;
+  }
 
   return (
     <Tab.Navigator
@@ -194,7 +242,7 @@ const MainTabs = () => {
           borderRightWidth: 0,
           borderLeftWidth: 0,
         },
-        tabBarButton: (props) => (
+        tabBarButton: props => (
           <TouchableOpacity
             {...props}
             style={[
@@ -214,23 +262,37 @@ const MainTabs = () => {
           fontWeight: '500',
         },
       })}>
-      <Tab.Screen 
-        name="Services" 
-        component={ServicesStack} 
+      <Tab.Screen
+        name="Services"
+        component={ServicesStack}
         options={{title: t('common.request')}}
+        listeners={({navigation}) => ({
+          tabPress: () => {
+            // Always reset to open (anyone-can-accept) flow when opening Services tab.
+            // Specific-provider requests only come from Provider Details navigation.
+            navigation.navigate('Services', {
+              screen: 'ServiceRequest',
+              params: {
+                requestMode: 'open',
+                provider: undefined,
+                serviceType: undefined,
+              },
+            });
+          },
+        })}
       />
-      <Tab.Screen 
-        name="Providers" 
-        component={ProvidersListScreen}
+      <Tab.Screen
+        name="Providers"
+        component={ProvidersStack}
         options={{title: t('common.browse')}}
       />
-      <Tab.Screen 
-        name="History" 
+      <Tab.Screen
+        name="History"
         component={ServiceHistoryScreen}
         options={{title: t('common.history')}}
       />
-      <Tab.Screen 
-        name="Settings" 
+      <Tab.Screen
+        name="Settings"
         component={SettingsStack}
         options={{title: t('common.settings')}}
       />

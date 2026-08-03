@@ -6,9 +6,9 @@
  * Providers cannot edit reviews
  */
 
-import auth from '@react-native-firebase/auth';
 import {reviewsApi, type Review as ReviewApi} from './api/reviewsApi';
 import {jobCardsApi} from './api/jobCardsApi';
+import {getStoredJwt, readStoredUser} from './session';
 
 export interface Review {
   id?: string;
@@ -38,8 +38,10 @@ export const createReview = async (
   photos?: string[],
 ): Promise<string> => {
   try {
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
+    const jwt = await getStoredJwt();
+    const storedUser = await readStoredUser();
+    const customerId = storedUser?.id || storedUser?._id;
+    if (!jwt || !customerId) {
       throw new Error('User not authenticated');
     }
 
@@ -55,7 +57,7 @@ export const createReview = async (
     }
 
     // Verify the current user is the customer
-    if (jobCard.customerId !== currentUser.uid) {
+    if (jobCard.customerId !== customerId) {
       throw new Error('Only the customer can create a review');
     }
 
@@ -177,8 +179,9 @@ export const canCustomerReview = async (
   jobCardId: string,
 ): Promise<boolean> => {
   try {
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
+    const storedUser = await readStoredUser();
+    const customerId = storedUser?.id || storedUser?._id;
+    if (!customerId) {
       return false;
     }
 
@@ -194,7 +197,7 @@ export const canCustomerReview = async (
     }
 
     // Check if customer matches
-    if (jobCard.customerId !== currentUser.uid) {
+    if (jobCard.customerId !== customerId) {
       return false;
     }
 

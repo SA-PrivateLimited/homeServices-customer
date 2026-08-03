@@ -1,11 +1,10 @@
 /**
- * API Client
- * Base client for making HTTP requests to the backend API
- * Handles authentication, error handling, and request formatting
+ * API Client — JWT from backend session (phone + PIN / MongoDB).
+ * Firebase is fully disabled on the customer critical path.
  */
 
-import auth from '@react-native-firebase/auth';
 import {API_BASE_URL, API_TIMEOUT} from '../../config/api';
+import {getStoredJwt} from '../session';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -22,25 +21,15 @@ export interface RequestOptions {
   skipAuth?: boolean;
 }
 
-/**
- * Get Firebase Auth token for API requests
- */
 async function getAuthToken(): Promise<string | null> {
   try {
-    const user = auth().currentUser;
-    if (!user) {
-      return null;
-    }
-    return await user.getIdToken();
+    return await getStoredJwt();
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
   }
 }
 
-/**
- * Make API request with authentication
- */
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestOptions = {},
@@ -53,7 +42,6 @@ export async function apiRequest<T>(
     skipAuth = false,
   } = options;
 
-  // Get auth token unless skipping auth
   let authToken: string | null = null;
   if (!skipAuth) {
     authToken = await getAuthToken();
@@ -62,27 +50,27 @@ export async function apiRequest<T>(
     }
   }
 
-  // Build headers
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     ...headers,
   };
 
   if (authToken && !skipAuth) {
-    requestHeaders['Authorization'] = `Bearer ${authToken}`;
+    requestHeaders.Authorization = `Bearer ${authToken}`;
   }
 
-  // Build URL
   const url = endpoint.startsWith('http')
     ? endpoint
     : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-  // Create timeout promise
+  if (__DEV__) {
+    console.log('[API]', method, url);
+  }
+
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error('Request timeout')), timeout);
   });
 
-  // Create fetch promise
   const fetchPromise = fetch(url, {
     method,
     headers: requestHeaders,
@@ -90,25 +78,23 @@ export async function apiRequest<T>(
   });
 
   try {
-    // Race between fetch and timeout
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
-    // Check if response is ok
     if (!response.ok) {
       let errorData: any = {};
       try {
         errorData = await response.json();
       } catch {
-        // If JSON parsing fails, use status text
         errorData = {message: response.statusText};
       }
 
       throw new Error(
-        errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+        errorData.message ||
+          errorData.error ||
+          `HTTP ${response.status}: ${response.statusText}`,
       );
     }
 
-    // Parse response
     const data: ApiResponse<T> = await response.json();
 
     if (!data.success) {
@@ -117,30 +103,38 @@ export async function apiRequest<T>(
 
     return data.data as T;
   } catch (error: any) {
-    // Handle network errors
     if (error.message === 'Request timeout') {
-      throw new Error('Request timed out. Please check your connection and try again.');
+      throw new Error(
+        'Request timed out. Please check your connection and try again.',
+      );
     }
 
-    if (error.message?.includes('Failed to fetch') || error.message?.includes('Network request failed')) {
+    if (
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('Network request failed')
+    ) {
+      if (__DEV__) {
+        console.warn(
+          '[API] Network request failed. URL was:',
+          url,
+          '| Original error:',
+          error.message,
+        );
+      }
       throw new Error('Network error. Please check your internet connection.');
     }
 
-    // Re-throw other errors
     throw error;
   }
 }
 
-/**
- * GET request helper
- */
-export async function apiGet<T>(endpoint: string, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
+export async function apiGet<T>(
+  endpoint: string,
+  options?: Omit<RequestOptions, 'method' | 'body'>,
+): Promise<T> {
   return apiRequest<T>(endpoint, {...options, method: 'GET'});
 }
 
-/**
- * POST request helper
- */
 export async function apiPost<T>(
   endpoint: string,
   body?: any,
@@ -149,9 +143,6 @@ export async function apiPost<T>(
   return apiRequest<T>(endpoint, {...options, method: 'POST', body});
 }
 
-/**
- * PUT request helper
- */
 export async function apiPut<T>(
   endpoint: string,
   body?: any,
@@ -160,9 +151,6 @@ export async function apiPut<T>(
   return apiRequest<T>(endpoint, {...options, method: 'PUT', body});
 }
 
-/**
- * DELETE request helper
- */
 export async function apiDelete<T>(
   endpoint: string,
   options?: Omit<RequestOptions, 'method' | 'body'>,

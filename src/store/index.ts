@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {User} from '../services/api/usersApi';
 import type {ServiceRequest} from '../services/api/serviceRequestsApi';
 import {changeLanguage} from '../i18n';
+import {normalizeUser, readStoredUser} from '../services/session';
 
 export interface AppNotification {
   id: string;
@@ -95,9 +96,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Service Request actions
   setCurrentUser: async (user: User | null) => {
-    set({currentUser: user});
-    if (user) {
-      await AsyncStorage.setItem('currentUser', JSON.stringify(user));
+    const normalized = user ? normalizeUser(user as any) : null;
+    set({currentUser: normalized});
+    if (normalized) {
+      await AsyncStorage.setItem('currentUser', JSON.stringify(normalized));
     } else {
       await AsyncStorage.removeItem('currentUser');
     }
@@ -205,10 +207,23 @@ export const useStore = create<AppState>((set, get) => ({
       // Initialize i18n with stored language
       await changeLanguage(storedLanguage);
 
+      // Prefer JWT session user (phone auth) over legacy store key
+      let parsedUser: User | null = null;
+      try {
+        const sessionUser = await readStoredUser();
+        if (sessionUser) {
+          parsedUser = normalizeUser(sessionUser as any);
+        } else if (currentUser) {
+          parsedUser = normalizeUser(JSON.parse(currentUser));
+        }
+      } catch {
+        parsedUser = currentUser ? normalizeUser(JSON.parse(currentUser)) : null;
+      }
+
       set({
         isDarkMode: theme ? JSON.parse(theme) : false,
         language: storedLanguage,
-        currentUser: currentUser ? JSON.parse(currentUser) : null,
+        currentUser: parsedUser,
         serviceRequests: serviceRequests ? JSON.parse(serviceRequests) : [],
         notifications: notifications ? JSON.parse(notifications).map((n: any) => ({
           ...n,

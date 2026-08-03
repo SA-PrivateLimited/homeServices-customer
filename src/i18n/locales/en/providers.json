@@ -32,6 +32,12 @@
   "pleaseLoginToRequest": "Please login to request a service",
   "browseProviders": "Browse Providers",
   "providerDetails": "Provider Details",
-  "newServiceRequestNotification": "New service request incoming"
+  "newServiceRequestNotification": "New service request incoming",
+  "selectProfession": "Select profession",
+  "allProfessions": "All professions",
+  "selectState": "Select state",
+  "allStates": "All states",
+  "selectDistrict": "Select district",
+  "allDistricts": "All districts"
 }
 

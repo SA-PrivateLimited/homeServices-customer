@@ -35,7 +35,7 @@
   "logout": "Logout",
   "logoutTitle": "Logout",
   "logoutMessage": "Are you sure you want to logout?",
-  "logoutSubMessage": "You'll need to sign in again to access your account.",
+  "logoutSubMessage": "You'll only need your PIN next time — your number stays saved for 30 days.",
   "request": "Request",
   "browse": "Browse",
   "cancellationReason": "Cancellation Reason",

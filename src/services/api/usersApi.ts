@@ -27,14 +27,22 @@ export interface User {
   };
   homeAddress?: {
     address?: string;
+    landmark?: string;
     city?: string;
+    district?: string;
     state?: string;
+    stateId?: string;
+    districtId?: string;
     pincode?: string;
   };
   officeAddress?: {
     address?: string;
+    landmark?: string;
     city?: string;
+    district?: string;
     state?: string;
+    stateId?: string;
+    districtId?: string;
     pincode?: string;
   };
   profileImage?: string;
