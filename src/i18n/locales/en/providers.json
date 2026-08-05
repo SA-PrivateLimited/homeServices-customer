@@ -38,6 +38,9 @@
   "selectState": "Select state",
   "allStates": "All states",
   "selectDistrict": "Select district",
-  "allDistricts": "All districts"
+  "allDistricts": "All districts",
+  "district": "District",
+  "submitRequest": "Submit request",
+  "requestSentTitle": "Request submitted"
 }
 

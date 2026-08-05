@@ -56,12 +56,14 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason, getJobCardById} from '../services/jobCardService';
 import {jobCardsApi} from '../services/api/jobCardsApi';
+import JobCardComments from '../components/JobCardComments';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import CancelTaskModal from '../components/CancelTaskModal';
 import {getDistanceToCustomer, formatDistance} from '../services/providerLocationService';
 import ReviewModal from '../components/ReviewModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AlertModal from '../components/AlertModal';
+import Toast from '../components/Toast';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import {providersApi, Provider} from '../services/api/providersApi';
 import WebSocketService from '../services/websocketService';
@@ -110,6 +112,8 @@ export default function ActiveServiceScreen({
   const [showReRequestModal, setShowReRequestModal] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -380,6 +384,13 @@ export default function ActiveServiceScreen({
               ...request,
               rejectionReason: (request as any).rejectionReason,
             }));
+          } else if (newStatus === 'pending') {
+            // Keep declinedProviders in sync while still waiting
+            setServiceRequest((prev: any) => ({
+              ...(prev || {}),
+              ...request,
+              declinedProviders: (request as any).declinedProviders || [],
+            }));
           }
 
           setStatus(newStatus);
@@ -574,7 +585,57 @@ export default function ActiveServiceScreen({
     };
 
     fetchAvailableProviders();
-  }, [status, serviceRequest?.serviceType]);
+  }, [status, serviceRequest?.serviceType, serviceRequest?.providerId]);
+
+  // Realtime: accept / targeted reject / open-request decline
+  useEffect(() => {
+    if (!serviceRequestId || !customerUserId) return;
+
+    const unsubscribe = WebSocketService.onServiceRequestStatus(data => {
+      const eventId = String(
+        data.serviceRequestId || data.consultationId || '',
+      );
+      if (!eventId || eventId !== String(serviceRequestId)) return;
+
+      if (data.status === 'accepted') {
+        loadServiceData();
+        return;
+      }
+
+      if (data.status === 'rejected') {
+        setStatus('rejected');
+        setServiceRequest((prev: any) => ({
+          ...(prev || {}),
+          status: 'rejected',
+          rejectionReason: data.rejectionReason,
+          providerName: data.providerName || prev?.providerName,
+          providerId: data.providerId || prev?.providerId,
+        }));
+        return;
+      }
+
+      if (data.status === 'pending' && Array.isArray(data.declinedProviders)) {
+        setServiceRequest((prev: any) => ({
+          ...(prev || {}),
+          declinedProviders: data.declinedProviders,
+        }));
+        const name =
+          data.lastDeclinedProvider?.providerName ||
+          data.declinedProviders[data.declinedProviders.length - 1]
+            ?.providerName ||
+          'Provider';
+        setToastMessage(
+          String(
+            t('activeService.providerDeclinedToast') ||
+              '{{name}} declined — still waiting for others',
+          ).replace('{{name}}', name),
+        );
+        setShowToast(true);
+      }
+    });
+
+    return unsubscribe;
+  }, [serviceRequestId, customerUserId, t]);
 
   const loadServiceData = async () => {
     try {
@@ -1257,6 +1318,59 @@ export default function ActiveServiceScreen({
       )
     : t('activeService.waitingForProviderToAccept');
 
+  const declinedProvidersList: Array<{
+    providerId: string;
+    providerName?: string;
+    providerPhone?: string;
+  }> = Array.isArray(serviceRequest?.declinedProviders)
+    ? serviceRequest.declinedProviders
+    : [];
+  const declinedIdSet = new Set(
+    declinedProvidersList.map(d => String(d.providerId)),
+  );
+
+  /** Online + declined merged for pending open requests */
+  const displayProviders: Array<{
+    _id?: string;
+    id?: string;
+    name?: string;
+    displayName?: string;
+    phoneNumber?: string;
+    phone?: string;
+    isOnline?: boolean;
+    declined?: boolean;
+  }> = (() => {
+    if (status !== 'pending' || serviceRequest?.providerId) return [];
+    const online = (availableProviders || []).map(p => {
+      const id = String(p._id || p.id || '');
+      return {
+        ...p,
+        declined: declinedIdSet.has(id),
+      };
+    });
+    const onlineIds = new Set(
+      online.map(p => String(p._id || p.id || '')).filter(Boolean),
+    );
+    const declinedOnly = declinedProvidersList
+      .filter(d => !onlineIds.has(String(d.providerId)))
+      .map(d => ({
+        _id: d.providerId,
+        id: d.providerId,
+        name: d.providerName || 'Provider',
+        displayName: d.providerName || 'Provider',
+        phoneNumber: d.providerPhone || '',
+        phone: d.providerPhone || '',
+        isOnline: false,
+        declined: true,
+      }));
+    // Declined first so customer notices, then still-available online
+    return [
+      ...declinedOnly,
+      ...online.filter(p => p.declined),
+      ...online.filter(p => !p.declined),
+    ];
+  })();
+
   const providerNotReadyMessage = String(
     t('activeService.providerNotReadyMessage') ||
       '{{name}} declined this request. You can choose another provider or request the service again.',
@@ -1746,7 +1860,7 @@ export default function ActiveServiceScreen({
                       {t('loading')}
                     </Text>
                   </View>
-                ) : availableProviders.length > 0 ? (
+                ) : displayProviders.length > 0 ? (
                   <View style={styles.providersListContainer}>
                     <Text style={[styles.providersHeader, {color: theme.text}]}>
                       {t('activeService.availableProviders')}
@@ -1756,30 +1870,70 @@ export default function ActiveServiceScreen({
                       showsHorizontalScrollIndicator={false}
                       style={styles.providersScrollContainer}
                     >
-                      {availableProviders.map((provider:any) => (
-                        <View key={provider._id || provider.id} style={[styles.providerCard, {backgroundColor: theme.card, borderColor: theme.border}]}>
-                          <View style={styles.providerCardInfo}>
-                            <Text style={[styles.providerCardName, {color: theme.text}]}>
-                              {provider.displayName || provider.name || t('activeService.providerDetails')}
-                            </Text>
-                            <Text style={[styles.providerCardPhone, {color: theme.textSecondary}]}>
-                              {provider?.phoneNumber || provider?.phone || (provider as any)?.primaryPhone || (provider as any)?.mobile || t('activeService.phoneNotAvailable')}
-                            </Text>
-                          </View>
-                          <View style={styles.providerStatusContainer}>
-                            <View style={[
-                              styles.providerStatusIndicator,
-                              {backgroundColor: provider.isOnline ? '#34C759' : '#FF3B30'}
-                            ]} />
-                            <Text style={[
-                              styles.providerStatusText,
-                              {color: provider.isOnline ? '#34C759' : '#FF3B30'}
+                      {displayProviders.map((provider: any) => {
+                        const declined = !!provider.declined;
+                        const statusColor = declined
+                          ? '#FF3B30'
+                          : provider.isOnline
+                            ? '#34C759'
+                            : '#FF3B30';
+                        const statusLabel = declined
+                          ? String(t('activeService.declined') || 'Declined')
+                          : provider.isOnline
+                            ? t('activeService.online')
+                            : t('activeService.offline');
+                        return (
+                          <View
+                            key={provider._id || provider.id}
+                            style={[
+                              styles.providerCard,
+                              {
+                                backgroundColor: theme.card,
+                                borderColor: declined
+                                  ? '#FF3B30' + '55'
+                                  : theme.border,
+                              },
                             ]}>
-                              {provider.isOnline ? t('activeService.online') : t('activeService.offline')}
-                            </Text>
+                            <View style={styles.providerCardInfo}>
+                              <Text
+                                style={[
+                                  styles.providerCardName,
+                                  {color: theme.text},
+                                ]}>
+                                {provider.displayName ||
+                                  provider.name ||
+                                  t('activeService.providerDetails')}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.providerCardPhone,
+                                  {color: theme.textSecondary},
+                                ]}>
+                                {provider?.phoneNumber ||
+                                  provider?.phone ||
+                                  (provider as any)?.primaryPhone ||
+                                  (provider as any)?.mobile ||
+                                  t('activeService.phoneNotAvailable')}
+                              </Text>
+                            </View>
+                            <View style={styles.providerStatusContainer}>
+                              <View
+                                style={[
+                                  styles.providerStatusIndicator,
+                                  {backgroundColor: statusColor},
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.providerStatusText,
+                                  {color: statusColor},
+                                ]}>
+                                {statusLabel}
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                      ))}
+                        );
+                      })}
                     </ScrollView>
                   </View>
                 ) : null}
@@ -1936,6 +2090,33 @@ export default function ActiveServiceScreen({
               </View>
             )}
           </View>
+
+          {/* Comments — shared with provider & admin once a job card exists */}
+          {jobCardId && !String(jobCardId).startsWith('sr_') ? (
+            <JobCardComments
+              comments={(jobCard as any)?.comments || []}
+              theme={theme}
+              canComment={
+                status === 'accepted' ||
+                status === 'in-progress' ||
+                status === 'completed'
+              }
+              title={String(t('jobCard.comments') || 'Comments')}
+              placeholder={String(
+                t('jobCard.commentPlaceholder') || 'Write a comment…',
+              )}
+              emptyText={String(t('jobCard.noComments') || 'No comments yet')}
+              postLabel={String(t('jobCard.postComment') || 'Post')}
+              onSubmit={async text => {
+                const updated = await jobCardsApi.addComment(jobCardId, text);
+                setJobCard((prev: any) => ({
+                  ...(prev || {}),
+                  ...(updated as any),
+                  comments: (updated as any).comments || [],
+                }));
+              }}
+            />
+          ) : null}
 
           {/* Action Buttons */}
           <View style={styles.actionsContainer}>
@@ -2121,6 +2302,14 @@ export default function ActiveServiceScreen({
           }}
         />
       )}
+
+      <Toast
+        visible={showToast}
+        message={toastMessage}
+        type="info"
+        duration={3500}
+        onHide={() => setShowToast(false)}
+      />
     </View>
   );
 }

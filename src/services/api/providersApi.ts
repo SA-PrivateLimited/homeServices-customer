@@ -54,6 +54,7 @@ export interface ProviderFilters {
   district?: string;
   stateId?: string;
   districtId?: string;
+  pincode?: string;
   isOnline?: boolean;
   minRating?: number;
   limit?: number;

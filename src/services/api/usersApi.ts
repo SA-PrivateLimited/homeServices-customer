@@ -34,6 +34,8 @@ export interface User {
     stateId?: string;
     districtId?: string;
     pincode?: string;
+    label?: string;
+    customLabel?: string;
   };
   officeAddress?: {
     address?: string;
@@ -44,7 +46,24 @@ export interface User {
     stateId?: string;
     districtId?: string;
     pincode?: string;
+    label?: string;
+    customLabel?: string;
   };
+  serviceAddresses?: Array<{
+    id?: string;
+    label?: 'home' | 'office' | 'other';
+    customLabel?: string;
+    address?: string;
+    landmark?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    stateId?: string;
+    districtId?: string;
+    pincode?: string;
+    latitude?: number;
+    longitude?: number;
+  }>;
   profileImage?: string;
   gender?: string;
   bloodGroup?: string;

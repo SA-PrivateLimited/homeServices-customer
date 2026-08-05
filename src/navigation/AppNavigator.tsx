@@ -1,11 +1,16 @@
 import React, {useState, useEffect} from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+  CommonActions,
+} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {View, ActivityIndicator, StyleSheet} from 'react-native';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
 import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
+import {onSessionExpired} from '../services/sessionExpiry';
 
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
@@ -17,6 +22,7 @@ import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 import ActiveServiceScreen from '../screens/ActiveServiceScreen';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 export default function AppNavigator() {
   const [initializing, setInitializing] = useState(true);
@@ -50,6 +56,26 @@ export default function AppNavigator() {
     };
   }, [setCurrentUser]);
 
+  useEffect(() => {
+    return onSessionExpired(() => {
+      void (async () => {
+        try {
+          await setCurrentUser(null);
+        } catch {
+          // ignore
+        }
+        if (navigationRef.isReady()) {
+          navigationRef.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{name: 'Login'}],
+            }),
+          );
+        }
+      })();
+    });
+  }, [setCurrentUser]);
+
   if (initializing) {
     return (
       <View style={styles.loadingContainer}>
@@ -60,6 +86,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       theme={{
         dark: isDarkMode,
         colors: {

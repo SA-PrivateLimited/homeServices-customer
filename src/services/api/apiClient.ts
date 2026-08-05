@@ -4,7 +4,7 @@
  */
 
 import {API_BASE_URL, API_TIMEOUT} from '../../config/api';
-import {getStoredJwt} from '../session';
+import {forceLogoutExpiredSession, getStoredJwt} from '../session';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -19,6 +19,22 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
   skipAuth?: boolean;
+}
+
+let handlingUnauthorized = false;
+
+async function handleUnauthorized(): Promise<void> {
+  if (handlingUnauthorized) return;
+  handlingUnauthorized = true;
+  try {
+    await forceLogoutExpiredSession();
+  } catch (e) {
+    console.warn('[API] failed to logout after 401', e);
+  } finally {
+    setTimeout(() => {
+      handlingUnauthorized = false;
+    }, 1500);
+  }
 }
 
 async function getAuthToken(): Promise<string | null> {
@@ -86,6 +102,15 @@ export async function apiRequest<T>(
         errorData = await response.json();
       } catch {
         errorData = {message: response.statusText};
+      }
+
+      if (response.status === 401 && !skipAuth && authToken) {
+        void handleUnauthorized();
+        throw new Error(
+          errorData.message ||
+            errorData.error ||
+            'Session expired. Please sign in again.',
+        );
       }
 
       throw new Error(

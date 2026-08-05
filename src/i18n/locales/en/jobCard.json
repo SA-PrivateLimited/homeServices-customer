@@ -16,5 +16,9 @@
   "yourVerificationPIN": "Your Verification PIN:",
   "sharePIN": "Share this PIN when provider completes the service",
   "viewDetails": "View Details",
-  "review": "Review"
+  "review": "Review",
+  "comments": "Comments",
+  "commentPlaceholder": "Write a comment…",
+  "noComments": "No comments yet",
+  "postComment": "Post"
 }

@@ -6,10 +6,34 @@
 import io, { Socket } from 'socket.io-client';
 import {SOCKET_URL} from '../config/api';
 
+export type ServiceRequestStatusPayload = {
+  type?: string;
+  serviceRequestId?: string;
+  consultationId?: string;
+  status?: string;
+  providerId?: string;
+  providerName?: string;
+  rejectionReason?: string;
+  declinedProviders?: Array<{
+    providerId: string;
+    providerName?: string;
+    providerPhone?: string;
+    reason?: string;
+    declinedAt?: string | Date;
+  }>;
+  lastDeclinedProvider?: {
+    providerId?: string;
+    providerName?: string;
+  };
+  message?: string;
+  jobCardId?: string;
+};
+
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnected: boolean = false;
   private serviceCompletedCallbacks: Array<(data: {jobCardId: string; consultationId: string; providerName: string; serviceType: string}) => void> = [];
+  private serviceRequestStatusCallbacks: Array<(data: ServiceRequestStatusPayload) => void> = [];
 
   /**
    * Set up service completion listener
@@ -59,38 +83,53 @@ class WebSocketService {
     console.log('✅ [WEBSOCKET] Service-completed listener set up successfully');
   }
 
+  private setupServiceRequestStatusListener(): void {
+    if (!this.socket) return;
+
+    this.socket.off('service-request-status');
+    this.socket.on('service-request-status', (data: ServiceRequestStatusPayload) => {
+      console.log('📬 [WEBSOCKET] service-request-status:', data);
+      this.serviceRequestStatusCallbacks.forEach(callback => {
+        try {
+          callback(data);
+        } catch (error: any) {
+          console.error('❌ [WEBSOCKET] service-request-status callback error:', error?.message);
+        }
+      });
+    });
+  }
+
+  private setupEventListeners(): void {
+    this.setupServiceCompletedListener();
+    this.setupServiceRequestStatusListener();
+  }
+
   /**
    * Initialize WebSocket connection
    */
   connect(): void {
     if (this.socket?.connected) {
       console.log('WebSocket already connected');
-      // Set up listener even if already connected
-      this.setupServiceCompletedListener();
+      this.setupEventListeners();
       return;
     }
 
     try {
-      // Create socket instance
       const socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling'], // Add polling as fallback
+        transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionAttempts: 10,
       });
 
-      // Store reference immediately to prevent race conditions
       this.socket = socket;
 
-      // Use the local socket reference in event handlers to avoid null issues
       socket.on('connect', () => {
-        // Use the local socket reference, not this.socket (which might be null)
         if (!socket || !socket.connected) {
           console.error('❌ [WEBSOCKET] Socket is null or not connected in connect handler');
           return;
         }
 
-        // Update this.socket to ensure it's in sync
         this.socket = socket;
 
         console.log('✅ [WEBSOCKET] WebSocket connected:', {
@@ -99,14 +138,12 @@ class WebSocketService {
         });
         this.isConnected = true;
         
-        // Set up service completion listener
-        this.setupServiceCompletedListener();
+        this.setupEventListeners();
       });
 
       socket.on('disconnect', () => {
         console.log('❌ WebSocket disconnected');
         this.isConnected = false;
-        // Don't set socket to null here - let reconnection handle it
       });
 
       socket.on('connect_error', (error) => {
@@ -117,11 +154,8 @@ class WebSocketService {
       socket.on('reconnect', () => {
         console.log('✅ [WEBSOCKET] WebSocket reconnected');
         this.isConnected = true;
-        this.setupServiceCompletedListener();
+        this.setupEventListeners();
       });
-      
-      // Don't setup listener here - wait for 'connect' event
-      // The listener will be set up in the 'connect' event handler above
     } catch (error) {
       console.error('Error initializing WebSocket:', error);
       this.socket = null;
@@ -148,7 +182,6 @@ class WebSocketService {
       this.socket.emit('join-customer-room', customerId);
       console.log(`✅ [WEBSOCKET] Join request sent for room: ${roomName}`);
       
-      // Listen for room join confirmation
       this.socket.once('customer-room-joined', (data: any) => {
         console.log(`✅ [WEBSOCKET] Customer room joined successfully:`, {
           ...data,
@@ -157,7 +190,6 @@ class WebSocketService {
       });
     } else {
       console.warn('⚠️ [WEBSOCKET] Socket not connected. Waiting for connection...');
-      // Wait for connection and then join
       if (this.socket) {
         this.socket.once('connect', () => {
           console.log('✅ [WEBSOCKET] Socket connected, now joining customer room');
@@ -166,7 +198,6 @@ class WebSocketService {
           console.log(`✅ [WEBSOCKET] Joined customer room: ${roomName}`);
         });
       } else {
-        // Connect first, then join
         console.log('🔌 [WEBSOCKET] Socket is null, connecting first...');
         this.connect();
         if (this.socket) {
@@ -188,13 +219,11 @@ class WebSocketService {
     this.serviceCompletedCallbacks.push(callback);
     console.log('📝 [WEBSOCKET] Total callbacks registered:', this.serviceCompletedCallbacks.length);
     
-    // Ensure listener is set up if socket is already connected
     if (this.socket?.connected) {
       console.log('📝 [WEBSOCKET] Socket already connected, ensuring listener is set up');
       this.setupServiceCompletedListener();
     }
     
-    // Return unsubscribe function
     return () => {
       const index = this.serviceCompletedCallbacks.indexOf(callback);
       if (index > -1) {
@@ -205,18 +234,35 @@ class WebSocketService {
   }
 
   /**
+   * Register callback for service-request-status (accept / reject / open decline)
+   */
+  onServiceRequestStatus(
+    callback: (data: ServiceRequestStatusPayload) => void,
+  ): () => void {
+    this.serviceRequestStatusCallbacks.push(callback);
+    if (this.socket?.connected) {
+      this.setupServiceRequestStatusListener();
+    }
+    return () => {
+      const index = this.serviceRequestStatusCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.serviceRequestStatusCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
    * Emit a new booking event to notify the provider
    */
   async emitNewBooking(providerId: string, bookingData: any): Promise<void> {
     try {
-      // Call the REST API endpoint to emit the booking
       const response = await fetch(`${SOCKET_URL}/emit-booking`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          providerId, // Use providerId instead of doctorId
+          providerId,
           bookingData,
         }),
       });

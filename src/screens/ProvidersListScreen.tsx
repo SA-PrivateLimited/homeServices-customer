@@ -35,6 +35,7 @@ import AdSlot from '../components/AdSlot';
 import {getDistanceToCustomer} from '../services/providerLocationService';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
+import ProviderRequestModal from '../components/ProviderRequestModal';
 
 const ALL_PROFESSIONS = '__all__';
 const ALL_STATES = '__all_states__';
@@ -84,6 +85,19 @@ function phoneOf(p: ProviderWithStatus): string {
   return p.phoneNumber || p.phone || '';
 }
 
+function districtOf(
+  p: ProviderWithStatus,
+  districts?: GeographyDistrict[],
+): string {
+  const named = (p.address?.district || p.address?.city || '').trim();
+  if (named) return named;
+  const id = p.address?.districtId;
+  if (id && districts?.length) {
+    return districts.find((d) => d._id === id)?.name || '';
+  }
+  return '';
+}
+
 function matchesProfession(p: ProviderWithStatus, selected: string): boolean {
   if (!selected || selected === ALL_PROFESSIONS) return true;
   const needle = selected.toLowerCase().trim();
@@ -125,6 +139,8 @@ export default function ProvidersListScreen({navigation}: any) {
   const [geoDistricts, setGeoDistricts] = useState<GeographyDistrict[]>([]);
   const [selectedStateId, setSelectedStateId] = useState(ALL_STATES);
   const [selectedDistrictId, setSelectedDistrictId] = useState(ALL_DISTRICTS);
+  const [requestProvider, setRequestProvider] = useState<ProviderWithStatus | null>(null);
+
 
   useEffect(() => {
     loadProfessionOptions();
@@ -370,6 +386,11 @@ export default function ProvidersListScreen({navigation}: any) {
           <Text style={[styles.guestPhone, {color: theme.text}]} numberOfLines={1}>
             {phone || t('providers.noPhoneNumber')}
           </Text>
+          {districtOf(item, geoDistricts) ? (
+            <Text style={[styles.guestPhone, {color: theme.textSecondary}]} numberOfLines={1}>
+              {t('providers.district')}: {districtOf(item, geoDistricts)}
+            </Text>
+          ) : null}
         </View>
         {phone ? (
           <TouchableOpacity
@@ -384,87 +405,124 @@ export default function ProvidersListScreen({navigation}: any) {
   };
 
   // Logged-in: richer card
-  const renderProvider = ({item}: {item: ProviderWithStatus}) => (
-    <TouchableOpacity
-      style={[styles.card, {backgroundColor: theme.card, borderColor: theme.border}]}
-      onPress={() => navigation.navigate('ProviderDetails', {provider: item})}
-      activeOpacity={0.7}>
-      <View style={styles.imageWrap}>
-        {item.profileImage ? (
-          <Image source={{uri: item.profileImage}} style={styles.image} />
-        ) : (
-          <View style={[styles.placeholder, {backgroundColor: theme.border}]}>
-            <Icon name="person" size={36} color={theme.textSecondary} />
-          </View>
-        )}
-        {item.isOnline && <View style={styles.onlineDot} />}
-      </View>
+  const openRequestModal = (item: ProviderWithStatus) => {
+    const phoneVerified = currentUser?.phoneVerified === true;
+    const customerId = currentUser?.id || (currentUser as any)?._id;
+    if (!currentUser || !customerId || !phoneVerified) {
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: String(t('providers.pleaseLoginToRequest')),
+        type: 'warning',
+      });
+      return;
+    }
+    setRequestProvider(item);
+  };
 
-      <View style={styles.info}>
-        <View style={styles.nameRow}>
-          <Text style={[styles.name, {color: theme.text}]} numberOfLines={1}>
-            {item.name}
+  const renderProvider = ({item}: {item: ProviderWithStatus}) => (
+    <View
+      style={[styles.card, {backgroundColor: theme.card, borderColor: theme.border}]}>
+      <TouchableOpacity
+        style={styles.cardMain}
+        onPress={() => navigation.navigate('ProviderDetails', {provider: item})}
+        activeOpacity={0.7}>
+        <View style={styles.imageWrap}>
+          {item.profileImage ? (
+            <Image source={{uri: item.profileImage}} style={styles.image} />
+          ) : (
+            <View style={[styles.placeholder, {backgroundColor: theme.border}]}>
+              <Icon name="person" size={36} color={theme.textSecondary} />
+            </View>
+          )}
+          {item.isOnline && <View style={styles.onlineDot} />}
+        </View>
+
+        <View style={styles.info}>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, {color: theme.text}]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.isOnline && (
+              <View style={styles.onlineBadge}>
+                <Text style={styles.onlineBadgeText}>{t('providers.online')}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={[styles.specialization, {color: theme.textSecondary}]} numberOfLines={1}>
+            {professionOf(item)}
           </Text>
-          {item.isOnline && (
-            <View style={styles.onlineBadge}>
-              <Text style={styles.onlineBadgeText}>{t('providers.online')}</Text>
+
+          {districtOf(item, geoDistricts) ? (
+            <View style={styles.locationItem}>
+              <Icon name="place" size={14} color={theme.primary} />
+              <Text style={[styles.locationText, {color: theme.textSecondary}]} numberOfLines={1}>
+                {districtOf(item, geoDistricts)}
+              </Text>
+            </View>
+          ) : null}
+
+          {item.rating !== undefined && item.rating > 0 && (
+            <View style={styles.ratingRow}>
+              <Icon name="star" size={14} color="#FFD700" />
+              <Text style={[styles.ratingText, {color: theme.text}]}>
+                {item.rating.toFixed(1)}
+              </Text>
+              {item.totalConsultations !== undefined && item.totalConsultations > 0 && (
+                <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
+                  ({item.totalConsultations} {item.totalConsultations === 1 ? t('providers.review') : t('providers.reviews')})
+                </Text>
+              )}
+            </View>
+          )}
+
+          {item.experience !== undefined && item.experience > 0 && (
+            <Text style={[styles.experience, {color: theme.textSecondary}]}>
+              {t('providers.experienceWithYears', {years: item.experience, count: item.experience})}
+            </Text>
+          )}
+
+          {(item.distance || item.eta) && (
+            <View style={styles.locationRow}>
+              {item.distance && (
+                <View style={styles.locationItem}>
+                  <Icon name="location-on" size={14} color={theme.primary} />
+                  <Text style={[styles.locationText, {color: theme.textSecondary}]}>
+                    {item.distance}
+                  </Text>
+                </View>
+              )}
+              {item.eta && (
+                <View style={styles.locationItem}>
+                  <Icon name="access-time" size={14} color={theme.primary} />
+                  <Text style={[styles.locationText, {color: theme.textSecondary}]}>
+                    ~{item.eta} min
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </View>
-
-        <Text style={[styles.specialization, {color: theme.textSecondary}]} numberOfLines={1}>
-          {professionOf(item)}
-        </Text>
-
-        {item.rating !== undefined && item.rating > 0 && (
-          <View style={styles.ratingRow}>
-            <Icon name="star" size={14} color="#FFD700" />
-            <Text style={[styles.ratingText, {color: theme.text}]}>
-              {item.rating.toFixed(1)}
-            </Text>
-            {item.totalConsultations !== undefined && item.totalConsultations > 0 && (
-              <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                ({item.totalConsultations} {item.totalConsultations === 1 ? t('providers.review') : t('providers.reviews')})
-              </Text>
-            )}
-          </View>
-        )}
-
-        {item.experience !== undefined && item.experience > 0 && (
-          <Text style={[styles.experience, {color: theme.textSecondary}]}>
-            {t('providers.experienceWithYears', {years: item.experience, count: item.experience})}
-          </Text>
-        )}
-
-        {(item.distance || item.eta) && (
-          <View style={styles.locationRow}>
-            {item.distance && (
-              <View style={styles.locationItem}>
-                <Icon name="location-on" size={14} color={theme.primary} />
-                <Text style={[styles.locationText, {color: theme.textSecondary}]}>
-                  {item.distance}
-                </Text>
-              </View>
-            )}
-            {item.eta && (
-              <View style={styles.locationItem}>
-                <Icon name="access-time" size={14} color={theme.primary} />
-                <Text style={[styles.locationText, {color: theme.textSecondary}]}>
-                  ~{item.eta} min
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={[styles.callBtn, {backgroundColor: theme.primary}]}
-        onPress={() => handleCallProvider(item)}
-        activeOpacity={0.7}>
-        <Icon name="phone" size={20} color="#fff" />
       </TouchableOpacity>
-    </TouchableOpacity>
+
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={[styles.callBtn, {backgroundColor: theme.primary}]}
+          onPress={() => handleCallProvider(item)}
+          activeOpacity={0.7}>
+          <Icon name="phone" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.requestBtn, {backgroundColor: theme.primary}]}
+          onPress={() => openRequestModal(item)}
+          activeOpacity={0.7}>
+          <Text style={styles.requestBtnText} numberOfLines={2}>
+            {t('providers.requestService')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 
   const professionOptions = useMemo(() => {
@@ -664,6 +722,19 @@ export default function ProvidersListScreen({navigation}: any) {
           contentContainerStyle={{paddingBottom: 24}}
         />
       )}
+
+      <ProviderRequestModal
+        visible={!!requestProvider}
+        provider={requestProvider}
+        onClose={() => setRequestProvider(null)}
+        onSuccess={(serviceRequestId) => {
+          setRequestProvider(null);
+          navigation.navigate('Services', {
+            screen: 'ActiveService',
+            params: {serviceRequestId},
+          });
+        }}
+      />
 
       <AlertModal
         visible={alertModal.visible}
@@ -914,6 +985,32 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 12,
     marginLeft: 4,
+  },
+
+  cardMain: {
+    flexDirection: 'row',
+    flex: 1,
+    minWidth: 0,
+  },
+  cardActions: {
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 8,
+    marginLeft: 8,
+  },
+  requestBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
+    maxWidth: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   callBtn: {
     width: 48,

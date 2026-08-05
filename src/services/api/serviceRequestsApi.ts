@@ -38,6 +38,13 @@ export interface ServiceRequest {
   cancellationReason?: string;
   rejectionReason?: string;
   rejectedAt?: string | Date;
+  declinedProviders?: Array<{
+    providerId: string;
+    providerName?: string;
+    providerPhone?: string;
+    reason?: string;
+    declinedAt?: string | Date;
+  }>;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -101,6 +108,26 @@ export async function createServiceRequest(data: Partial<ServiceRequest>): Promi
 }
 
 /**
+ * Notify admin that providers are needed for a service type in the customer's local area
+ */
+export async function requestAreaProviders(data: {
+  serviceType: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress: {
+    address?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+  };
+}): Promise<{serviceType: string; pincode: string}> {
+  return apiPost('/customer/serviceRequests/request-area-providers', data);
+}
+
+/**
  * Update service request status
  */
 export async function updateServiceRequestStatus(
@@ -146,6 +173,7 @@ export const serviceRequestsApi = {
   getById: getServiceRequestById,
   getAll: getServiceRequests,
   create: createServiceRequest,
+  requestAreaProviders,
   updateStatus: updateServiceRequestStatus,
   cancel: cancelServiceRequest,
   findByConsultationId: findServiceRequestByConsultationId,

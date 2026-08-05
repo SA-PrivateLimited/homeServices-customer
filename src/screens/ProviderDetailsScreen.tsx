@@ -18,7 +18,7 @@ import ReviewsList from '../components/ReviewsList';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import useTranslation from '../hooks/useTranslation';
-import WebSocketService from '../services/websocketService';
+import ProviderRequestModal from '../components/ProviderRequestModal';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -66,6 +66,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     type: 'info',
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
 
   // Poll online status from Mongo/backend API
   useEffect(() => {
@@ -112,68 +113,14 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
 
   // Browse list only shows approved providers; missing status should not block requests.
   // Only block when explicitly pending/rejected.
-  const handleRequestService = async () => {
-    if (approvalStatus === 'rejected' || approvalStatus === 'pending') {
-      setAlertModal({
-        visible: true,
-        title: t('providers.providerNotAvailable'),
-        message: t('providers.providerNotAvailableMessage'),
-        type: 'warning',
-        onClose: () => {
-          setAlertModal({...alertModal, visible: false});
-          navigation.goBack();
-        },
-      });
-      return;
-    }
-
-    // Offline / unavailable is status only — still allow requesting this provider.
+  const handleRequestService = () => {
     const phoneVerified = currentUser?.phoneVerified === true;
     const customerId = currentUser?.id || currentUser?._id;
     if (!currentUser || !customerId || !phoneVerified) {
       setShowLoginModal(true);
       return;
     }
-
-    const providerId = (provider as any).id || (provider as any)._id || (provider as any).uid;
-    // Best-effort live notify if connected; request is still created either way
-    if (providerId && customerId && isOnline) {
-      try {
-        const notificationData = {
-          customerId,
-          customerName: (currentUser as any)?.name || 'Customer',
-          patientName: (currentUser as any)?.name || 'Customer',
-          serviceType: provider.specialization || (provider as any).specialty || 'Service',
-          message: String(t('providers.newServiceRequestNotification')),
-          timestamp: new Date().toISOString(),
-          isPreliminary: true,
-        };
-
-        await WebSocketService.emitNewBooking(providerId, notificationData);
-        console.log('✅ WebSocket notification sent to provider:', providerId);
-      } catch (websocketError) {
-        console.warn('Could not send WebSocket notification to provider:', websocketError);
-      }
-    }
-
-    const serializableProvider = serializeDoctorForNavigation({
-      ...(provider as any),
-      approvalStatus: approvalStatus || 'approved',
-      isOnline,
-      isAvailable,
-    });
-    navigation.navigate('Services', {
-      screen: 'ServiceRequest',
-      params: {
-        requestMode: 'specificProvider',
-        provider: serializableProvider,
-        serviceType:
-          provider.specialization ||
-          (provider as any).specialty ||
-          (provider as any).serviceType ||
-          '',
-      },
-    });
+    setRequestModalVisible(true);
   };
 
   return (
@@ -229,6 +176,16 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             <Text style={[styles.specialization, {color: theme.textSecondary}]}>
               {provider.specialization || (provider as any).specialty || 'Service Provider'}
             </Text>
+            {((provider as any).address?.district ||
+              (provider as any).location?.district ||
+              (provider as any).address?.city) ? (
+              <Text style={[styles.statusText, {color: theme.textSecondary, marginTop: 4}]}>
+                {t('providers.district')}:{' '}
+                {(provider as any).address?.district ||
+                  (provider as any).location?.district ||
+                  (provider as any).address?.city}
+              </Text>
+            ) : null}
 
             {/* Online Status Indicator */}
             <View style={styles.statusRow}>
@@ -365,6 +322,19 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      <ProviderRequestModal
+        visible={requestModalVisible}
+        provider={provider as any}
+        onClose={() => setRequestModalVisible(false)}
+        onSuccess={(serviceRequestId) => {
+          setRequestModalVisible(false);
+          navigation.navigate('Services', {
+            screen: 'ActiveService',
+            params: {serviceRequestId},
+          });
+        }}
+      />
+
       {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
@@ -391,9 +361,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           setShowLoginModal(false);
           const serializableProvider = serializeDoctorForNavigation(provider as any);
           setRedirectAfterLogin({
-            route: 'ServiceRequest',
+            route: 'ProviderDetails',
             params: {
-              requestMode: 'specificProvider',
               provider: serializableProvider,
             },
           });

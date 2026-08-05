@@ -16,5 +16,9 @@
   "yourVerificationPIN": "आपका सत्यापन PIN:",
   "sharePIN": "प्रदाता द्वारा सेवा पूर्ण होने पर यह PIN साझा करें",
   "viewDetails": "विवरण देखें",
-  "review": "समीक्षा"
+  "review": "समीक्षा",
+  "comments": "टिप्पणियाँ",
+  "commentPlaceholder": "टिप्पणी लिखें…",
+  "noComments": "अभी कोई टिप्पणी नहीं",
+  "postComment": "पोस्ट करें"
 }

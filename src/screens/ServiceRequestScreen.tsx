@@ -4,7 +4,7 @@
  * Simple flow: Select service → Describe problem → Choose address → Submit
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -30,21 +30,23 @@ import {
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+  rememberServiceAddress,
   type SavedAddress,
 } from '../services/addressService';
 import type {UserLocation} from '../types/common';
-import WebSocketService from '../services/websocketService';
 import Toast from '../components/Toast';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
-import ServiceAddressFields, {
-  type ServiceAddressValue,
-} from '../components/ServiceAddressFields';
-import {Select, MultiSelect} from 'sapvt-ltd-app-packages';
+import ServiceAddressPicker, {
+  emptyAddressSelection,
+  type ServiceAddressSelection,
+} from '../components/ServiceAddressPicker';
+import ServiceQuestionnaireFields from '../components/ServiceQuestionnaireFields';
+import {Select} from 'sapvt-ltd-app-packages';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import {usersApi} from '../services/api/usersApi';
-import {providersApi} from '../services/api/providersApi';
+import {providersApi, type Provider} from '../services/api/providersApi';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -126,6 +128,9 @@ export default function ServiceRequestScreen({
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
   const [providerCounts, setProviderCounts] = useState<Record<string, number>>({});
   const [loadingProviderCounts, setLoadingProviderCounts] = useState(false);
+  /** Service types the customer already asked admin to source in this area */
+  const [requestedAreaTypes, setRequestedAreaTypes] = useState<Record<string, boolean>>({});
+  const [notifyingDemandFor, setNotifyingDemandFor] = useState<string | null>(null);
   const [selectedServiceType, setSelectedServiceType] = useState<string>(
     route?.params?.serviceType || '',
   );
@@ -133,10 +138,17 @@ export default function ServiceRequestScreen({
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireQuestion[]>([]);
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, any>>({});
   const [problem, setProblem] = useState('');
+  const [addressSel, setAddressSel] = useState<ServiceAddressSelection>(
+    emptyAddressSelection({mode: 'saved'}),
+  );
+  const [addressRefreshKey, setAddressRefreshKey] = useState(0);
   const [selectedAddress, setSelectedAddress] = useState<UserLocation | null>(null);
   const [saveAddressForFuture, setSaveAddressForFuture] = useState(true);
+  const [areaProviders, setAreaProviders] = useState<Provider[]>([]);
+  const [loadingAreaProviders, setLoadingAreaProviders] = useState(false);
+  /** '' = any available provider in area (open request) */
+  const [preferredProviderId, setPreferredProviderId] = useState<string>('');
   const [secondaryMobile, setSecondaryMobile] = useState('');
-  const [fillingCurrentAddress, setFillingCurrentAddress] = useState(false);
   const [urgency, setUrgency] = useState<'immediate' | 'scheduled'>('immediate');
   const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
   const [scheduledTime, setScheduledTime] = useState<string>('');
@@ -195,14 +207,114 @@ export default function ServiceRequestScreen({
   useEffect(() => {
     loadServiceCategories();
     loadSavedAddresses();
+    setAddressRefreshKey(k => k + 1);
   }, []);
 
+  // Keep legacy selectedAddress in sync with address picker (submit + validation)
   useEffect(() => {
-    // Load provider counts when service categories are loaded
-    if (serviceCategories.length > 0) {
-      loadProviderCounts();
+    const a = addressSel.address;
+    if (a?.address && a?.pincode) {
+      setSelectedAddress(a as UserLocation);
+      setSaveAddressForFuture(addressSel.saveForFuture);
+    } else if (addressSel.mode === 'new' && !a?.address) {
+      // keep previous until valid, or clear if switching to empty new
+      if (!addressSel.selectedId) {
+        setSelectedAddress(a as UserLocation);
+      }
+    } else if (addressSel.mode === 'saved' && a?.address) {
+      setSelectedAddress(a as UserLocation);
     }
-  }, [serviceCategories]);
+  }, [addressSel]);
+
+  const loadAreaProviders = useCallback(async () => {
+    if (isTargetedRequest) {
+      setAreaProviders([]);
+      return;
+    }
+    const addr = addressSel.address;
+    if (!selectedServiceType || !addr?.pincode) {
+      setAreaProviders([]);
+      setPreferredProviderId('');
+      return;
+    }
+    setLoadingAreaProviders(true);
+    try {
+      const filters: any = {
+        serviceType: selectedServiceType,
+      };
+      if (addr.districtId) filters.districtId = addr.districtId;
+      if (addr.district || addr.city) {
+        filters.district = addr.district || addr.city;
+      }
+      if (addr.pincode) filters.pincode = addr.pincode;
+      if (addr.stateId) filters.stateId = addr.stateId;
+
+      let providers = await providersApi.getAll(filters);
+      providers = providers.filter(p => p.approvalStatus !== 'rejected');
+
+      // If district filter returned empty, retry with pincode only
+      if (providers.length === 0 && addr.pincode) {
+        providers = (
+          await providersApi.getAll({
+            serviceType: selectedServiceType,
+            pincode: addr.pincode,
+          })
+        ).filter(p => p.approvalStatus !== 'rejected');
+      }
+
+      setAreaProviders(providers);
+      setProviderCounts(prev => ({
+        ...prev,
+        [selectedServiceType]: providers.length,
+      }));
+      // Clear preferred if no longer in list
+      setPreferredProviderId(prev => {
+        if (!prev) return '';
+        const stillThere = providers.some(
+          p => String(p.id || p._id) === prev,
+        );
+        return stillThere ? prev : '';
+      });
+    } catch (e) {
+      console.warn('loadAreaProviders failed', e);
+      setAreaProviders([]);
+    } finally {
+      setLoadingAreaProviders(false);
+    }
+  }, [
+    isTargetedRequest,
+    selectedServiceType,
+    addressSel.address?.pincode,
+    addressSel.address?.districtId,
+    addressSel.address?.district,
+    addressSel.address?.city,
+    addressSel.address?.stateId,
+  ]);
+
+  useEffect(() => {
+    void loadAreaProviders();
+  }, [loadAreaProviders]);
+
+  useEffect(() => {
+    // Load provider counts for the picker (area-scoped when address is set)
+    if (serviceCategories.length > 0) {
+      void loadProviderCounts();
+    }
+    // New area → allow requesting again
+    setRequestedAreaTypes({});
+  }, [
+    serviceCategories,
+    addressSel.address?.pincode,
+    addressSel.address?.districtId,
+    addressSel.address?.district,
+    addressSel.address?.city,
+  ]);
+
+  useEffect(() => {
+    if (showServiceTypeModal && serviceCategories.length > 0) {
+      void loadProviderCounts();
+    }
+  }, [showServiceTypeModal]);
 
   useEffect(() => {
     if (currentPincode && !selectedAddress) {
@@ -226,27 +338,47 @@ export default function ServiceRequestScreen({
     try {
       setLoadingProviderCounts(true);
       const counts: Record<string, number> = {};
-      
-      // Fetch provider counts for each service category
+      const addr = addressSel.address || selectedAddress;
+
       await Promise.all(
-        serviceCategories.map(async (category) => {
+        serviceCategories.map(async category => {
           try {
-            const providers = await providersApi.getAll({
+            const filters: any = {
               serviceType: category.name,
-              // Only count approved providers
-            });
-            // Filter for approved providers only
-            const approvedProviders = providers.filter(
-              (p) => p.approvalStatus === 'approved'
-            );
-            counts[category.name] = approvedProviders.length;
+            };
+            if (addr?.districtId) filters.districtId = addr.districtId;
+            if ((addr as any)?.district || addr?.city) {
+              filters.district = (addr as any)?.district || addr?.city;
+            }
+            if (addr?.pincode) filters.pincode = addr.pincode;
+            if ((addr as any)?.stateId) filters.stateId = (addr as any).stateId;
+
+            let providers = await providersApi.getAll(filters);
+            providers = providers.filter(p => p.approvalStatus !== 'rejected');
+
+            // If area filter returned empty, retry with pincode only
+            if (providers.length === 0 && addr?.pincode) {
+              providers = (
+                await providersApi.getAll({
+                  serviceType: category.name,
+                  pincode: addr.pincode,
+                })
+              ).filter(p => p.approvalStatus !== 'rejected');
+            }
+
+            // Without an address, count approved providers nationwide as a fallback
+            if (!addr?.pincode) {
+              providers = providers.filter(p => p.approvalStatus === 'approved');
+            }
+
+            counts[category.name] = providers.length;
           } catch (error) {
             console.error(`Error fetching providers for ${category.name}:`, error);
             counts[category.name] = 0;
           }
-        })
+        }),
       );
-      
+
       setProviderCounts(counts);
     } catch (error) {
       console.error('Error loading provider counts:', error);
@@ -371,22 +503,123 @@ export default function ServiceRequestScreen({
     }
 
     const count = providerCounts[category.name] || 0;
-    
-    // Open requests require at least one online provider
+
+    // Unavailable: ask admin to bring this service to the customer's area
     if (count === 0) {
-      const serviceName = language === 'hi' && category.nameHi ? category.nameHi : category.name;
-      const messageTemplate = String(t('services.providerNotAvailableMessage'));
-      const message = messageTemplate.replace('{{serviceType}}', serviceName);
+      if (requestedAreaTypes[category.name]) {
+        setAlertModal({
+          visible: true,
+          title: String(t('services.providerNotAvailable') || 'Not available'),
+          message: String(
+            t('services.requestProvidersSuccess') ||
+              'Request already sent. Admin will work on getting providers in your area.',
+          ).replace(
+            '{{serviceType}}',
+            language === 'hi' && category.nameHi
+              ? category.nameHi
+              : category.name,
+          ),
+          type: 'info',
+        });
+        return;
+      }
+      handleRequestAreaProviders(category);
+      return;
+    }
+
+    applyServiceType(category);
+  };
+
+  const handleRequestAreaProviders = (category: ServiceCategory) => {
+    const addr = (addressSel.address || selectedAddress) as UserLocation | null;
+    if (!addr?.pincode) {
+      setShowServiceTypeModal(false);
       setAlertModal({
         visible: true,
-        title: String(t('services.providerNotAvailable')),
-        message: message,
+        title: String(t('common.addressRequired') || 'Address required'),
+        message: String(
+          t('services.requestProvidersNeedAddress') ||
+            'Select a service address first so we know which area needs providers.',
+        ),
         type: 'warning',
       });
       return;
     }
-    
-    applyServiceType(category);
+
+    if (!currentUser || currentUser.phoneVerified !== true) {
+      requirePhoneLogin();
+      return;
+    }
+
+    const serviceName =
+      language === 'hi' && category.nameHi ? category.nameHi : category.name;
+    const areaLabel =
+      addr.pincode +
+      (addr.city || (addr as any).district
+        ? ` · ${addr.city || (addr as any).district}`
+        : '');
+    const message = String(
+      t('services.requestProvidersConfirmMessage') ||
+        'Notify admin to arrange {{serviceType}} providers near {{area}}?',
+    )
+      .replace('{{serviceType}}', serviceName)
+      .replace('{{area}}', areaLabel);
+
+    setConfirmationModal({
+      visible: true,
+      title: String(
+        t('services.requestProvidersConfirmTitle') || 'Notify admin?',
+      ),
+      message,
+      type: 'info',
+      onConfirm: () => {
+        setConfirmationModal(prev => ({...prev, visible: false}));
+        void (async () => {
+          setNotifyingDemandFor(category.name);
+          try {
+            await serviceRequestsApi.requestAreaProviders({
+              serviceType: category.name,
+              customerName: currentUser.name || currentUser.displayName || '',
+              customerPhone: currentUser.phone || currentUser.phoneNumber || '',
+              customerAddress: {
+                address: addr.address || '',
+                city: addr.city,
+                district: (addr as any).district || addr.city,
+                state: addr.state,
+                pincode: addr.pincode,
+                latitude: addr.latitude,
+                longitude: addr.longitude,
+              },
+            });
+            setRequestedAreaTypes(prev => ({
+              ...prev,
+              [category.name]: true,
+            }));
+            setToastMessage(
+              String(
+                t('services.requestProvidersSuccess') ||
+                  'Admin notified. We will work on getting providers in your area.',
+              ).replace('{{serviceType}}', serviceName),
+            );
+            setShowToast(true);
+          } catch (e: any) {
+            setAlertModal({
+              visible: true,
+              title: String(t('common.error') || 'Error'),
+              message:
+                e?.message ||
+                String(
+                  t('services.requestProvidersFailed') ||
+                    'Could not notify admin. Please try again.',
+                ),
+              type: 'error',
+            });
+          } finally {
+            setNotifyingDemandFor(null);
+          }
+        })();
+      },
+    });
   };
 
   const handleQuestionnaireAnswer = (questionId: string, answer: any) => {
@@ -412,7 +645,7 @@ export default function ServiceRequestScreen({
     if (address.city !== undefined && address.city !== null && address.city !== '') {
       cleaned.city = address.city;
     }
-    const anyAddr = address as ServiceAddressValue;
+    const anyAddr = address as any;
     if (anyAddr.district) cleaned.district = anyAddr.district;
     if (anyAddr.landmark) cleaned.landmark = anyAddr.landmark;
     if (anyAddr.stateId) cleaned.stateId = anyAddr.stateId;
@@ -858,7 +1091,8 @@ export default function ServiceRequestScreen({
     navigation.navigate('Login');
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (opts?: {requestAdminHelp?: boolean}) => {
+    const requestAdminHelp = opts?.requestAdminHelp === true;
     const customerId = currentUser?.id || currentUser?._id;
     const isPhoneVerified = currentUser?.phoneVerified === true;
 
@@ -878,19 +1112,49 @@ export default function ServiceRequestScreen({
       return;
     }
 
-    // Check if selected service type has available providers (skip for targeted requests)
-    if (!isTargetedRequest) {
-      const providerCount = providerCounts[selectedServiceType] || 0;
+    if (addressSel.mode === 'edit') {
+      setAlertModal({
+        visible: true,
+        title: t('common.warning') || 'Warning',
+        message:
+          t('services.saveAddressFirst') ||
+          'Please save or cancel address edits first.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    if (!selectedAddress || !selectedAddress.pincode || !selectedAddress.address) {
+      setAlertModal({
+        visible: true,
+        title: t('common.addressRequired'),
+        message: t('common.addressRequiredMessage'),
+        type: 'warning',
+      });
+      return;
+    }
+
+    // Check if selected service type has available providers in area (skip for targeted / admin-assist)
+    if (!isTargetedRequest && !requestAdminHelp) {
+      const providerCount =
+        areaProviders.length || providerCounts[selectedServiceType] || 0;
       if (providerCount === 0) {
-        const selectedCategory = serviceCategories.find(cat => cat.name === selectedServiceType);
-        const serviceName = language === 'hi' && selectedCategory?.nameHi ? selectedCategory.nameHi : selectedServiceType;
-        const messageTemplate = String(t('services.providerNotAvailableMessage'));
+        const selectedCat = serviceCategories.find(cat => cat.name === selectedServiceType);
+        const serviceName = language === 'hi' && selectedCat?.nameHi ? selectedCat.nameHi : selectedServiceType;
+        const messageTemplate = String(
+          t('services.providerNotAvailableNotifyAdmin') ||
+            'No {{serviceType}} providers are available near this address. Notify admin so they can find and assign a provider?',
+        );
         const message = messageTemplate.replace('{{serviceType}}', serviceName);
-        setAlertModal({
+        setConfirmationModal({
           visible: true,
-          title: String(t('services.providerNotAvailable')),
-          message: message,
+          title: String(t('services.providerNotAvailable') || 'No providers nearby'),
+          message,
           type: 'warning',
+          onConfirm: () => {
+            setConfirmationModal(prev => ({...prev, visible: false}));
+            void handleSubmit({requestAdminHelp: true});
+          },
         });
         return;
       }
@@ -922,22 +1186,12 @@ export default function ServiceRequestScreen({
       }
     }
 
-    // If no questionnaire, problem description is required
+    // Problem is optional when category questionnaire exists; otherwise required
     if ((!questionnaire || questionnaire.length === 0) && !problem.trim()) {
       setAlertModal({
         visible: true,
         title: t('common.problemDescriptionRequired'),
         message: t('common.problemDescriptionRequiredMessage'),
-        type: 'warning',
-      });
-      return;
-    }
-
-    if (!selectedAddress || !selectedAddress.pincode) {
-      setAlertModal({
-        visible: true,
-        title: t('common.addressRequired'),
-        message: t('common.addressRequiredMessage'),
         type: 'warning',
       });
       return;
@@ -998,11 +1252,20 @@ export default function ServiceRequestScreen({
           currentUser.phone ||
           currentUser.phoneNumber ||
           '',
-        customerAddress: cleanAddress,
+        customerAddress: {
+          ...cleanAddress,
+          label: addressSel.label,
+          ...(addressSel.label === 'other' || addressSel.customLabel.trim()
+            ? {customLabel: addressSel.customLabel.trim()}
+            : {}),
+        },
         serviceType: selectedServiceType,
         problem: problem.trim(),
         status: 'pending',
         urgency: urgency,
+        ...(requestAdminHelp
+          ? {requestAdminHelp: true, needsAdminAssignment: true}
+          : {}),
       };
 
       if (secondaryMobile.trim().length === 10) {
@@ -1011,51 +1274,59 @@ export default function ServiceRequestScreen({
 
       if (saveAddressForFuture && cleanAddress) {
         try {
-          await usersApi.updateMe({
-            homeAddress: {
-              address: cleanAddress.address,
-              landmark: cleanAddress.landmark,
-              city: cleanAddress.district || cleanAddress.city,
-              district: cleanAddress.district || cleanAddress.city,
-              state: cleanAddress.state,
-              stateId: cleanAddress.stateId,
-              districtId: cleanAddress.districtId,
-              pincode: cleanAddress.pincode,
-            },
+          await rememberServiceAddress({
+            ...(cleanAddress as any),
+            label: addressSel.label,
+            customLabel:
+              addressSel.label === 'other'
+                ? addressSel.customLabel.trim()
+                : undefined,
           });
         } catch (saveErr) {
           console.warn('Could not save address for future', saveErr);
         }
       }
 
-      // Direct request to a specific provider (from Provider Details only).
-      // Open Services-tab requests must NOT set providerId — any provider can accept.
-      if (isTargetedRequest && targetedProviderId) {
-        serviceRequestDataRaw.providerId = String(targetedProviderId);
-        serviceRequestDataRaw.providerName = targetedProvider?.name || '';
+      // Targeted (provider details) or optional dropdown pick on this screen.
+      const dropdownProvider =
+        !isTargetedRequest && preferredProviderId
+          ? areaProviders.find(
+              p => String(p.id || p._id) === preferredProviderId,
+            )
+          : null;
+      const assignProvider = isTargetedRequest
+        ? targetedProvider
+        : dropdownProvider;
+      const assignProviderId = isTargetedRequest
+        ? targetedProviderId
+        : preferredProviderId || null;
+
+      if (assignProviderId && assignProvider) {
+        serviceRequestDataRaw.providerId = String(assignProviderId);
+        serviceRequestDataRaw.providerName = assignProvider?.name || '';
         const phone =
-          targetedProvider?.phone ||
-          targetedProvider?.phoneNumber ||
-          targetedProvider?.primaryPhone ||
+          (assignProvider as any)?.phone ||
+          (assignProvider as any)?.phoneNumber ||
+          (assignProvider as any)?.primaryPhone ||
           '';
         if (phone) {
           serviceRequestDataRaw.providerPhone = phone;
         }
         const specialization =
-          targetedProvider?.specialization ||
-          targetedProvider?.specialty ||
-          targetedProvider?.serviceType ||
+          (assignProvider as any)?.specialization ||
+          (assignProvider as any)?.specialty ||
+          (assignProvider as any)?.serviceType ||
           selectedServiceType;
         if (specialization) {
           serviceRequestDataRaw.providerSpecialization = specialization;
         }
-        if (targetedProvider?.rating != null) {
-          serviceRequestDataRaw.providerRating = targetedProvider.rating;
+        if ((assignProvider as any)?.rating != null) {
+          serviceRequestDataRaw.providerRating = (assignProvider as any).rating;
         }
         const image =
-          targetedProvider?.image ||
-          targetedProvider?.photoURL ||
-          targetedProvider?.profileImage;
+          (assignProvider as any)?.image ||
+          (assignProvider as any)?.photoURL ||
+          (assignProvider as any)?.profileImage;
         if (image) {
           serviceRequestDataRaw.providerImage = image;
         }
@@ -1111,90 +1382,23 @@ export default function ServiceRequestScreen({
         console.warn('Could not cache service request locally:', e);
       }
 
-      // Notify providers via WebSocket (targeted = only that provider; else nearby online)
-      try {
-        let providerIdsToNotify: string[] = [];
-
-        if (isTargetedRequest && targetedProviderId) {
-          providerIdsToNotify = [String(targetedProviderId)];
-        } else {
-          const onlineProviders = await providersApi.getAll({
-            serviceType: selectedServiceType,
-            isOnline: true,
-            limit: 50,
-          });
-
-          providerIdsToNotify = onlineProviders
-            .filter(p => p.approvalStatus === 'approved')
-            .map(p => p._id || p.id)
-            .filter((id): id is string => !!id);
-        }
-
-        console.log(
-          `📢 Notifying ${providerIdsToNotify.length} provider(s) about service request: ${serviceRequestId}`,
-        );
-
-        // Emit WebSocket notification to each provider
-        const notificationPromises = Array.from(providerIdsToNotify).map(providerId => {
-          console.log(`📤 Sending WebSocket notification to provider: ${providerId}`);
-          
-          // Build WebSocket payload
-          const websocketPayload: any = {
-            consultationId: serviceRequestId,
-            id: serviceRequestId,
-            bookingId: serviceRequestId,
-            customerName: serviceRequestData.customerName,
-            patientName: serviceRequestData.customerName, // For backward compatibility
-            customerPhone: serviceRequestData.customerPhone,
-            patientPhone: serviceRequestData.customerPhone, // For backward compatibility
-            customerAddress: serviceRequestData.customerAddress,
-            patientAddress: serviceRequestData.customerAddress, // For backward compatibility
-            serviceType: selectedServiceType,
-            problem: problem.trim(),
-            scheduledTime: urgency === 'scheduled' && scheduledDate ? scheduledDate : new Date(),
-            consultationFee: 0, // Service requests don't have fees upfront
-            providerId: isTargetedRequest ? String(targetedProviderId) : undefined,
-            isTargeted: isTargetedRequest,
-          };
-
-          // Only include problem if it has a value AND there's no questionnaire
-          // If questionnaire exists, the problem field is optional and shouldn't be sent if empty
-          const hasQuestionnaire = questionnaire && questionnaire.length > 0 && Object.keys(questionnaireAnswers).length > 0;
-          const hasProblem = problem.trim().length > 0;
-          
-          if (hasProblem && !hasQuestionnaire) {
-            // Problem is required when no questionnaire
-            websocketPayload.problem = problem.trim();
-          } else if (hasProblem && hasQuestionnaire) {
-            // Problem is optional when questionnaire exists, only include if provided
-            websocketPayload.problem = problem.trim();
-          }
-          // If no problem and questionnaire exists, don't include problem field
-
-          // Include questionnaire answers if available
-          if (hasQuestionnaire) {
-            websocketPayload.questionnaireAnswers = serviceRequestData.questionnaireAnswers;
-          }
-
-          return WebSocketService.emitNewBooking(providerId, websocketPayload).catch(error => {
-            console.error(`Failed to notify provider ${providerId}:`, error);
-            // Don't fail the request if WebSocket notification fails
-          });
-        });
-
-        await Promise.all(notificationPromises);
-        console.log(`✅ Notified ${providerIdsToNotify.length} provider(s) about new service request`);
-      } catch (websocketError) {
-        console.error('Error notifying providers via WebSocket:', websocketError);
-        // Don't fail the request if WebSocket notification fails
-      }
+      // Provider + admin notifications are handled by the backend on create
+      // (area-scoped providers + admin realtime/FCM). Do not emit from the client.
 
       // Show toast notification
       setSubmittedServiceRequestId(serviceRequestId);
       setToastMessage(
         isTargetedRequest
           ? String(t('services.requestSentToProvider') || `Your request has been sent to ${targetedProvider?.name || 'the provider'}.`)
-          : 'Your service request has been submitted. Nearby providers will be notified.',
+          : requestAdminHelp
+            ? String(
+                t('services.adminNotifiedForUnavailable') ||
+                  'Admin has been notified. They will find a provider and assign your request.',
+              )
+            : String(
+                t('services.requestSubmittedProvidersNotified') ||
+                  'Your service request has been submitted. Providers in your area will be notified.',
+              ),
       );
       setShowToast(true);
       
@@ -1267,7 +1471,43 @@ export default function ServiceRequestScreen({
         </View>
       ) : null}
 
-      {/* Service Type Selection */}
+      {/* 1. Service address first */}
+      <View style={[styles.section, {backgroundColor: theme.card, borderRadius: 12, padding: 12}]}>
+        <Text style={[styles.label, {color: theme.text}]}>
+          {t('services.serviceAddress')} *
+        </Text>
+        <ServiceAddressPicker
+          theme={theme}
+          value={addressSel}
+          onChange={setAddressSel}
+          t={t as any}
+          refreshKey={addressRefreshKey}
+        />
+        <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
+          Secondary mobile (optional)
+        </Text>
+        <TextInput
+          style={[
+            styles.problemInput,
+            {
+              color: theme.text,
+              borderColor: theme.border,
+              backgroundColor: theme.background,
+              minHeight: 44,
+            },
+          ]}
+          value={secondaryMobile}
+          onChangeText={(text) =>
+            setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
+          }
+          placeholder="10-digit mobile"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="phone-pad"
+          maxLength={10}
+        />
+      </View>
+
+      {/* 2. Service Type */}
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
           {t('services.serviceType')} *
@@ -1320,186 +1560,130 @@ export default function ServiceRequestScreen({
         ) : null}
       </View>
 
-      {/* Questionnaire */}
+      {/* 3. Providers in area */}
+      {!isTargetedRequest && selectedServiceType && selectedAddress?.pincode ? (
+        <View style={styles.section}>
+          <Text style={[styles.label, {color: theme.text}]}>
+            {t('services.providersInYourArea') || 'Providers in your area'}
+          </Text>
+          {loadingAreaProviders ? (
+            <ActivityIndicator color={theme.primary} style={{marginVertical: 8}} />
+          ) : (
+            <>
+              <Text
+                style={[
+                  styles.sectionSubheader,
+                  {color: theme.textSecondary, marginBottom: 8},
+                ]}>
+                {(
+                  t('services.providersInAreaCount') ||
+                  '{{count}} {{serviceType}} provider(s) near this address'
+                )
+                  .replace('{{count}}', String(areaProviders.length))
+                  .replace('{{serviceType}}', selectedServiceType)}
+              </Text>
+              <Select
+                options={[
+                  {
+                    value: '',
+                    label:
+                      (t('services.anyAvailableProvider') ||
+                        'Any available provider') +
+                      ` (${areaProviders.length})`,
+                  },
+                  ...areaProviders.map(p => {
+                    const id = String(p.id || p._id || '');
+                    const rating =
+                      p.rating != null
+                        ? ` · ★ ${Number(p.rating).toFixed(1)}`
+                        : '';
+                    const online = p.isOnline ? ' · Online' : '';
+                    return {
+                      value: id,
+                      label: `${p.name || p.displayName || 'Provider'}${rating}${online}`,
+                    };
+                  }),
+                ]}
+                value={preferredProviderId}
+                onChange={setPreferredProviderId}
+                placeholder={
+                  t('services.selectProviderOptional') ||
+                  'Select a provider (optional)'
+                }
+              />
+            </>
+          )}
+        </View>
+      ) : null}
+
+      {/* 4. Questionnaire */}
       {questionnaire && questionnaire.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionHeader, {color: theme.text}]}>
-            Service Details
-          </Text>
-          <Text style={[styles.sectionSubheader, {color: theme.textSecondary}]}>
-            Please answer these questions to help us serve you better
-          </Text>
-          {questionnaire.map((question, index) => (
-            <View key={question.id} style={styles.questionContainer}>
-              <Text style={[styles.questionText, {color: theme.text}]}>
-                {index + 1}. {getQuestionText(question)}
-                {question.required && <Text style={styles.requiredStar}> *</Text>}
-              </Text>
-
-              {/* Text Input */}
-              {question.type === 'text' && (
-                <TextInput
-                  style={[
-                    styles.questionInput,
-                    {backgroundColor: theme.card, color: theme.text, borderColor: theme.border},
-                  ]}
-                  value={questionnaireAnswers[question.id] || ''}
-                  onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={getPlaceholderText(question, t('services.enterYourAnswer'))}
-                  placeholderTextColor={theme.textSecondary}
-                  multiline
-                />
-              )}
-
-              {/* Number Input */}
-              {question.type === 'number' && (
-                <TextInput
-                  style={[
-                    styles.questionInput,
-                    {backgroundColor: theme.card, color: theme.text, borderColor: theme.border},
-                  ]}
-                  value={questionnaireAnswers[question.id] || ''}
-                  onChangeText={(text) => handleQuestionnaireAnswer(question.id, text)}
-                  placeholder={getPlaceholderText(question, t('services.enterANumber'))}
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="numeric"
-                />
-              )}
-
-              {/* Boolean (Yes/No) */}
-              {question.type === 'boolean' && (
-                <View style={styles.booleanButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.booleanButton,
-                      questionnaireAnswers[question.id] === true && styles.booleanButtonSelected,
-                      {borderColor: theme.border},
-                      questionnaireAnswers[question.id] === true && {backgroundColor: theme.primary},
-                    ]}
-                    onPress={() => handleQuestionnaireAnswer(question.id, true)}>
-                    <Text style={[
-                      styles.booleanButtonText,
-                      {color: questionnaireAnswers[question.id] === true ? '#fff' : theme.text},
-                    ]}>
-                      {t('common.yes')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.booleanButton,
-                      questionnaireAnswers[question.id] === false && styles.booleanButtonSelected,
-                      {borderColor: theme.border},
-                      questionnaireAnswers[question.id] === false && {backgroundColor: theme.primary},
-                    ]}
-                    onPress={() => handleQuestionnaireAnswer(question.id, false)}>
-                    <Text style={[
-                      styles.booleanButtonText,
-                      {color: questionnaireAnswers[question.id] === false ? '#fff' : theme.text},
-                    ]}>
-                      {t('common.no')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {question.type === 'select' && getOptions(question).length > 0 && (
-                <Select
-                  options={getOptions(question).map((option, optIdx) => ({
-                    value: question.options?.[optIdx] || option,
-                    label: option,
-                  }))}
-                  value={
-                    typeof questionnaireAnswers[question.id] === 'string'
-                      ? questionnaireAnswers[question.id]
-                      : ''
-                  }
-                  onChange={value =>
-                    handleQuestionnaireAnswer(question.id, value)
-                  }
-                  placeholder={t('common.select') || 'Select…'}
-                />
-              )}
-
-              {question.type === 'multiselect' &&
-                getOptions(question).length > 0 && (
-                  <MultiSelect
-                    options={getOptions(question).map((option, optIdx) => ({
-                      value: question.options?.[optIdx] || option,
-                      label: option,
-                    }))}
-                    value={
-                      Array.isArray(questionnaireAnswers[question.id])
-                        ? questionnaireAnswers[question.id]
-                        : []
-                    }
-                    onChange={value =>
-                      handleQuestionnaireAnswer(question.id, value)
-                    }
-                    placeholder={t('common.select') || 'Select…'}
-                  />
-                )}
-            </View>
-          ))}
+          <ServiceQuestionnaireFields
+            questions={questionnaire}
+            answers={questionnaireAnswers}
+            onChange={handleQuestionnaireAnswer}
+            theme={theme}
+            language={language}
+            title={String(t('services.serviceDetails') || 'Service Details')}
+            subtitle={String(
+              t('services.answerQuestionsToHelp') ||
+                'Please answer these questions to help us serve you better',
+            )}
+            yesLabel={String(t('common.yes'))}
+            noLabel={String(t('common.no'))}
+            selectPlaceholder={String(t('common.select') || 'Select…')}
+            textPlaceholder={String(
+              t('services.enterYourAnswer') || 'Enter your answer',
+            )}
+            numberPlaceholder={String(
+              t('services.enterANumber') || 'Enter a number',
+            )}
+          />
         </View>
       )}
 
-      {/* Problem Description */}
-      {questionnaire && questionnaire.length > 0 ? (
-        <View style={styles.section}>
-          <Text style={[styles.label, {color: theme.text}]}>
-           {t('services.problemInBrief')} *
-          </Text>
-          <Text style={[styles.sectionSubheader, {color: theme.textSecondary, marginBottom: 8}]}>
+      {/* 5. Problem (optional when questionnaire exists) */}
+      <View style={styles.section}>
+        <Text style={[styles.label, {color: theme.text}]}>
+          {questionnaire && questionnaire.length > 0
+            ? `${t('services.problemInBrief') || t('services.describeProblem')} (${t('common.optional') || 'optional'})`
+            : `${t('services.describeProblem')} *`}
+        </Text>
+        {questionnaire && questionnaire.length > 0 ? (
+          <Text
+            style={[
+              styles.sectionSubheader,
+              {color: theme.textSecondary, marginBottom: 8},
+            ]}>
             {t('services.additionalInfoDescription')}
           </Text>
-          <TextInput
-            style={[
-              styles.problemInput,
-              {
-                backgroundColor: theme.card,
-                color: theme.text,
-                borderColor: theme.border,
-              },
-            ]}
-            value={problem}
-            onChangeText={setProblem}
-            placeholder={t('services.additionalInfoPlaceholder')}
-            placeholderTextColor={theme.textSecondary}
-            multiline
-            numberOfLines={4}
-            maxLength={500}
-          />
-          <Text style={[styles.charCount, {color: theme.textSecondary}]}>
-            {problem.length}/500
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.section}>
-          <Text style={[styles.label, {color: theme.text}]}>
-            {t('services.describeProblem')} *
-          </Text>
-          <TextInput
-            style={[
-              styles.problemInput,
-              {
-                backgroundColor: theme.card,
-                color: theme.text,
-                borderColor: theme.border,
-              },
-            ]}
-            value={problem}
-            onChangeText={setProblem}
-            placeholder={t('services.problemPlaceholder')}
-            placeholderTextColor={theme.textSecondary}
-            multiline
-            numberOfLines={4}
-            maxLength={500}
-          />
-          <Text style={[styles.charCount, {color: theme.textSecondary}]}>
-            {problem.length}/500
-          </Text>
-        </View>
-      )}
+        ) : null}
+        <TextInput
+          style={[
+            styles.problemInput,
+            {
+              backgroundColor: theme.card,
+              color: theme.text,
+              borderColor: theme.border,
+            },
+          ]}
+          value={problem}
+          onChangeText={setProblem}
+          placeholder={
+            questionnaire && questionnaire.length > 0
+              ? t('services.additionalInfoPlaceholder')
+              : t('services.problemPlaceholder') || t('services.describeProblem')
+          }
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          numberOfLines={4}
+          maxLength={500}
+        />
+        <Text style={[styles.charCount, {color: theme.textSecondary}]}>
+          {problem.length}/500
+        </Text>
+      </View>
 
       {/* Photos */}
       <View style={styles.section}>
@@ -1533,83 +1717,6 @@ export default function ServiceRequestScreen({
             ))}
           </View>
         )}
-      </View>
-
-      {/* Service address — simplified fields */}
-      <View style={[styles.section, {backgroundColor: theme.card, borderRadius: 12, padding: 12}]}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {t('services.serviceAddress')} *
-        </Text>
-        <ServiceAddressFields
-          value={(selectedAddress || {}) as ServiceAddressValue}
-          onChange={(next) => setSelectedAddress(next)}
-          theme={theme}
-          showSaveForFuture
-          saveForFuture={saveAddressForFuture}
-          onSaveForFutureChange={setSaveAddressForFuture}
-          currentAddressLoading={fillingCurrentAddress}
-          onUseCurrentAddress={async () => {
-            setFillingCurrentAddress(true);
-            try {
-              const hasPermission =
-                await GeolocationService.requestLocationPermission();
-              if (hasPermission !== 'granted') {
-                setAlertModal({
-                  visible: true,
-                  title: t('common.error'),
-                  message:
-                    t('services.locationPermissionRequired') ||
-                    'Location permission is required.',
-                  type: 'warning',
-                });
-                return;
-              }
-              const location = await GeolocationService.getCurrentLocation();
-              setSelectedAddress({
-                ...(selectedAddress || {}),
-                address: location.address || selectedAddress?.address || '',
-                city: location.city || '',
-                district: location.city || (selectedAddress as any)?.district || '',
-                state: location.state || '',
-                pincode: location.pincode || '',
-                latitude: location.latitude,
-                longitude: location.longitude,
-                country: 'IN',
-              });
-            } catch (err: any) {
-              setAlertModal({
-                visible: true,
-                title: t('common.error'),
-                message: err?.message || t('services.addressSaveError'),
-                type: 'error',
-              });
-            } finally {
-              setFillingCurrentAddress(false);
-            }
-          }}
-        />
-        <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
-          Secondary mobile (optional)
-        </Text>
-        <TextInput
-          style={[
-            styles.problemInput,
-            {
-              color: theme.text,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-              minHeight: 44,
-            },
-          ]}
-          value={secondaryMobile}
-          onChangeText={(text) =>
-            setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
-          }
-          placeholder="10-digit mobile"
-          placeholderTextColor={theme.textSecondary}
-          keyboardType="phone-pad"
-          maxLength={10}
-        />
       </View>
 
       {/* Urgency Selection */}
@@ -1712,19 +1819,29 @@ export default function ServiceRequestScreen({
           styles.submitButton,
           {
             backgroundColor:
-              selectedServiceType && problem.trim() && selectedAddress
+              selectedServiceType &&
+              selectedAddress?.address &&
+              selectedAddress?.pincode &&
+              (questionnaire.length > 0 || problem.trim())
                 ? theme.primary
                 : theme.border,
             opacity:
-              selectedServiceType && problem.trim() && selectedAddress ? 1 : 0.5,
+              selectedServiceType &&
+              selectedAddress?.address &&
+              selectedAddress?.pincode &&
+              (questionnaire.length > 0 || problem.trim())
+                ? 1
+                : 0.5,
           },
         ]}
         onPress={handleSubmit}
         disabled={
           !selectedServiceType ||
-          !problem.trim() ||
-          !selectedAddress ||
+          !selectedAddress?.address ||
+          !selectedAddress?.pincode ||
+          (questionnaire.length === 0 && !problem.trim()) ||
           loading ||
+          addressSel.mode === 'edit' ||
           (urgency === 'scheduled' && !scheduledDate)
         }>
         {loading ? (
@@ -1756,69 +1873,135 @@ export default function ServiceRequestScreen({
             <FlatList
               data={serviceCategories}
               keyExtractor={item => item.id}
-              renderItem={({item}) => (
-                <TouchableOpacity
-                  style={[
-                    styles.categoryItem,
-                    {
-                      backgroundColor:
-                        selectedServiceType === item.name
-                          ? theme.primary + '20'
-                          : 'transparent',
-                    },
-                  ]}
-                  onPress={() => handleSelectServiceType(item)}>
+              renderItem={({item}) => {
+                const count = providerCounts[item.name] || 0;
+                const unavailable = !loadingProviderCounts && count === 0;
+                const alreadyRequested = !!requestedAreaTypes[item.name];
+                const notifying = notifyingDemandFor === item.name;
+
+                return (
                   <View
                     style={[
-                      styles.categoryIcon,
-                      {backgroundColor: item.color + '20'},
+                      styles.categoryItem,
+                      {
+                        backgroundColor:
+                          selectedServiceType === item.name
+                            ? theme.primary + '20'
+                            : 'transparent',
+                      },
                     ]}>
-                    <Icon name={item.icon} size={24} color={item.color} />
-                  </View>
-                  <View style={styles.categoryText}>
-                    <View style={styles.categoryNameRow}>
-                      <Text style={[styles.categoryName, {color: theme.text}]}>
-                        {language === 'hi' && item.nameHi ? item.nameHi : item.name}
-                      </Text>
-                      {loadingProviderCounts ? (
-                        <ActivityIndicator size="small" color={theme.primary} style={styles.countLoader} />
-                      ) : (
-                        <View style={[
-                          styles.providerCountBadge,
-                          {
-                            backgroundColor: (providerCounts[item.name] || 0) === 0 
-                              ? '#e74c3c' 
-                              : theme.primary + '20',
-                          }
+                    <TouchableOpacity
+                      style={styles.categorySelectArea}
+                      activeOpacity={unavailable ? 1 : 0.7}
+                      onPress={() => handleSelectServiceType(item)}>
+                      <View
+                        style={[
+                          styles.categoryIcon,
+                          {backgroundColor: item.color + '20'},
                         ]}>
-                          <Text style={[
-                            styles.providerCountText,
-                            {
-                              color: (providerCounts[item.name] || 0) === 0 
-                                ? '#fff' 
-                                : theme.primary,
-                            }
-                          ]}>
-                            {(providerCounts[item.name] || 0) === 0 
-                              ? String(t('services.noProviders'))
-                              : `${providerCounts[item.name] || 0} ${String(t('services.providersAvailable'))}`
-                            }
+                        <Icon name={item.icon} size={24} color={item.color} />
+                      </View>
+                      <View style={styles.categoryText}>
+                        <View style={styles.categoryNameRow}>
+                          <Text style={[styles.categoryName, {color: theme.text}]}>
+                            {language === 'hi' && item.nameHi
+                              ? item.nameHi
+                              : item.name}
                           </Text>
+                          {loadingProviderCounts ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={theme.primary}
+                              style={styles.countLoader}
+                            />
+                          ) : (
+                            <View
+                              style={[
+                                styles.providerCountBadge,
+                                {
+                                  backgroundColor: unavailable
+                                    ? '#e74c3c'
+                                    : theme.primary + '20',
+                                },
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.providerCountText,
+                                  {
+                                    color: unavailable ? '#fff' : theme.primary,
+                                  },
+                                ]}>
+                                {unavailable
+                                  ? String(t('services.noProviders'))
+                                  : `${count} ${String(
+                                      t('services.providersAvailable'),
+                                    )}`}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                      )}
-                    </View>
-                    {(item.description || item.descriptionHi) && (
-                      <Text
-                        style={[styles.categoryDescription, {color: theme.textSecondary}]}>
-                        {language === 'hi' && item.descriptionHi ? item.descriptionHi : (item.description || '')}
-                      </Text>
-                    )}
+                        {(item.description || item.descriptionHi) && (
+                          <Text
+                            style={[
+                              styles.categoryDescription,
+                              {color: theme.textSecondary},
+                            ]}>
+                            {language === 'hi' && item.descriptionHi
+                              ? item.descriptionHi
+                              : item.description || ''}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {unavailable ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.requestProvidersButton,
+                          {
+                            backgroundColor: alreadyRequested
+                              ? theme.border
+                              : theme.primary,
+                            opacity: notifying ? 0.7 : 1,
+                          },
+                        ]}
+                        disabled={alreadyRequested || notifying}
+                        onPress={() => handleRequestAreaProviders(item)}
+                        accessibilityLabel={String(
+                          t('services.requestProviders') || 'Request',
+                        )}>
+                        {notifying ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Icon
+                              name={
+                                alreadyRequested
+                                  ? 'notifications'
+                                  : 'notifications-active'
+                              }
+                              size={16}
+                              color="#fff"
+                            />
+                            <Text style={styles.requestProvidersButtonText}>
+                              {alreadyRequested
+                                ? String(
+                                    t('services.requestProvidersRequested') ||
+                                      'Requested',
+                                  )
+                                : String(
+                                    t('services.requestProviders') || 'Request',
+                                  )}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    ) : selectedServiceType === item.name ? (
+                      <Icon name="check-circle" size={24} color={theme.primary} />
+                    ) : null}
                   </View>
-                  {selectedServiceType === item.name && (
-                    <Icon name="check-circle" size={24} color={theme.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
+                );
+              }}
             />
           </View>
         </View>
@@ -2669,6 +2852,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 12,
   },
+  categorySelectArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   categoryIcon: {
     width: 48,
     height: 48,
@@ -2702,6 +2891,21 @@ const styles = StyleSheet.create({
   providerCountText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  requestProvidersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 88,
+  },
+  requestProvidersButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   countLoader: {
     marginLeft: 8,

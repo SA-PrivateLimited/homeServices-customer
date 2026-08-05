@@ -55,6 +55,8 @@
   "availableProviders": "Available Providers",
   "online": "Online",
   "offline": "Offline",
+  "declined": "Declined",
+  "providerDeclinedToast": "{{name}} declined — still waiting for others",
   "away": "away",
   "eta": "ETA",
   "min": "min",

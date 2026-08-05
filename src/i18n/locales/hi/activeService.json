@@ -55,6 +55,8 @@
   "availableProviders": "उपलब्ध प्रदाता",
   "online": "ऑनलाइन",
   "offline": "ऑफलाइन",
+  "declined": "अस्वीकृत",
+  "providerDeclinedToast": "{{name}} ने अस्वीकार किया — अन्य प्रदाताओं की प्रतीक्षा जारी",
   "away": "दूर",
   "eta": "अनुमानित समय",
   "min": "मिनट",

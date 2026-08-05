@@ -38,6 +38,9 @@
   "selectState": "राज्य चुनें",
   "allStates": "सभी राज्य",
   "selectDistrict": "ज़िला चुनें",
-  "allDistricts": "सभी ज़िले"
+  "allDistricts": "सभी ज़िले",
+  "district": "ज़िला",
+  "submitRequest": "अनुरोध भेजें",
+  "requestSentTitle": "अनुरोध भेज दिया गया"
 }
 

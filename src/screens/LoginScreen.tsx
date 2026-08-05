@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [otpBanner, setOtpBanner] = useState<OtpBanner | null>(null);
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
+  const pinLoginInFlight = useRef(false);
 
   const {
     isDarkMode,
@@ -267,22 +268,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     }
   };
 
-  const handleLoginWithPin = async () => {
-    if (!/^\d{6}$/.test(pin.trim())) {
+  const handleLoginWithPin = async (pinOverride?: string) => {
+    const code = (pinOverride ?? pin).trim();
+    if (!/^\d{6}$/.test(code)) {
       setInlineError(t('auth.pinMustBeSixDigits'));
       return;
     }
-
+    if (pinLoginInFlight.current || loading) return;
+    pinLoginInFlight.current = true;
     setLoading(true);
     setInlineError(null);
     try {
-      const result = await loginPin(fullPhone(), pin.trim());
+      const result = await loginPin(fullPhone(), code);
       await applySession(result.token, result.user);
       navigateAfterAuth();
     } catch (error: any) {
       setInlineError(error.message || t('auth.incorrectPin'));
       setPin('');
     } finally {
+      pinLoginInFlight.current = false;
       setLoading(false);
     }
   };
@@ -466,9 +470,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
             </Text>
             <PinBoxesInput
               value={pin}
+              length={6}
               onChange={text => {
                 setPin(text);
                 setInlineError(null);
+              }}
+              onComplete={code => {
+                void handleLoginWithPin(code);
               }}
               editable={!loading}
               autoFocus
@@ -553,6 +561,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
             </Text>
             <PinBoxesInput
               value={newPin}
+              length={6}
               onChange={text => {
                 setNewPin(text);
                 setInlineError(null);
