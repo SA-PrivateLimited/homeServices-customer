@@ -1,0 +1,28 @@
+---
+description: Always-active project conventions (Home Services RN)
+alwaysApply: true
+---
+
+# Project Always Rules
+
+## Never commit
+- `.env` / `.env.local` — secrets
+- `agent-context/` (gitignored)
+
+## Branch naming
+`feat/[ticket-id]` · `fix/[ticket-id]` · `chore/[description]`
+
+## i18n
+Every user-visible string uses i18next. No hardcoded English/Hindi in JSX.
+
+## Theme
+Use `src/utils/theme.ts` / `baseline.md`. No random hex in new UI.
+
+## State
+Zustand in `src/store/`. Prefer existing store fields before new stores.
+
+## Tests
+Jest tests must be deterministic — mock network/Firebase.
+
+## PR size
+Prefer PRs under ~400 lines changed.

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test-notification.js:*)",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell dumpsys notification_policy)",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell dumpsys notification)",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell \"dumpsys window | grep -E ''mCurrentFocus|mFocusedApp''\")",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell \"cmd notification allow_listener com.medifind && cmd notification set_importance com.medifind 4\")",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell settings put global heads_up_notifications_enabled 1)",
+      "Bash(/Users/sandeepgupta/Library/Android/sdk/platform-tools/adb shell am start:*)",
+      "Bash(node send-test-notification.js:*)",
+      "Bash(adb:*)",
+      "Bash(node test-doctor-notification.js:*)",
+      "Bash(timeout 60 adb:*)",
+      "Bash(chmod:*)",
+      "Bash(for i in {1..30})",
+      "Bash(do echo 'Checking... ($i/30)')",
+      "Bash(BashOutput 6aed8c)",
+      "Bash(done)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

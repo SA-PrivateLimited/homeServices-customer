@@ -1,0 +1,50 @@
+---
+description: TypeScript standards for this codebase
+globs: **/*.ts,**/*.tsx
+alwaysApply: false
+---
+
+# TypeScript Standards
+
+## Strict mode
+This project runs with `strict: true`. Every file must comply.
+
+## No `any`
+Never use `any`. Use `unknown` when the type is genuinely unknown, then narrow it. Use generics when the type varies by caller.
+
+## Interfaces vs types
+- Use `interface` for object shapes that might be extended.
+- Use `type` for unions, intersections, primitives, and utility types.
+
+## Naming
+- Interfaces and types: `PascalCase`
+- Functions and variables: `camelCase`
+- Constants: `UPPER_SNAKE_CASE` only for true module-level constants
+- React components: `PascalCase`
+- File names: `PascalCase` for components, `camelCase` for utilities
+
+## Imports
+- Use named imports. Avoid default imports for utility modules.
+- Group: external → internal (`src/`) → relative. Blank line between groups.
+- No unused imports.
+
+## Functions
+- Prefer arrow functions for component definitions and callbacks.
+- Use explicit return types on all exported functions.
+- Avoid overloaded functions — use union types or generics instead.
+
+## Nullability
+- Prefer `undefined` over `null` in new code.
+- Use optional chaining `?.` and nullish coalescing `??`.
+- Do not cast with `!` unless you are 100% certain the value cannot be null/undefined.
+
+## Async
+- Always `await` promises. Never fire-and-forget inside components.
+- Use `async/await` not `.then()` chains.
+- Handle errors: wrap in `try/catch` or use a typed result pattern.
+
+## Enums
+- Prefer `const` objects with `as const` over TypeScript `enum`. Enums have surprising runtime behaviour.
+
+## File size
+Keep files under 250 lines. Extract types to a co-located `types.ts` if the file grows.
