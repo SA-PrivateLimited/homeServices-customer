@@ -20,7 +20,7 @@ export async function lookupPhone(
 ): Promise<PhoneLookupResult> {
   return apiPost<PhoneLookupResult>(
     '/auth/phone/lookup',
-    {phoneNumber},
+    {phoneNumber, role: 'customer'},
     {skipAuth: true},
   );
 }
@@ -46,60 +46,59 @@ export async function loginPin(
 ): Promise<PinAuthResult> {
   return apiPost<PinAuthResult>(
     '/auth/phone/login-pin',
-    {phoneNumber, pin},
+    {phoneNumber, pin, role: 'customer'},
     {skipAuth: true},
   );
 }
 
+/**
+ * Optional probe — Firebase mode does not send SMS.
+ * Prefer client Firebase Phone Auth for actual OTP delivery.
+ */
 export async function sendPhoneOtp(phoneNumber: string): Promise<{
   phoneNumber: string;
+  provider?: string;
   status?: string;
   channel?: string;
   dev?: boolean;
-  /** Present in TWILIO_DEV_MODE — show in-app banner */
   otp?: string;
   expiresAt?: string;
   expiresInSeconds?: number;
 }> {
-  return apiPost(
-    '/auth/phone/send-otp',
-    {phoneNumber},
-    {skipAuth: true},
-  );
+  return apiPost('/auth/phone/send-otp', {phoneNumber}, {skipAuth: true});
 }
 
-/** Forgot PIN / signup: verify OTP and set a user-chosen PIN. */
+/** Forgot PIN — Firebase idToken (or legacy Twilio code). */
 export async function resetPin(
   phoneNumber: string,
-  code: string,
   pin: string,
+  opts: {idToken: string} | {code: string},
 ): Promise<PinAuthResult> {
-  return apiPost<PinAuthResult>(
-    '/auth/phone/reset-pin',
-    {
-      phoneNumber,
-      code,
-      pin,
-    },
-    {skipAuth: true},
-  );
+  const body: Record<string, string> = {phoneNumber, pin};
+  if ('idToken' in opts) body.idToken = opts.idToken;
+  else body.code = opts.code;
+
+  return apiPost<PinAuthResult>('/auth/phone/reset-pin', body, {
+    skipAuth: true,
+  });
 }
 
-/** New number: verify OTP and create account with user-chosen PIN. */
+/** Signup — Firebase idToken + chosen PIN (or legacy Twilio code). */
 export async function registerWithOtp(
   phoneNumber: string,
-  code: string,
   pin: string,
-  fullName?: string,
+  opts: {idToken: string; fullName?: string} | {code: string; fullName?: string},
 ): Promise<PinAuthResult> {
-  return apiPost<PinAuthResult>(
-    '/auth/phone/register-with-otp',
-    {
-      phoneNumber,
-      code,
-      pin,
-      fullName: fullName || 'Customer',
-    },
-    {skipAuth: true},
-  );
+  const body: Record<string, string> = {
+    phoneNumber,
+    pin,
+    fullName: opts.fullName || 'Customer',
+    role: 'customer',
+  };
+  if ('idToken' in opts) body.idToken = opts.idToken;
+  else body.code = opts.code;
+
+  return apiPost<PinAuthResult>('/auth/phone/register-with-otp', body, {
+    skipAuth: true,
+  });
 }

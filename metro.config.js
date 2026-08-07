@@ -11,8 +11,7 @@ const appPackagesRoot = path.resolve(monorepoPackages, 'saPvtLtdAppPackages');
 const appNodeModules = path.resolve(projectRoot, 'node_modules');
 
 const firebaseShims = {
-  '@react-native-firebase/app': path.resolve(__dirname, 'src/shims/app.js'),
-  '@react-native-firebase/auth': path.resolve(__dirname, 'src/shims/auth.js'),
+  // Real Firebase Auth is used for Phone OTP; keep other modules stubbed.
   '@react-native-firebase/firestore': path.resolve(
     __dirname,
     'src/shims/firestore.js',

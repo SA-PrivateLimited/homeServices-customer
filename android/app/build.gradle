@@ -151,5 +151,5 @@ afterEvaluate {
     }
 }
 
-// Google Services / Firebase removed — app uses MongoDB + JWT only
-// apply plugin: 'com.google.gms.google-services'
+// Google Services required for Firebase Phone Auth
+apply plugin: 'com.google.gms.google-services'

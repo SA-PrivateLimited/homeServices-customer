@@ -15,8 +15,7 @@ buildscript {
         classpath("com.android.tools.build:gradle:8.1.1")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-        // Firebase / Google Services removed
-        // classpath("com.google.gms:google-services:4.4.0")
+        classpath("com.google.gms:google-services:4.4.0")
     }
 }
 
