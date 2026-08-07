@@ -1,7 +1,7 @@
 /**
  * Service Request Screen
- * Customer app - Request a home service (Ola/Uber style)
- * Simple flow: Select service → Describe problem → Choose address → Submit
+ * Customer app — location first, then service type, then submit.
+ * Flow: Address/location → Service type → Providers in area → Details → Submit
  */
 
 import React, {useState, useEffect, useCallback} from 'react';
@@ -19,7 +19,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
@@ -43,6 +42,7 @@ import ServiceAddressPicker, {
   type ServiceAddressSelection,
 } from '../components/ServiceAddressPicker';
 import ServiceQuestionnaireFields from '../components/ServiceQuestionnaireFields';
+import PhoneNumberInput from '../components/PhoneNumberInput';
 import {Select} from 'sapvt-ltd-app-packages';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import {usersApi} from '../services/api/usersApi';
@@ -149,9 +149,6 @@ export default function ServiceRequestScreen({
   /** '' = any available provider in area (open request) */
   const [preferredProviderId, setPreferredProviderId] = useState<string>('');
   const [secondaryMobile, setSecondaryMobile] = useState('');
-  const [urgency, setUrgency] = useState<'immediate' | 'scheduled'>('immediate');
-  const [scheduledDate, setScheduledDate] = useState<Date | null>(null);
-  const [scheduledTime, setScheduledTime] = useState<string>('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -175,10 +172,8 @@ export default function ServiceRequestScreen({
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [submittedServiceRequestId, setSubmittedServiceRequestId] = useState<string | null>(null);
-  const [showDateTimeModal, setShowDateTimeModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [tempScheduledDate, setTempScheduledDate] = useState<Date>(new Date());
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -1197,15 +1192,6 @@ export default function ServiceRequestScreen({
       return;
     }
 
-    if (urgency === 'scheduled' && !scheduledDate) {
-      setAlertModal({
-        visible: true,
-        title: t('common.scheduledDateRequired'),
-        message: t('common.scheduledDateRequiredMessage'),
-        type: 'warning',
-      });
-      return;
-    }
 
     setLoading(true);
     try {
@@ -1262,7 +1248,7 @@ export default function ServiceRequestScreen({
         serviceType: selectedServiceType,
         problem: problem.trim(),
         status: 'pending',
-        urgency: urgency,
+        urgency: 'immediate',
         ...(requestAdminHelp
           ? {requestAdminHelp: true, needsAdminAssignment: true}
           : {}),
@@ -1340,10 +1326,6 @@ export default function ServiceRequestScreen({
         delete serviceRequestDataRaw.providerImage;
       }
 
-      // Handle scheduledTime
-      if (urgency === 'scheduled' && scheduledDate) {
-        serviceRequestDataRaw.scheduledTime = scheduledDate.toISOString();
-      }
 
       // Only include photos if there are any (filter out undefined/null/empty)
       if (photos.length > 0) {
@@ -1486,45 +1468,62 @@ export default function ServiceRequestScreen({
         <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
           Secondary mobile (optional)
         </Text>
-        <TextInput
-          style={[
-            styles.problemInput,
-            {
-              color: theme.text,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-              minHeight: 44,
-            },
-          ]}
+        <PhoneNumberInput
           value={secondaryMobile}
           onChangeText={(text) =>
             setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
           }
           placeholder="10-digit mobile"
+          borderColor={theme.border}
+          backgroundColor={theme.card}
+          prefixBackgroundColor={theme.background}
+          textColor={theme.text}
           placeholderTextColor={theme.textSecondary}
-          keyboardType="phone-pad"
-          maxLength={10}
         />
       </View>
 
-      {/* 2. Service Type */}
+      {/* 2. Service Type — after location */}
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
           {t('services.serviceType')} *
         </Text>
+        {!selectedAddress?.address || !selectedAddress?.pincode ? (
+          <Text
+            style={{
+              color: theme.textSecondary,
+              fontSize: 13,
+              marginBottom: 8,
+            }}>
+            Enter your service address above to see providers available in your
+            area.
+          </Text>
+        ) : null}
         <TouchableOpacity
           style={[
             styles.serviceTypeButton,
             {
               backgroundColor: theme.card,
               borderColor: theme.border,
-              opacity: isTargetedRequest ? 0.85 : 1,
+              opacity:
+                isTargetedRequest ||
+                !selectedAddress?.address ||
+                !selectedAddress?.pincode
+                  ? 0.85
+                  : 1,
             },
           ]}
-          disabled={isTargetedRequest}
+          disabled={
+            isTargetedRequest ||
+            !selectedAddress?.address ||
+            !selectedAddress?.pincode
+          }
           activeOpacity={isTargetedRequest ? 1 : 0.7}
           onPress={() => {
-            if (!isTargetedRequest) {
+            if (
+              !isTargetedRequest &&
+              selectedAddress?.address &&
+              selectedAddress?.pincode
+            ) {
               setShowServiceTypeModal(true);
             }
           }}>
@@ -1541,7 +1540,9 @@ export default function ServiceRequestScreen({
             </View>
           ) : (
             <Text style={[styles.placeholderText, {color: theme.textSecondary}]}>
-              {t('services.selectServiceType')}
+              {!selectedAddress?.address || !selectedAddress?.pincode
+                ? 'Complete address first'
+                : t('services.selectServiceType')}
             </Text>
           )}
           <Icon
@@ -1719,100 +1720,6 @@ export default function ServiceRequestScreen({
         )}
       </View>
 
-      {/* Urgency Selection */}
-      <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>{t('services.whenDoYouNeedIt')} *</Text>
-        <View style={styles.urgencyContainer}>
-          <TouchableOpacity
-            style={[
-              styles.urgencyButton,
-              {
-                backgroundColor:
-                  urgency === 'immediate' ? theme.primary : theme.card,
-                borderColor: theme.border,
-              },
-            ]}
-            onPress={() => setUrgency('immediate')}>
-            <Icon
-              name="flash-on"
-              size={24}
-              color={urgency === 'immediate' ? '#fff' : theme.textSecondary}
-            />
-            <Text
-              style={[
-                styles.urgencyText,
-                {
-                  color: urgency === 'immediate' ? '#fff' : theme.text,
-                },
-              ]}>
-              {t('services.immediate')}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.urgencyButton,
-              {
-                backgroundColor:
-                  urgency === 'scheduled' ? theme.primary : theme.card,
-                borderColor: theme.border,
-              },
-            ]}
-            onPress={() => setUrgency('scheduled')}>
-            <Icon
-              name="schedule"
-              size={24}
-              color={urgency === 'scheduled' ? '#fff' : theme.textSecondary}
-            />
-            <Text
-              style={[
-                styles.urgencyText,
-                {
-                  color: urgency === 'scheduled' ? '#fff' : theme.text,
-                },
-              ]}>
-              {t('services.scheduled')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Scheduled Date/Time (if scheduled) */}
-      {urgency === 'scheduled' && (
-        <View style={styles.section}>
-          <Text style={[styles.label, {color: theme.text}]}>
-            Select Date & Time
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.dateTimeButton,
-              {backgroundColor: theme.card, borderColor: theme.border},
-            ]}
-            onPress={() => {
-              // Initialize with existing scheduled date, or set to at least 1 hour from now
-              if (scheduledDate) {
-                setTempScheduledDate(scheduledDate);
-              } else {
-                // Set to 1 hour from now to avoid validation errors
-                const oneHourLater = new Date();
-                oneHourLater.setHours(oneHourLater.getHours() + 1);
-                // Round to next hour for cleaner display
-                oneHourLater.setMinutes(0);
-                setTempScheduledDate(oneHourLater);
-              }
-              setShowDateTimeModal(true);
-            }}>
-            <Icon name="calendar-today" size={24} color={theme.primary} />
-            <Text style={[styles.dateTimeText, {color: theme.text}]}>
-              {scheduledDate
-                ? scheduledDate.toLocaleString()
-                : 'Select date and time'}
-            </Text>
-            <Icon name="chevron-right" size={24} color={theme.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Submit Button */}
       <TouchableOpacity
         style={[
@@ -1841,8 +1748,7 @@ export default function ServiceRequestScreen({
           !selectedAddress?.pincode ||
           (questionnaire.length === 0 && !problem.trim()) ||
           loading ||
-          addressSel.mode === 'edit' ||
-          (urgency === 'scheduled' && !scheduledDate)
+          addressSel.mode === 'edit'
         }>
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -2459,159 +2365,6 @@ export default function ServiceRequestScreen({
       </Modal>
 
       {/* Date/Time Picker Modal */}
-      <Modal
-        visible={showDateTimeModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDateTimeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.dateTimeModal, {backgroundColor: theme.card}]}>
-            <View style={styles.dateTimeModalHeader}>
-              <Text style={[styles.dateTimeModalTitle, {color: theme.text}]}>
-                Select Date & Time
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowDateTimeModal(false)}
-                style={styles.modalCloseButton}>
-                <Icon name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.dateTimeModalContent}>
-              {/* Date Picker */}
-              <View style={styles.dateTimePickerSection}>
-                <Text style={[styles.dateTimePickerLabel, {color: theme.text}]}>
-                  Select Date
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.dateTimePickerButton,
-                    {backgroundColor: theme.background, borderColor: theme.border},
-                  ]}
-                  onPress={() => setShowDatePicker(true)}>
-                  <Icon name="calendar-today" size={20} color={theme.primary} />
-                  <Text style={[styles.dateTimePickerButtonText, {color: theme.text}]}>
-                    {tempScheduledDate.toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={tempScheduledDate}
-                    mode="date"
-                    minimumDate={new Date()}
-                    display="default"
-                    onChange={(event, selectedDate) => {
-                      setShowDatePicker(false);
-                      if (selectedDate) {
-                        // Preserve the time when changing date
-                        const newDate = new Date(selectedDate);
-                        newDate.setHours(tempScheduledDate.getHours());
-                        newDate.setMinutes(tempScheduledDate.getMinutes());
-                        
-                        // If selected date is today, ensure time is at least 1 hour from now
-                        const now = new Date();
-                        const isToday = newDate.toDateString() === now.toDateString();
-                        if (isToday) {
-                          const oneHourLater = new Date(now);
-                          oneHourLater.setHours(oneHourLater.getHours() + 1);
-                          if (newDate <= oneHourLater) {
-                            // Set time to 1 hour from now if selected time is too close
-                            newDate.setHours(oneHourLater.getHours());
-                            newDate.setMinutes(0);
-                          }
-                        }
-                        
-                        setTempScheduledDate(newDate);
-                      }
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Time Picker */}
-              <View style={styles.dateTimePickerSection}>
-                <Text style={[styles.dateTimePickerLabel, {color: theme.text}]}>
-                  Select Time
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.dateTimePickerButton,
-                    {backgroundColor: theme.background, borderColor: theme.border},
-                  ]}
-                  onPress={() => setShowTimePicker(true)}>
-                  <Icon name="access-time" size={20} color={theme.primary} />
-                  <Text style={[styles.dateTimePickerButtonText, {color: theme.text}]}>
-                    {tempScheduledDate.toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
-                  </Text>
-                </TouchableOpacity>
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={tempScheduledDate}
-                    mode="time"
-                    is24Hour={false}
-                    display="default"
-                    onChange={(event, selectedTime) => {
-                      setShowTimePicker(false);
-                      if (selectedTime) {
-                        // Preserve the date when changing time
-                        const newDate = new Date(tempScheduledDate);
-                        newDate.setHours(selectedTime.getHours());
-                        newDate.setMinutes(selectedTime.getMinutes());
-                        setTempScheduledDate(newDate);
-                      }
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.dateTimeModalActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.dateTimeModalCancelButton,
-                    {borderColor: theme.border},
-                  ]}
-                  onPress={() => setShowDateTimeModal(false)}>
-                  <Text style={[styles.dateTimeModalCancelText, {color: theme.text}]}>
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.dateTimeModalConfirmButton, {backgroundColor: theme.primary}]}
-                  onPress={() => {
-                    // Validate that selected date/time is at least 1 hour in the future
-                    const now = new Date();
-                    const oneHourLater = new Date(now);
-                    oneHourLater.setHours(oneHourLater.getHours() + 1);
-                    
-                    if (tempScheduledDate <= oneHourLater) {
-                      setAlertModal({
-                        visible: true,
-                        title: t('common.invalidDateTime') || 'Invalid Date/Time',
-                        message: t('common.invalidDateTimeMessage') || 'Please select a date and time at least 1 hour in the future for scheduled service.',
-                        type: 'warning',
-                      });
-                      return;
-                    }
-                    setScheduledDate(tempScheduledDate);
-                    setShowDateTimeModal(false);
-                  }}>
-                  <Text style={styles.dateTimeModalConfirmText}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Toast Notification */}
       <Toast
@@ -2777,37 +2530,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
-  urgencyContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  urgencyButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-  },
-  urgencyText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dateTimeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  dateTimeText: {
-    flex: 1,
-    fontSize: 16,
-    marginLeft: 12,
-  },
+
+
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3158,79 +2882,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
   },
-  dateTimeModal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  dateTimeModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  dateTimeModalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
+
+
+
   modalCloseButton: {
     padding: 4,
   },
-  dateTimeModalContent: {
-    padding: 20,
-  },
-  dateTimePickerSection: {
-    marginBottom: 24,
-  },
-  dateTimePickerLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 12,
-  },
-  dateTimePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 12,
-  },
-  dateTimePickerButtonText: {
-    fontSize: 16,
-    flex: 1,
-  },
-  dateTimeModalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  dateTimeModalCancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  dateTimeModalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dateTimeModalConfirmButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  dateTimeModalConfirmText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
+
+
+
+
+
+
+
+
+
   // Questionnaire styles
   sectionHeader: {
     fontSize: 20,
