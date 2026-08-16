@@ -41,7 +41,7 @@
   "cancellationReason": "रद्दीकरण कारण",
   "cancellationReasonPlaceholder": "विस्तृत रद्दीकरण कारण दर्ज करें...",
   "provideCancellationReason": "कृपया रद्दीकरण कारण प्रदान करें",
-  "provideDetailedReason": "कृपया एक विस्तृत कारण प्रदान करें (कम से कम 10 वर्ण)",
+  "provideDetailedReason": "कृपया एक विस्तृत कारण प्रदान करें (कम से कम 5 वर्ण)",
   "characters": "वर्ण",
   "cancelling": "रद्द किया जा रहा है...",
   "cancelService": "सेवा रद्द करें",

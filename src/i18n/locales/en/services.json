@@ -12,11 +12,12 @@
   "scheduled": "Scheduled",
   "immediate": "Immediate",
   "status": "Status",
-  "pending": "Pending",
+  "pending": "Waiting for provider",
   "accepted": "Accepted",
   "inProgress": "In Progress",
   "completed": "Completed",
   "cancelled": "Cancelled",
+  "rejected": "Declined",
   "provider": "Provider",
   "customer": "Customer",
   "noServices": "No services found",
@@ -24,6 +25,7 @@
   "noPendingServices": "No pending services",
   "noAcceptedServices": "No accepted services",
   "noCompletedServices": "No completed services",
+  "noCancelledServices": "No cancelled services",
   "serviceRequested": "Service requested successfully",
   "serviceAccepted": "Service accepted",
   "serviceStarted": "Service started",
@@ -108,5 +110,10 @@
   "selectProviderOptional": "Select a provider (optional)",
   "serviceDetails": "Service Details",
   "answerQuestionsToHelp": "Please answer these questions to help us serve you better",
-  "saveAddressFirst": "Please save or cancel address edits first."
+  "saveAddressFirst": "Please save or cancel address edits first.",
+  "photos": "Photos",
+  "photoTypeError": "Please choose a JPG, PNG, or WebP image.",
+  "photoSizeError": "Please choose an image smaller than 5 MB.",
+  "photoRetryHint": "Tap a photo to retry the upload.",
+  "photosMustBeReady": "Please wait for photos to finish uploading, or remove failed ones."
 }

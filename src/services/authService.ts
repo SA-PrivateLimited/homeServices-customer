@@ -4,6 +4,7 @@
 
 import type {User} from './api/usersApi';
 import {usersApi} from './api/usersApi';
+import {logoutRemote} from './api/phoneAuthApi';
 import {
   clearSession,
   getStoredJwt,
@@ -65,6 +66,7 @@ export const updateUserLocation = async (
 };
 
 export const logout = async (): Promise<void> => {
+  await logoutRemote();
   await logoutCustomer();
 };
 

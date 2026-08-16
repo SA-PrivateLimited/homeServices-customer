@@ -41,7 +41,7 @@
   "cancellationReason": "Cancellation Reason",
   "cancellationReasonPlaceholder": "Enter detailed cancellation reason...",
   "provideCancellationReason": "Please provide a cancellation reason",
-  "provideDetailedReason": "Please provide a detailed reason (at least 10 characters)",
+  "provideDetailedReason": "Please provide a detailed reason (at least 5 characters)",
   "characters": "characters",
   "cancelling": "Cancelling...",
   "cancelService": "Cancel Service",

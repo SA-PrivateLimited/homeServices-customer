@@ -12,11 +12,12 @@
   "scheduled": "निर्धारित",
   "immediate": "तत्काल",
   "status": "स्थिति",
-  "pending": "लंबित",
+  "pending": "प्रदाता की प्रतीक्षा",
   "accepted": "स्वीकृत",
   "inProgress": "प्रगति में",
   "completed": "पूर्ण",
   "cancelled": "रद्द",
+  "rejected": "अस्वीकृत",
   "provider": "प्रदाता",
   "customer": "ग्राहक",
   "noServices": "कोई सेवा नहीं मिली",
@@ -24,6 +25,7 @@
   "noPendingServices": "कोई लंबित सेवा नहीं",
   "noAcceptedServices": "कोई स्वीकृत सेवा नहीं",
   "noCompletedServices": "कोई पूर्ण सेवा नहीं",
+  "noCancelledServices": "कोई रद्द सेवा नहीं",
   "serviceRequested": "सेवा सफलतापूर्वक अनुरोध की गई",
   "serviceAccepted": "सेवा स्वीकृत",
   "serviceStarted": "सेवा शुरू की गई",
@@ -108,5 +110,10 @@
   "selectProviderOptional": "प्रदाता चुनें (वैकल्पिक)",
   "serviceDetails": "सेवा विवरण",
   "answerQuestionsToHelp": "बेहतर सेवा के लिए कृपया इन प्रश्नों के उत्तर दें",
-  "saveAddressFirst": "कृपया पहले पता संपादन सहेजें या रद्द करें।"
+  "saveAddressFirst": "कृपया पहले पता संपादन सहेजें या रद्द करें।",
+  "photos": "फ़ोटो",
+  "photoTypeError": "कृपया JPG, PNG या WebP छवि चुनें।",
+  "photoSizeError": "कृपया 5 MB से छोटी छवि चुनें।",
+  "photoRetryHint": "अपलोड फिर से करने के लिए फ़ोटो पर टैप करें।",
+  "photosMustBeReady": "कृपया फ़ोटो अपलोड पूरा होने दें, या असफल फ़ोटो हटा दें।"
 }

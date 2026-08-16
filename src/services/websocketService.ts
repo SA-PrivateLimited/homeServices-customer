@@ -13,6 +13,11 @@ export type ServiceRequestStatusPayload = {
   status?: string;
   providerId?: string;
   providerName?: string;
+  providerPhone?: string;
+  serviceType?: string;
+  problem?: string;
+  acceptedAt?: string;
+  createdAt?: string;
   rejectionReason?: string;
   declinedProviders?: Array<{
     providerId: string;

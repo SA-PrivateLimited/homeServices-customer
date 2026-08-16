@@ -102,3 +102,12 @@ export async function registerWithOtp(
     skipAuth: true,
   });
 }
+
+/** POST /auth/logout — best-effort; local session is still cleared by the caller. */
+export async function logoutRemote(): Promise<void> {
+  try {
+    await apiPost('/auth/logout', {});
+  } catch {
+    // JWT is stateless; local logout still proceeds
+  }
+}

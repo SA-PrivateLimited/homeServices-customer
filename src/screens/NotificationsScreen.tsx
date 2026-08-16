@@ -11,6 +11,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
+import EmptyState from '../components/EmptyState';
 import type {AppNotification} from '../store';
 
 interface NotificationsScreenProps {
@@ -58,14 +59,10 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         // Try to navigate to ServiceHistory
         const parent = navigation.getParent();
         if (parent) {
-          // Navigate to History tab first, then to ServiceHistory
-          parent.navigate('History', {
-            screen: 'ServiceHistory',
-            params: {serviceRequestId},
-          });
+          // History tab renders ServiceHistoryScreen directly (not a nested stack).
+          parent.navigate('History');
         } else {
-          // Fallback: navigate to ServiceHistory
-          navigation.navigate('ServiceHistory', {serviceRequestId});
+          navigation.navigate('History');
         }
       } catch (error) {
         // Fallback: just navigate to ServiceHistory
@@ -189,12 +186,11 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
       )}
 
       {userNotifications.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="notifications-off-outline" size={64} color={theme.textSecondary} />
-          <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
-            {t('notifications.noNotifications')}
-          </Text>
-        </View>
+        <EmptyState
+          icon="notifications-outline"
+          title={t('notifications.noNotifications')}
+          message={t('notifications.noNotifications')}
+        />
       ) : (
         <FlatList
           data={userNotifications}
@@ -284,15 +280,6 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 4,
     marginLeft: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 16,
   },
 });
 

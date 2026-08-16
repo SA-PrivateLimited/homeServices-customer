@@ -11,6 +11,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  code?: string;
 }
 
 export interface RequestOptions {
@@ -19,6 +20,19 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
   skipAuth?: boolean;
+}
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  data?: unknown;
+  constructor(message: string, status: number, code?: string, data?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
 }
 
 let handlingUnauthorized = false;
@@ -104,30 +118,46 @@ export async function apiRequest<T>(
         errorData = {message: response.statusText};
       }
 
+      const code =
+        (typeof errorData.code === 'string' ? errorData.code : undefined) ||
+        (typeof errorData.error === 'string' ? errorData.error : undefined);
+      const message =
+        errorData.message ||
+        errorData.error ||
+        `HTTP ${response.status}: ${response.statusText}`;
+
       if (response.status === 401 && !skipAuth && authToken) {
         void handleUnauthorized();
-        throw new Error(
+        throw new ApiError(
           errorData.message ||
             errorData.error ||
             'Session expired. Please sign in again.',
+          401,
+          code,
+          errorData.data,
         );
       }
 
-      throw new Error(
-        errorData.message ||
-          errorData.error ||
-          `HTTP ${response.status}: ${response.statusText}`,
-      );
+      throw new ApiError(message, response.status, code, errorData.data);
     }
 
     const data: ApiResponse<T> = await response.json();
 
     if (!data.success) {
-      throw new Error(data.message || data.error || 'API request failed');
+      throw new ApiError(
+        data.message || data.error || 'API request failed',
+        response.status,
+        data.code || data.error,
+        data.data,
+      );
     }
 
     return data.data as T;
   } catch (error: any) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     if (error.message === 'Request timeout') {
       throw new Error(
         'Request timed out. Please check your connection and try again.',
@@ -182,3 +212,85 @@ export async function apiDelete<T>(
 ): Promise<T> {
   return apiRequest<T>(endpoint, {...options, method: 'DELETE'});
 }
+
+type RNUploadFile = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+/**
+ * Multipart POST. Do not set Content-Type — RN sets the boundary.
+ */
+export async function apiUploadFormData<T>(
+  endpoint: string,
+  formData: FormData,
+  options?: Omit<RequestOptions, 'method' | 'body'>,
+): Promise<T> {
+  const skipAuth = options?.skipAuth === true;
+  const authToken = skipAuth ? null : await getAuthToken();
+  if (!skipAuth && !authToken) {
+    throw new Error('User not authenticated. Please login.');
+  }
+
+  const headers: Record<string, string> = {...(options?.headers || {})};
+  if (authToken && !skipAuth) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  const timeout = options?.timeout ?? Math.max(API_TIMEOUT, 60000);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            'Request timed out. Please check your connection and try again.',
+          ),
+        ),
+      timeout,
+    );
+  });
+
+  const response = await Promise.race([
+    fetch(url, {method: 'POST', headers, body: formData}),
+    timeoutPromise,
+  ]);
+
+  let payload: ApiResponse<T> | Record<string, never> = {};
+  try {
+    payload = (await response.json()) as ApiResponse<T>;
+  } catch {
+    payload = {};
+  }
+
+  const apiPayload = payload as ApiResponse<T>;
+
+  if (!response.ok) {
+    if (response.status === 401 && !skipAuth && authToken) {
+      void handleUnauthorized();
+    }
+    throw new ApiError(
+      apiPayload.message || apiPayload.error || 'Could not upload the photo. Please try again.',
+      response.status,
+      apiPayload.code || apiPayload.error,
+      apiPayload.data,
+    );
+  }
+
+  if (apiPayload && apiPayload.success === false) {
+    throw new ApiError(
+      apiPayload.message || apiPayload.error || 'Could not upload the photo. Please try again.',
+      response.status,
+      apiPayload.code || apiPayload.error,
+      apiPayload.data,
+    );
+  }
+
+  return apiPayload.data as T;
+}
+
+export type {RNUploadFile};

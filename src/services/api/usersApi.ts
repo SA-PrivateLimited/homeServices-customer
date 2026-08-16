@@ -3,7 +3,7 @@
  * Handles all user operations via backend API
  */
 
-import {apiGet, apiPut} from './apiClient';
+import {apiGet, apiPut, apiUploadFormData, type RNUploadFile} from './apiClient';
 
 export interface User {
   _id?: string;
@@ -106,8 +106,36 @@ export async function getUserById(userId: string): Promise<User | null> {
   }
 }
 
+const MAX_PROFILE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PROFILE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+/** POST /users/me/profile-image — field name `file` */
+export async function uploadMyProfileImage(
+  file: RNUploadFile & {fileSize?: number},
+): Promise<{profileImage?: string; url?: string} & Partial<User>> {
+  const type = file.type === 'image/jpg' ? 'image/jpeg' : file.type;
+  if (!ALLOWED_PROFILE_TYPES.has(type)) {
+    throw new Error('Please choose a JPG, PNG, or WebP image.');
+  }
+  if (file.fileSize && file.fileSize > MAX_PROFILE_BYTES) {
+    throw new Error('Please choose an image smaller than 5 MB.');
+  }
+  const form = new FormData();
+  form.append('file', {
+    uri: file.uri,
+    name: file.name || 'profile.jpg',
+    type,
+  } as unknown as Blob);
+  return apiUploadFormData('/users/me/profile-image', form);
+}
+
 export const usersApi = {
   getMe,
   updateMe,
   getById: getUserById,
+  uploadMyProfileImage,
 };

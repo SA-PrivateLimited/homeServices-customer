@@ -19,6 +19,8 @@
   "dateNotAvailable": "तारीख उपलब्ध नहीं",
   "waitingForProvider": "प्रदाता की प्रतीक्षा कर रहे हैं...",
   "loading": "सेवा इतिहास लोड हो रहा है...",
+  "callProvider": "प्रदाता को कॉल करें",
+  "yourServicesIntro": "आपके सेवा अनुरोध — विवरण देखने के लिए कार्ड पर टैप करें।",
   "yourReview": "आपकी समीक्षा",
   "totalAmount": "कुल राशि",
   "serviceFee": "सेवा शुल्क",

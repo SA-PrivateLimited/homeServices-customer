@@ -1,9 +1,16 @@
 {
   "generic": "Something went wrong. Please try again.",
-  "network": "Network error. Please check your connection.",
-  "permissionDenied": "Permission denied",
-  "notFound": "Not found",
-  "unauthorized": "Unauthorized access",
-  "serverError": "Server error. Please try again later.",
-  "loadingFailed": "Loading failed"
+  "network": "We could not connect. Please check your internet connection and try again.",
+  "permissionDenied": "You don't have permission to do that.",
+  "notFound": "We couldn't find that.",
+  "unauthorized": "Please sign in again.",
+  "serverError": "Something went wrong on our side. Please try again in a moment.",
+  "loadingFailed": "Could not load this information. Please try again.",
+  "sessionExpired": "Your session has expired. Please sign in again.",
+  "forbidden": "You don't have permission to do that.",
+  "conflict": "This action could not be completed. Please try again.",
+  "tooManyAttempts": "Too many attempts. Please wait and try again.",
+  "timeout": "The request is taking too long. Please try again.",
+  "uploadFailed": "Could not upload the photo. Please try again.",
+  "unableToSaveProfile": "Could not save profile. Please try again."
 }

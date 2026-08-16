@@ -55,6 +55,8 @@ export interface JobCard {
     text: string;
     createdAt?: string | Date;
   }>;
+  providerPhone?: string;
+  photos?: Array<string | {key?: string; url?: string}>;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

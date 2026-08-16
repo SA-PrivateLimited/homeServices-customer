@@ -61,7 +61,7 @@
   "emailVerificationUnavailableMessage": "ईमेल सत्यापन वर्तमान में उपलब्ध नहीं है। कृपया सुनिश्चित करें कि Firebase Console > Authentication > Sign-in method में Email/Password प्रदाता सक्षम है।",
   "verificationEmailSent": "सत्यापन ईमेल भेजा गया",
   "verificationEmailSentMessage": "कृपया अपने ईमेल इनबॉक्स की जांच करें और सत्यापन लिंक पर क्लिक करें। आपको अपने स्पैम फ़ोल्डर की जांच करनी पड़ सकती है।",
-  "failedToUploadImage": "प्रोफ़ाइल छवि अपलोड करने में विफल। प्रोफ़ाइल छवि अपडेट किए बिना सहेजी जाएगी।",
+  "failedToUploadImage": "प्रोफ़ाइल छवि अपलोड करने में विफल। कृपया पुनः प्रयास करें।",
   "emailUpdateRequiresReauth": "ईमेल अपडेट के लिए पुनः प्रमाणीकरण आवश्यक",
   "emailUpdateRequiresReauthMessage": "कृपया अपना ईमेल पता बदलने के लिए लॉगआउट करें और फिर से लॉगिन करें।",
   "completeYourProfileTitle": "अपना प्रोफ़ाइल पूरा करें",

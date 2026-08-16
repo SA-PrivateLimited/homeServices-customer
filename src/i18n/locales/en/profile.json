@@ -61,7 +61,7 @@
   "emailVerificationUnavailableMessage": "Email verification is currently unavailable. Please ensure Email/Password provider is enabled in Firebase Console > Authentication > Sign-in method.",
   "verificationEmailSent": "Verification Email Sent",
   "verificationEmailSentMessage": "Please check your email inbox and click the verification link. You may need to check your spam folder.",
-  "failedToUploadImage": "Failed to upload profile image. Profile will be saved without updating the image.",
+  "failedToUploadImage": "Failed to upload profile image. Please try again.",
   "emailUpdateRequiresReauth": "Email Update Requires Re-authentication",
   "emailUpdateRequiresReauthMessage": "Please logout and login again to change your email address.",
   "completeYourProfileTitle": "Complete Your Profile",

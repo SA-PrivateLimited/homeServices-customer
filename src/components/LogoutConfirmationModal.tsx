@@ -4,10 +4,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {Button} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
@@ -76,34 +76,18 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
 
           {/* Action Buttons */}
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.cancelButton,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                },
-              ]}
+            <Button
+              title={t('common.cancel')}
+              variant="secondary"
               onPress={onCancel}
-              activeOpacity={0.7}>
-              <Text
-                style={[
-                  styles.cancelButtonText,
-                  {color: theme.text},
-                ]}>
-                {t('common.cancel')}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                {backgroundColor: theme.error},
-              ]}
+              style={styles.actionButton}
+            />
+            <Button
+              title={t('common.logout')}
+              variant="danger"
               onPress={onConfirm}
-              activeOpacity={0.8}>
-              <Text style={styles.confirmButtonText}>{t('common.logout')}</Text>
-            </TouchableOpacity>
+              style={styles.actionButton}
+            />
           </View>
         </View>
       </View>
@@ -168,38 +152,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  cancelButton: {
+  actionButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  confirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
 
 export default LogoutConfirmationModal;
-

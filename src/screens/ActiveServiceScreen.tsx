@@ -63,12 +63,18 @@ import {getDistanceToCustomer, formatDistance} from '../services/providerLocatio
 import ReviewModal from '../components/ReviewModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AlertModal from '../components/AlertModal';
-import Toast from '../components/Toast';
+import {toast} from 'sapvt-ltd-app-packages';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import {providersApi, Provider} from '../services/api/providersApi';
 import WebSocketService from '../services/websocketService';
 import useTranslation from '../hooks/useTranslation';
 import {getUserId} from '../services/session';
+import {getServiceStatusColor} from '../utils/serviceStatus';
+import RequestPhotoGallery from '../components/RequestPhotoGallery';
+import {
+  contactHintMessage,
+  providerPhoneFromApi,
+} from '../utils/providerContact';
 
 interface ActiveServiceScreenProps {
   navigation: any;
@@ -112,8 +118,6 @@ export default function ActiveServiceScreen({
   const [showReRequestModal, setShowReRequestModal] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
 
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -546,17 +550,18 @@ export default function ActiveServiceScreen({
             limit: 10
           });
           
-          // Fetch full provider details including phone numbers for each provider
+          // Nearby pending chips: public provider list has no phones
           const providersWithDetails = await Promise.all(
             providers.map(async (provider) => {
               try {
-                // Get full provider details to ensure we have phone number
                 const fullProvider = await providersApi.getById(provider._id || provider.id || '');
                 if (fullProvider) {
                   return {
                     ...provider,
-                    phoneNumber: fullProvider.phoneNumber || fullProvider.phone || (fullProvider as any)?.primaryPhone || (fullProvider as any)?.mobile || provider.phoneNumber || provider.phone,
-                    phone: fullProvider.phoneNumber || fullProvider.phone || (fullProvider as any)?.primaryPhone || (fullProvider as any)?.mobile || provider.phone || provider.phoneNumber,
+                    ...fullProvider,
+                    // Do not surface public phone fields on pending nearby chips
+                    phoneNumber: undefined,
+                    phone: undefined,
                   };
                 }
                 return provider;
@@ -598,6 +603,21 @@ export default function ActiveServiceScreen({
       if (!eventId || eventId !== String(serviceRequestId)) return;
 
       if (data.status === 'accepted') {
+        const name = data.providerName || String(t('providers.serviceProvider'));
+        const service = data.serviceType || String(t('common.service') || 'service');
+        const msg = String(
+          t('activeService.providerAcceptedToast') ||
+            '{{name}} accepted your {{service}} request.',
+        )
+          .replace('{{name}}', name)
+          .replace('{{service}}', service);
+        toast.success(msg);
+        setAlertModalConfig({
+          title: String(t('activeService.providerAssigned')),
+          message: msg,
+          type: 'success',
+        });
+        setShowAlertModal(true);
         loadServiceData();
         return;
       }
@@ -624,13 +644,12 @@ export default function ActiveServiceScreen({
           data.declinedProviders[data.declinedProviders.length - 1]
             ?.providerName ||
           'Provider';
-        setToastMessage(
+        toast.info(
           String(
             t('activeService.providerDeclinedToast') ||
               '{{name}} declined — still waiting for others',
           ).replace('{{name}}', name),
         );
-        setShowToast(true);
       }
     });
 
@@ -965,20 +984,23 @@ export default function ActiveServiceScreen({
   };
 
   const handleCallProvider = () => {
-    const phoneNumber = 
-      providerProfile?.phoneNumber || 
-      providerProfile?.phone || 
-      jobCard?.providerPhone || 
-      serviceRequest?.providerPhone;
-    
+    const phoneNumber = providerPhoneFromApi({
+      providerPhone: jobCard?.providerPhone || serviceRequest?.providerPhone,
+    });
+
     if (phoneNumber) {
-      // Ensure phone number has + prefix for tel: links
-      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      const formattedPhone = phoneNumber.startsWith('+')
+        ? phoneNumber
+        : `+${phoneNumber}`;
       Linking.openURL(`tel:${formattedPhone}`);
     } else {
       setAlertModalConfig({
         title: t('activeService.phoneNotAvailable'),
-        message: t('activeService.phoneNotAvailableMessage'),
+        message: contactHintMessage(
+          key => String(t(key)),
+          serviceRequest?.contact?.providerContactHint,
+          serviceRequest?.contact?.providerContactPolicy,
+        ),
         type: 'info',
       });
       setShowAlertModal(true);
@@ -1267,24 +1289,8 @@ export default function ActiveServiceScreen({
     }
   };
 
-  const getStatusColor = (statusValue: string) => {
-    switch (statusValue) {
-      case 'pending':
-        return '#FF9500';
-      case 'accepted':
-        return '#007AFF';
-      case 'in-progress':
-        return '#34C759';
-      case 'completed':
-        return '#34C759';
-      case 'cancelled':
-        return '#FF3B30';
-      case 'rejected':
-        return '#FF3B30';
-      default:
-        return '#8E8E93';
-    }
-  };
+  const getStatusColor = (statusValue: string) =>
+    getServiceStatusColor(statusValue, 'active');
 
   const getStatusText = (statusValue: string) => {
     switch (statusValue) {
@@ -1904,17 +1910,6 @@ export default function ActiveServiceScreen({
                                   provider.name ||
                                   t('activeService.providerDetails')}
                               </Text>
-                              <Text
-                                style={[
-                                  styles.providerCardPhone,
-                                  {color: theme.textSecondary},
-                                ]}>
-                                {provider?.phoneNumber ||
-                                  provider?.phone ||
-                                  (provider as any)?.primaryPhone ||
-                                  (provider as any)?.mobile ||
-                                  t('activeService.phoneNotAvailable')}
-                              </Text>
                             </View>
                             <View style={styles.providerStatusContainer}>
                               <View
@@ -1994,8 +1989,8 @@ export default function ActiveServiceScreen({
               </View>
             </View>
 
-            {/* Contact Information */}
-            {(providerProfile?.phoneNumber || providerProfile?.phone || serviceRequest?.providerPhone || jobCard?.providerPhone) && (
+            {/* Contact Information — only when API returns a phone */}
+            {(jobCard?.providerPhone || serviceRequest?.providerPhone) ? (
               <View style={styles.contactSection}>
                 <TouchableOpacity
                   style={styles.contactRow}
@@ -2006,11 +2001,19 @@ export default function ActiveServiceScreen({
                     style={[styles.contactValue, {color: theme.primary}]}
                     numberOfLines={1}
                     ellipsizeMode="tail">
-                    {providerProfile?.phoneNumber || providerProfile?.phone || serviceRequest?.providerPhone || jobCard?.providerPhone || 'N/A'}
+                    {jobCard?.providerPhone || serviceRequest?.providerPhone}
                   </Text>
                   <Icon name="chevron-right" size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
+            ) : (
+              <Text style={[styles.infoText, {color: theme.textSecondary, marginTop: 8}]}>
+                {contactHintMessage(
+                  key => String(t(key)),
+                  serviceRequest?.contact?.providerContactHint,
+                  serviceRequest?.contact?.providerContactPolicy,
+                )}
+              </Text>
             )}
 
             {/* Additional Provider Info */}
@@ -2077,6 +2080,11 @@ export default function ActiveServiceScreen({
                 </Text>
               </View>
             )}
+            <RequestPhotoGallery
+              photos={serviceRequest?.photos}
+              theme={theme}
+              title={String(t('services.photos') || 'Photos')}
+            />
             {customerAddress && (
               <View style={styles.detailRow}>
                 <Icon name="location-on" size={20} color={theme.primary} />
@@ -2128,12 +2136,14 @@ export default function ActiveServiceScreen({
                   <Icon name="check-circle" size={20} color="#fff" />
                   <Text style={styles.actionButtonText}>{t('activeService.verifyTaskCompleted')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, {backgroundColor: theme.primary}]}
-                  onPress={handleCallProvider}>
-                  <Icon name="phone" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
-                </TouchableOpacity>
+                {(jobCard?.providerPhone || serviceRequest?.providerPhone) ? (
+                  <TouchableOpacity
+                    style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                    onPress={handleCallProvider}>
+                    <Icon name="phone" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
+                  </TouchableOpacity>
+                ) : null}
               </>
             )}
 
@@ -2190,12 +2200,14 @@ export default function ActiveServiceScreen({
 
             {status === 'accepted' && (
               <>
-                <TouchableOpacity
-                  style={[styles.actionButton, {backgroundColor: theme.primary}]}
-                  onPress={handleCallProvider}>
-                  <Icon name="phone" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
-                </TouchableOpacity>
+                {(jobCard?.providerPhone || serviceRequest?.providerPhone) ? (
+                  <TouchableOpacity
+                    style={[styles.actionButton, {backgroundColor: theme.primary}]}
+                    onPress={handleCallProvider}>
+                    <Icon name="phone" size={20} color="#fff" />
+                    <Text style={styles.actionButtonText}>{t('activeService.callProvider')}</Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 <TouchableOpacity
                   style={[
@@ -2302,14 +2314,6 @@ export default function ActiveServiceScreen({
           }}
         />
       )}
-
-      <Toast
-        visible={showToast}
-        message={toastMessage}
-        type="info"
-        duration={3500}
-        onHide={() => setShowToast(false)}
-      />
     </View>
   );
 }

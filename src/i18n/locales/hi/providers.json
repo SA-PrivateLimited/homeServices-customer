@@ -41,6 +41,17 @@
   "allDistricts": "सभी ज़िले",
   "district": "ज़िला",
   "submitRequest": "अनुरोध भेजें",
-  "requestSentTitle": "अनुरोध भेज दिया गया"
+  "requestSentTitle": "अनुरोध भेज दिया गया",
+  "contactSignInTitle": "संपर्क के लिए साइन इन करें",
+  "contactSignInMessage": "अनुरोध स्वीकार होने के बाद प्रदाता से संपर्क करने के लिए कृपया साइन इन करें।",
+  "contactAfterAccept": "आपकी सेवा अनुरोध स्वीकार होने के बाद आप प्रदाता से संपर्क कर सकते हैं।",
+  "contactProvider": "प्रदाता से संपर्क करें",
+  "callProvider": "प्रदाता को कॉल करें",
+  "contactUnavailable": "संपर्क उपलब्ध नहीं",
+  "contactUnavailableGeneric": "प्रदाता से संपर्क अभी उपलब्ध नहीं है।",
+  "contactMasked": "सीधे कॉल उपलब्ध नहीं है। जारी रखने के लिए सेवा अनुरोध भेजें।",
+  "contactInactive": "इस अनुरोध के लिए प्रदाता का फ़ोन नंबर अब उपलब्ध नहीं है।",
+  "contactActiveOnly": "प्रदाता का फ़ोन नंबर केवल सक्रिय अनुरोध के दौरान दिखता है।",
+  "continueBrowsing": "ब्राउज़िंग जारी रखें",
+  "contactLogin": "लॉग इन"
 }
-

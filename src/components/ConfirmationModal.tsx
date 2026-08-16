@@ -17,3 +17,5 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = props => {
 };
 
 export default ConfirmationModal;
+/** Alias — ConfirmDialog (package naming) */
+export {ConfirmationModal as ConfirmDialog};

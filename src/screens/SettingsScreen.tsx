@@ -20,14 +20,13 @@ import {Select} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
-import {logoutCustomer} from '../services/session';
+import {updateUserProfile, logout} from '../services/authService';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
 import ServiceAddressFields, {
   type ServiceAddressValue,
 } from '../components/ServiceAddressFields';
-import {updateUserProfile} from '../services/authService';
 import useTranslation from '../hooks/useTranslation';
 
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);
@@ -205,7 +204,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     setLoggingOut(true);
     setShowLogoutModal(false);
     try {
-      await logoutCustomer();
+      await logout();
       await setCurrentUser(null);
       navigation.reset({index: 0, routes: [{name: 'Main'}]});
     } catch {

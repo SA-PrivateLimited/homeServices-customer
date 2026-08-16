@@ -1,6 +1,7 @@
 {
   "waitingForProvider": "Waiting for provider...",
   "providerAssigned": "Provider assigned",
+  "providerAcceptedToast": "{{name}} accepted your {{service}} request.",
   "serviceInProgress": "Service in progress",
   "serviceCompleted": "Service completed",
   "cancelled": "Cancelled",

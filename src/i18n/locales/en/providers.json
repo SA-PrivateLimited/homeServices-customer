@@ -41,6 +41,17 @@
   "allDistricts": "All districts",
   "district": "District",
   "submitRequest": "Submit request",
-  "requestSentTitle": "Request submitted"
+  "requestSentTitle": "Request submitted",
+  "contactSignInTitle": "Sign in to contact",
+  "contactSignInMessage": "Please sign in to contact this provider after your request is accepted.",
+  "contactAfterAccept": "You can contact the provider after your service request is accepted.",
+  "contactProvider": "Contact Provider",
+  "callProvider": "Call Provider",
+  "contactUnavailable": "Contact not available",
+  "contactUnavailableGeneric": "Provider contact is not available right now.",
+  "contactMasked": "Direct calling is not available. Send a service request to continue.",
+  "contactInactive": "The provider phone number is no longer available for this request.",
+  "contactActiveOnly": "The provider phone number is shown only while your request is active.",
+  "continueBrowsing": "Continue browsing",
+  "contactLogin": "Log in"
 }
-

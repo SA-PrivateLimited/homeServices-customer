@@ -39,6 +39,10 @@ export interface JobCard {
   scheduledTime?: Date;
   jobCardPdfUrl?: string;
   serviceAmount?: number;
+  providerPhone?: string;
+  photos?: Array<string | {key?: string; url?: string}>;
+  contactHint?: string;
+  contactPolicy?: string;
   materialsUsed?: Array<{
     description: string;
     quantity?: number;

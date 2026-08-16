@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
-  Linking,
   StatusBar,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -36,6 +35,12 @@ import {getDistanceToCustomer} from '../services/providerLocationService';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ProviderRequestModal from '../components/ProviderRequestModal';
+import {
+  getBrandName,
+  subscribeBranding,
+} from '../services/brandingService';
+import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
+import {activeRequestCopy} from '../utils/activeRequestUx';
 
 const ALL_PROFESSIONS = '__all__';
 const ALL_STATES = '__all_states__';
@@ -81,10 +86,6 @@ function professionOf(p: ProviderWithStatus): string {
   );
 }
 
-function phoneOf(p: ProviderWithStatus): string {
-  return p.phoneNumber || p.phone || '';
-}
-
 function districtOf(
   p: ProviderWithStatus,
   districts?: GeographyDistrict[],
@@ -115,12 +116,15 @@ export default function ProvidersListScreen({navigation}: any) {
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
   const isGuest = !currentUser?.id && !currentUser?._id;
+  const [brandName, setBrandName] = useState(getBrandName());
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
     message: string;
     type: 'success' | 'error' | 'info' | 'warning';
+    buttonText?: string;
+    onClose?: () => void;
   }>({
     visible: false,
     title: '',
@@ -140,7 +144,11 @@ export default function ProvidersListScreen({navigation}: any) {
   const [selectedStateId, setSelectedStateId] = useState(ALL_STATES);
   const [selectedDistrictId, setSelectedDistrictId] = useState(ALL_DISTRICTS);
   const [requestProvider, setRequestProvider] = useState<ProviderWithStatus | null>(null);
+  const [checkingActive, setCheckingActive] = useState(false);
 
+  useEffect(() => {
+    return subscribeBranding(() => setBrandName(getBrandName()));
+  }, []);
 
   useEffect(() => {
     loadProfessionOptions();
@@ -340,20 +348,6 @@ export default function ProvidersListScreen({navigation}: any) {
     await loadOnlineProviders();
   };
 
-  const handleCallProvider = (provider: ProviderWithStatus) => {
-    const phone = phoneOf(provider);
-    if (!phone) {
-      setAlertModal({
-        visible: true,
-        title: t('providers.noPhoneNumber'),
-        message: t('providers.noPhoneNumberMessage'),
-        type: 'warning',
-      });
-      return;
-    }
-    Linking.openURL(`tel:${phone}`);
-  };
-
   const goLogin = () => {
     // Login lives on the root stack (above GuestStack / Main)
     const root = navigation.getParent()?.getParent() ?? navigation.getParent();
@@ -364,9 +358,30 @@ export default function ProvidersListScreen({navigation}: any) {
     }
   };
 
-  // Guest: name + profession + phone only
+  const handleContactProvider = (_provider: ProviderWithStatus) => {
+    if (!currentUser) {
+      setAlertModal({
+        visible: true,
+        title: t('providers.contactSignInTitle'),
+        message: t('providers.contactSignInMessage'),
+        type: 'info',
+        onClose: () => {
+          setAlertModal(prev => ({...prev, visible: false}));
+          goLogin();
+        },
+      });
+      return;
+    }
+    setAlertModal({
+      visible: true,
+      title: t('providers.contactUnavailable'),
+      message: t('providers.contactAfterAccept'),
+      type: 'info',
+    });
+  };
+
+  // Guest: name + profession only (no public phone)
   const renderGuestProvider = ({item}: {item: ProviderWithStatus}) => {
-    const phone = phoneOf(item);
     const profession = professionOf(item);
     return (
       <View
@@ -383,29 +398,50 @@ export default function ProvidersListScreen({navigation}: any) {
             numberOfLines={1}>
             {profession}
           </Text>
-          <Text style={[styles.guestPhone, {color: theme.text}]} numberOfLines={1}>
-            {phone || t('providers.noPhoneNumber')}
-          </Text>
           {districtOf(item, geoDistricts) ? (
             <Text style={[styles.guestPhone, {color: theme.textSecondary}]} numberOfLines={1}>
               {t('providers.district')}: {districtOf(item, geoDistricts)}
             </Text>
           ) : null}
         </View>
-        {phone ? (
+        <View style={styles.cardActions}>
           <TouchableOpacity
-            style={[styles.callBtn, {backgroundColor: theme.primary}]}
-            onPress={() => handleCallProvider(item)}
+            style={[styles.requestBtn, {backgroundColor: theme.primary}]}
+            onPress={() => handleContactProvider(item)}
             activeOpacity={0.7}>
-            <Icon name="phone" size={20} color="#fff" />
+            <Text style={styles.requestBtnText} numberOfLines={2}>
+              {t('providers.contactProvider')}
+            </Text>
           </TouchableOpacity>
-        ) : null}
+        </View>
       </View>
     );
   };
 
   // Logged-in: richer card
-  const openRequestModal = (item: ProviderWithStatus) => {
+  const showActiveConflict = (active: {
+    serviceRequestId: string;
+    serviceType: string;
+    status: string;
+  }) => {
+    const copy = activeRequestCopy(t, active);
+    setAlertModal({
+      visible: true,
+      title: copy.title,
+      message: copy.message,
+      type: 'info',
+      buttonText: copy.viewLabel,
+      onClose: () => {
+        setAlertModal(prev => ({...prev, visible: false}));
+        navigation.navigate('Services', {
+          screen: 'ActiveService',
+          params: {serviceRequestId: active.serviceRequestId},
+        });
+      },
+    });
+  };
+
+  const openRequestModal = async (item: ProviderWithStatus) => {
     const phoneVerified = currentUser?.phoneVerified === true;
     const customerId = currentUser?.id || (currentUser as any)?._id;
     if (!currentUser || !customerId || !phoneVerified) {
@@ -417,7 +453,21 @@ export default function ProvidersListScreen({navigation}: any) {
       });
       return;
     }
-    setRequestProvider(item);
+    if (checkingActive) return;
+    setCheckingActive(true);
+    try {
+      const serviceType = professionOf(item);
+      const active = await getActiveServiceRequest(serviceType);
+      if (active?.serviceRequestId) {
+        showActiveConflict(active);
+        return;
+      }
+      setRequestProvider(item);
+    } catch {
+      setRequestProvider(item);
+    } finally {
+      setCheckingActive(false);
+    }
   };
 
   const renderProvider = ({item}: {item: ProviderWithStatus}) => (
@@ -508,10 +558,12 @@ export default function ProvidersListScreen({navigation}: any) {
 
       <View style={styles.cardActions}>
         <TouchableOpacity
-          style={[styles.callBtn, {backgroundColor: theme.primary}]}
-          onPress={() => handleCallProvider(item)}
+          style={[styles.requestBtn, {borderColor: theme.primary, borderWidth: 1, backgroundColor: 'transparent'}]}
+          onPress={() => handleContactProvider(item)}
           activeOpacity={0.7}>
-          <Icon name="phone" size={20} color="#fff" />
+          <Text style={[styles.requestBtnText, {color: theme.primary}]} numberOfLines={2}>
+            {t('providers.contactProvider')}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.requestBtn, {backgroundColor: theme.primary}]}
@@ -590,7 +642,7 @@ export default function ProvidersListScreen({navigation}: any) {
             ]}>
             <View style={{flex: 1}}>
               <Text style={[styles.guestBrand, {color: theme.text}]}>
-                HomeServices
+                {brandName}
               </Text>
               <Text style={[styles.guestSub, {color: theme.textSecondary}]}>
                 {t('auth.guestSettingsHint')}
@@ -632,7 +684,7 @@ export default function ProvidersListScreen({navigation}: any) {
           ]}>
           <View style={{flex: 1}}>
             <Text style={[styles.guestBrand, {color: theme.text}]}>
-              HomeServices
+              {brandName}
             </Text>
             <Text style={[styles.guestSub, {color: theme.textSecondary}]}>
               {t('auth.guestSettingsHint')}
@@ -734,6 +786,10 @@ export default function ProvidersListScreen({navigation}: any) {
             params: {serviceRequestId},
           });
         }}
+        onActiveConflict={(active) => {
+          setRequestProvider(null);
+          showActiveConflict(active);
+        }}
       />
 
       <AlertModal
@@ -741,9 +797,14 @@ export default function ProvidersListScreen({navigation}: any) {
         title={alertModal.title}
         message={alertModal.message}
         type={alertModal.type}
-        onClose={() =>
-          setAlertModal({visible: false, title: '', message: '', type: 'info'})
-        }
+        buttonText={alertModal.buttonText}
+        onClose={() => {
+          if (alertModal.onClose) {
+            alertModal.onClose();
+          } else {
+            setAlertModal({visible: false, title: '', message: '', type: 'info'});
+          }
+        }}
       />
     </SafeAreaView>
   );

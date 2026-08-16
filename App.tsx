@@ -22,7 +22,7 @@ if (typeof window !== 'undefined') {
 import React, {useEffect, useState, useMemo} from 'react';
 import {StatusBar, Platform, PermissionsAndroid} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
-import {AppThemeProvider} from 'sapvt-ltd-app-packages';
+import {AppThemeProvider, ToastProvider} from 'sapvt-ltd-app-packages';
 import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
@@ -44,6 +44,9 @@ const App = () => {
       text: theme.text,
       textSecondary: theme.textSecondary,
       border: theme.border,
+      danger: theme.error,
+      success: theme.success,
+      warning: theme.warning,
     }),
     [
       theme.primary,
@@ -52,6 +55,9 @@ const App = () => {
       theme.text,
       theme.textSecondary,
       theme.border,
+      theme.error,
+      theme.success,
+      theme.warning,
     ],
   );
 
@@ -135,11 +141,13 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <AppThemeProvider colors={appThemeColors}>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.background}
-        />
-        <AppNavigator />
+        <ToastProvider>
+          <StatusBar
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor={theme.background}
+          />
+          <AppNavigator />
+        </ToastProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
   );

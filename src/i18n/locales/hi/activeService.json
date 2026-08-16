@@ -1,6 +1,7 @@
 {
   "waitingForProvider": "प्रदाता का इंतजार है...",
   "providerAssigned": "प्रदाता नियुक्त",
+  "providerAcceptedToast": "{{name}} ने आपके {{service}} अनुरोध को स्वीकार कर लिया।",
   "serviceInProgress": "सेवा प्रगति में है",
   "serviceCompleted": "सेवा पूर्ण हुई",
   "cancelled": "रद्द",

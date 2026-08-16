@@ -17,27 +17,44 @@ import {
   Linking,
   FlatList,
 } from 'react-native';
-import {useFocusEffect} from '@react-navigation/native';
+import {useFocusEffect, useRoute} from '@react-navigation/native';
 import AlertModal from '../components/AlertModal';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {StatusChip} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {getCustomerJobCards, JobCard} from '../services/jobCardService';
 import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
 import AdSlot from '../components/AdSlot';
+import EmptyState from '../components/EmptyState';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import {providersApi} from '../services/api/providersApi';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import useTranslation from '../hooks/useTranslation';
+import {
+  formatServiceStatusDate,
+  getServiceStatusColor,
+  normalizeServiceStatus,
+} from '../utils/serviceStatus';
+import RequestPhotoGallery from '../components/RequestPhotoGallery';
 
-type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed';
+type FilterType =
+  | 'all'
+  | 'pending'
+  | 'accepted'
+  | 'in-progress'
+  | 'completed'
+  | 'cancelled';
 type DateFilterType = 'all' | 'today' | 'week' | 'month';
 
 export default function ServiceHistoryScreen({navigation}: any) {
   const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+  const route = useRoute();
+  /** History tab has no stack header; ServicesStack already shows one. */
+  const showLocalHeader = route.name === 'History';
 
   const [jobCards, setJobCards] = useState<JobCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,12 +70,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const [showCompletedServiceModal, setShowCompletedServiceModal] = useState(false);
   const [selectedCompletedService, setSelectedCompletedService] = useState<JobCard | null>(null);
   const [providerDetails, setProviderDetails] = useState<{
-    phone?: string;
-    address?: any;
+    address?: {
+      address?: string;
+      city?: string;
+      state?: string;
+      pincode?: string;
+    };
   } | null>(null);
   const [providerReview, setProviderReview] = useState<Review | null>(null);
   const [loadingProviderDetails, setLoadingProviderDetails] = useState(false);
-  const [providerPhones, setProviderPhones] = useState<Record<string, string>>({});
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -117,6 +137,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
       createdAt: req.createdAt ? new Date(req.createdAt) : new Date(),
       updatedAt: req.updatedAt ? new Date(req.updatedAt) : new Date(),
       urgency: req.urgency,
+      providerPhone: req.providerPhone,
+      photos: req.photos,
+      contactHint: req.contact?.providerContactHint,
+      contactPolicy: req.contact?.providerContactPolicy,
     } as JobCard & {urgency?: string};
   };
 
@@ -167,27 +191,6 @@ export default function ServiceHistoryScreen({navigation}: any) {
         return bTime - aTime;
       });
 
-      const phoneMap: Record<string, string> = {};
-      const providerIds = new Set(allCards.map(card => card.providerId).filter(Boolean));
-
-      await Promise.all(
-        Array.from(providerIds).map(async providerId => {
-          if (!providerId) return;
-          try {
-            const provider = await providersApi.getById(providerId);
-            if (provider) {
-              const phone =
-                provider.phoneNumber ||
-                (provider as any).phone ||
-                (provider as any).primaryPhone;
-              if (phone) phoneMap[providerId] = phone;
-            }
-          } catch (error) {
-            console.error(`Error fetching phone for provider ${providerId}:`, error);
-          }
-        }),
-      );
-      setProviderPhones(phoneMap);
       setJobCards(allCards);
     } catch (error: any) {
       console.error('❌ Error loading history:', error);
@@ -219,8 +222,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       
       if (provider) {
         setProviderDetails({
-          phone: provider.phoneNumber || (provider as any).phone || (provider as any).primaryPhone,
-          address: provider.location || (provider as any).address || (provider as any).homeAddress || (provider as any).officeAddress,
+          address: provider.location || provider.currentLocation,
         });
       }
 
@@ -291,46 +293,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
     setShowReviewModal(true);
   };
 
-  const getStatusColor = (status: string) => {
-    const normalizedStatus = normalizeStatus(status);
-    switch (normalizedStatus) {
-      case 'completed':
-        return '#34C759';
-      case 'in-progress':
-        return '#FF6B35';
-      case 'accepted':
-        return '#FF9500';
-      case 'pending':
-        return '#8E8E93';
-      default:
-        return '#8E8E93';
-    }
-  };
-
-  const normalizeStatus = (status: string): 'pending' | 'accepted' | 'in-progress' | 'completed' => {
-    const lowerStatus = status?.toLowerCase() || '';
-
-    // Completed statuses
-    if (lowerStatus === 'completed' || lowerStatus === 'done' || lowerStatus === 'finished') {
-      return 'completed';
-    }
-
-    // In-progress statuses
-    if (lowerStatus === 'in-progress' || lowerStatus === 'in progress' ||
-        lowerStatus === 'inprogress' || lowerStatus === 'active' ||
-        lowerStatus === 'ongoing' || lowerStatus === 'started') {
-      return 'in-progress';
-    }
-
-    // Accepted statuses
-    if (lowerStatus === 'accepted' || lowerStatus === 'confirmed' ||
-        lowerStatus === 'assigned' || lowerStatus === 'provider-accepted') {
-      return 'accepted';
-    }
-
-    // Everything else (pending, waiting, new, cancelled, etc.) is treated as pending
-    return 'pending';
-  };
+  const normalizeStatus = (status: string) => normalizeServiceStatus(status);
 
   const getStatusText = (status: string) => {
     const normalizedStatus = normalizeStatus(status);
@@ -341,6 +304,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
         return t('services.inProgress');
       case 'accepted':
         return t('services.accepted');
+      case 'cancelled':
+        return t('services.cancelled');
+      case 'rejected':
+        return t('services.rejected');
       case 'pending':
         return t('services.pending');
       default:
@@ -418,6 +385,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
       case 'completed':
         filtered = jobCards.filter(card => normalizeStatus(card.status) === 'completed');
         break;
+      case 'cancelled':
+        filtered = jobCards.filter(card => {
+          const ns = normalizeStatus(card.status);
+          return ns === 'cancelled' || ns === 'rejected';
+        });
+        break;
       default:
         filtered = jobCards;
     }
@@ -471,6 +444,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const acceptedCount = jobCards.filter(card => normalizeStatus(card.status) === 'accepted').length;
   const inProgressCount = jobCards.filter(card => normalizeStatus(card.status) === 'in-progress').length;
   const completedCount = jobCards.filter(card => normalizeStatus(card.status) === 'completed').length;
+  const cancelledCount = jobCards.filter(card => {
+    const ns = normalizeStatus(card.status);
+    return ns === 'cancelled' || ns === 'rejected';
+  }).length;
   const filteredCount = filteredCards.length;
 
   const getSelectedServiceTypeName = () => {
@@ -521,20 +498,25 @@ export default function ServiceHistoryScreen({navigation}: any) {
             </Text>
 
             {/* Show provider phone for accepted and in-progress status */}
-            {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress') &&
-             providerPhones[jobCard.providerId] && (
+            {(normalizeStatus(jobCard.status) === 'accepted' ||
+              normalizeStatus(jobCard.status) === 'in-progress') &&
+              jobCard.providerPhone && (
               <View style={styles.providerPhoneRow}>
-                <Icon name="phone" size={14} color={theme.primary} />
                 <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
-                  {providerPhones[jobCard.providerId]}
+                  {jobCard.providerPhone}
                 </Text>
                 <TouchableOpacity
                   style={[styles.callButton, {backgroundColor: theme.primary}]}
+                  accessibilityRole="button"
+                  accessibilityLabel={String(t('serviceHistory.callProvider'))}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleCallProvider(providerPhones[jobCard.providerId]);
+                    handleCallProvider(jobCard.providerPhone);
                   }}>
                   <Icon name="phone" size={14} color="#fff" />
+                  <Text style={styles.callButtonText}>
+                    {t('serviceHistory.callProvider')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -557,19 +539,18 @@ export default function ServiceHistoryScreen({navigation}: any) {
           </View>
         </View>
         <View style={styles.statusChipsContainer}>
-          <View
-            style={[
-              styles.statusBadge,
-              {backgroundColor: getStatusColor(jobCard.status) + '20'},
-            ]}>
-            <Text
-              style={[
-                styles.statusText,
-                {color: getStatusColor(jobCard.status)},
-              ]}>
-              {getStatusText(jobCard.status)}
-            </Text>
-          </View>
+          <StatusChip
+            status={normalizeStatus(jobCard.status)}
+            label={getStatusText(jobCard.status)}
+            colorMap={{
+              pending: getServiceStatusColor('pending'),
+              accepted: getServiceStatusColor('accepted'),
+              'in-progress': getServiceStatusColor('in-progress'),
+              completed: getServiceStatusColor('completed'),
+              cancelled: getServiceStatusColor('cancelled'),
+              rejected: getServiceStatusColor('rejected'),
+            }}
+          />
           {/* Service Type Chip */}
           {(() => {
             const urgency = (jobCard as any).urgency;
@@ -626,7 +607,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
       <View style={styles.dateRow}>
         <Icon name="calendar-today" size={16} color={theme.textSecondary} />
         <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-          {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+          {formatServiceStatusDate(
+            jobCard.status,
+            normalizeStatus(jobCard.status) === 'completed' ||
+              normalizeStatus(jobCard.status) === 'cancelled' ||
+              normalizeStatus(jobCard.status) === 'rejected'
+              ? jobCard.updatedAt || jobCard.scheduledTime || jobCard.createdAt
+              : jobCard.scheduledTime || jobCard.createdAt,
+            String(t('serviceHistory.dateNotAvailable')),
+          )}
         </Text>
       </View>
 
@@ -660,10 +649,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
-        <Text style={[styles.headerTitle, {color: theme.text}]}>{t('services.myServices')}</Text>
-      </View>
+      {/* Header — only on History tab (stack already has a title) */}
+      {showLocalHeader ? (
+        <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
+          <Text style={[styles.headerTitle, {color: theme.text}]}>{t('services.myServices')}</Text>
+          <Text style={[styles.headerSub, {color: theme.textSecondary}]}>
+            {t('serviceHistory.yourServicesIntro')}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
@@ -746,6 +740,21 @@ export default function ServiceHistoryScreen({navigation}: any) {
               {t('services.completed')} ({completedCount})
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              filter === 'cancelled' && styles.filterButtonActive,
+              {backgroundColor: filter === 'cancelled' ? theme.primary : theme.card},
+            ]}
+            onPress={() => setFilter('cancelled')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                {color: filter === 'cancelled' ? '#fff' : theme.text},
+              ]}>
+              {t('services.cancelled')} ({cancelledCount})
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -788,31 +797,41 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
       {/* Service Cards List */}
       {filteredCards.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon
-            name={filter === 'pending' ? 'schedule' : filter === 'accepted' ? 'check-circle' : filter === 'completed' ? 'check-circle' : 'history'}
-            size={64}
-            color={theme.textSecondary}
-          />
-          <Text style={[styles.emptyText, {color: theme.text}]}>
-            {filter === 'pending'
+        <EmptyState
+          icon={
+            filter === 'pending'
+              ? 'calendar-outline'
+              : filter === 'accepted' || filter === 'completed'
+                ? 'document-text-outline'
+                : 'inbox-outline'
+          }
+          title={
+            filter === 'pending'
               ? t('services.noPendingServices')
               : filter === 'accepted'
               ? t('services.noAcceptedServices')
               : filter === 'completed'
               ? t('services.noCompletedServices')
-              : t('services.noServices')}
-          </Text>
-          <Text style={[styles.emptySubtext, {color: theme.textSecondary}]}>
-            {filter === 'pending'
+              : filter === 'cancelled'
+              ? t('services.noCancelledServices')
+              : filter === 'in-progress'
+              ? t('services.noActiveServices')
+              : t('services.noServices')
+          }
+          message={
+            filter === 'pending'
               ? t('services.noPendingServices')
               : filter === 'accepted'
               ? t('services.noAcceptedServices')
               : filter === 'completed'
               ? t('services.noCompletedServices')
-              : t('services.noServices')}
-          </Text>
-        </View>
+              : filter === 'cancelled'
+              ? t('services.noCancelledServices')
+              : filter === 'in-progress'
+              ? t('services.noActiveServices')
+              : t('services.noServices')
+          }
+        />
       ) : (
         <FlatList
           data={filteredCards}
@@ -1039,20 +1058,20 @@ export default function ServiceHistoryScreen({navigation}: any) {
                     <Text style={[styles.detailCardValue, {color: theme.text}]}>
                       {selectedCompletedService.providerName}
                     </Text>
-                    {providerDetails?.phone && (
+                    {selectedCompletedService.providerPhone ? (
                       <View style={styles.providerContactRow}>
                         <Icon name="phone" size={18} color={theme.primary} />
                         <Text style={[styles.providerPhoneText, {color: theme.textSecondary}]}>
-                          {providerDetails.phone}
+                          {selectedCompletedService.providerPhone}
                         </Text>
                         <TouchableOpacity
                           style={[styles.modalCallButton, {backgroundColor: theme.primary}]}
-                          onPress={() => handleCallProvider(providerDetails.phone)}>
+                          onPress={() => handleCallProvider(selectedCompletedService.providerPhone)}>
                           <Icon name="phone" size={16} color="#fff" />
-                          <Text style={styles.modalCallButtonText}>Call</Text>
+                          <Text style={styles.modalCallButtonText}>{t('serviceHistory.callProvider')}</Text>
                         </TouchableOpacity>
                       </View>
-                    )}
+                    ) : null}
                   </View>
 
                   {/* Provider Address Card */}
@@ -1138,6 +1157,17 @@ export default function ServiceHistoryScreen({navigation}: any) {
                       </Text>
                     </View>
                   )}
+
+                  {selectedCompletedService.photos &&
+                  selectedCompletedService.photos.length > 0 ? (
+                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
+                      <RequestPhotoGallery
+                        photos={selectedCompletedService.photos}
+                        theme={theme}
+                        title={String(t('services.photos') || 'Photos')}
+                      />
+                    </View>
+                  ) : null}
 
                   {/* Address Card */}
                   {selectedCompletedService.customerAddress && (
@@ -1262,6 +1292,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
   },
+  headerSub: {
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
   listContent: {
     padding: 16,
   },
@@ -1339,12 +1374,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   callButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  callButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   providerContactRow: {
     flexDirection: 'row',

@@ -35,6 +35,18 @@ import {
 import {useStore} from '../store';
 import useTranslation from '../hooks/useTranslation';
 import {lightTheme, darkTheme} from '../utils/theme';
+import RequestPhotoPicker, {
+  photosBusy,
+  photosHaveError,
+  readyPhotoRefs,
+  type RequestPhotoItem,
+} from './RequestPhotoPicker';
+import {getUserFacingErrorMessage} from '../utils/userFacingError';
+import {
+  activeConflictFromError,
+  activeRequestCopy,
+  isActiveServiceRequestConflict,
+} from '../utils/activeRequestUx';
 
 export type RequestableProvider = {
   id?: string;
@@ -57,6 +69,14 @@ type Props = {
   provider: RequestableProvider | null;
   onClose: () => void;
   onSuccess: (serviceRequestId: string) => void;
+  onActiveConflict?: (active: {
+    serviceRequestId: string;
+    serviceType: string;
+    status: string;
+    providerId?: string | null;
+    providerName?: string | null;
+    createdAt?: string | Date | null;
+  }) => void;
 };
 
 function cleanAddress(addr: ServiceAddressValue | null): ServiceAddressValue | null {
@@ -102,6 +122,7 @@ export default function ProviderRequestModal({
   provider,
   onClose,
   onSuccess,
+  onActiveConflict,
 }: Props) {
   const {isDarkMode, currentUser, setCurrentUser, addServiceRequest, language} =
     useStore();
@@ -123,12 +144,20 @@ export default function ProviderRequestModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [activeConflict, setActiveConflict] = useState<{
+    serviceRequestId: string;
+    serviceType: string;
+    status: string;
+  } | null>(null);
+  const [photos, setPhotos] = useState<RequestPhotoItem[]>([]);
 
   useEffect(() => {
     if (!visible || !provider) return;
     setProblem('');
     setError(null);
     setSubmitting(false);
+    setActiveConflict(null);
+    setPhotos([]);
     setAddressSel(emptyAddressSelection({mode: 'saved'}));
     setRefreshKey(k => k + 1);
     setQuestionnaireAnswers({});
@@ -145,7 +174,7 @@ export default function ProviderRequestModal({
   }, [visible, provider]);
 
   const onSubmit = async () => {
-    if (!provider) return;
+    if (!provider || submitting || activeConflict || photosBusy(photos)) return;
     const customerId = currentUser?.id || (currentUser as any)?._id;
     if (!customerId) {
       setError(String(t('providers.pleaseLoginToRequest')));
@@ -203,6 +232,16 @@ export default function ProviderRequestModal({
     } else if (!problem.trim()) {
       setError(
         String(t('services.problemRequired') || 'Please describe the problem.'),
+      );
+      return;
+    }
+
+    if (photosHaveError(photos)) {
+      setError(
+        String(
+          t('services.photosMustBeReady') ||
+            'Please wait for photos to finish uploading, or remove failed ones.',
+        ),
       );
       return;
     }
@@ -267,8 +306,10 @@ export default function ProviderRequestModal({
       if (questionnaire.length > 0 && Object.keys(questionnaireAnswers).length) {
         payload.questionnaireAnswers = questionnaireAnswers;
       }
-      const phone = provider.phone || provider.phoneNumber;
-      if (phone) payload.providerPhone = phone;
+      const uploadedRefs = readyPhotoRefs(photos);
+      if (uploadedRefs.length > 0) {
+        payload.photos = uploadedRefs;
+      }
       if (provider.rating != null) payload.providerRating = provider.rating;
       const image =
         provider.profileImage || provider.image || provider.photoURL;
@@ -293,7 +334,23 @@ export default function ProviderRequestModal({
       onClose();
       onSuccess(String(serviceRequestId));
     } catch (err: any) {
-      setError(err?.message || String(t('services.submitError')));
+      if (isActiveServiceRequestConflict(err)) {
+        let active = activeConflictFromError(err);
+        if (!active?.serviceRequestId) {
+          try {
+            active = await serviceRequestsApi.getActive(serviceTypeOf(provider));
+          } catch {
+            active = null;
+          }
+        }
+        if (active?.serviceRequestId) {
+          setActiveConflict(active);
+          onActiveConflict?.(active);
+          setError(null);
+          return;
+        }
+      }
+      setError(getUserFacingErrorMessage(err, 'request'));
     } finally {
       setSubmitting(false);
     }
@@ -401,6 +458,41 @@ export default function ProviderRequestModal({
               onChangeText={setProblem}
             />
 
+            <View style={{marginTop: 16}}>
+              <RequestPhotoPicker
+                items={photos}
+                onChange={setPhotos}
+                theme={theme}
+                t={t}
+                disabled={submitting}
+              />
+            </View>
+
+            {activeConflict ? (
+              <View
+                style={[
+                  styles.activeBanner,
+                  {backgroundColor: theme.primary + '18', borderColor: theme.primary},
+                ]}>
+                <Text style={[styles.activeBannerTitle, {color: theme.text}]}>
+                  {activeRequestCopy(t, activeConflict).title}
+                </Text>
+                <Text style={[styles.activeBannerMsg, {color: theme.textSecondary}]}>
+                  {activeRequestCopy(t, activeConflict).message}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    onActiveConflict?.(activeConflict);
+                    onClose();
+                  }}
+                  style={[styles.activeBannerBtn, {backgroundColor: theme.primary}]}>
+                  <Text style={styles.submitText}>
+                    {activeRequestCopy(t, activeConflict).viewLabel}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </ScrollView>
 
@@ -416,10 +508,13 @@ export default function ProviderRequestModal({
             <TouchableOpacity
               style={[
                 styles.submitBtn,
-                {backgroundColor: theme.primary, opacity: submitting ? 0.7 : 1},
+                {
+                  backgroundColor: theme.primary,
+                  opacity: submitting || activeConflict || photosBusy(photos) ? 0.7 : 1,
+                },
               ]}
               onPress={() => void onSubmit()}
-              disabled={submitting}>
+              disabled={submitting || Boolean(activeConflict) || photosBusy(photos)}>
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -485,6 +580,28 @@ const styles = StyleSheet.create({
     color: '#E53E3E',
     marginTop: 12,
     fontSize: 13,
+  },
+  activeBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  activeBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  activeBannerMsg: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  activeBannerBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 4,
   },
   footer: {
     flexDirection: 'row',

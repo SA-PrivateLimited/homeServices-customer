@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useEffect, useMemo, useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {
+  getBrandName,
+  subscribeBranding,
+} from '../services/brandingService';
 
 const {width, height} = Dimensions.get('window');
 
@@ -22,81 +26,94 @@ interface OnboardingStep {
   iconColor: string;
 }
 
-const customerSteps: OnboardingStep[] = [
-  {
-    id: 1,
-    title: 'Welcome to HomeServices',
-    description: 'Your trusted home services platform. Find verified service providers for plumbing, electrical work, carpentry, and more - all in one place.',
-    icon: 'construct',
-    iconColor: '#4A90E2',
-  },
-  {
-    id: 2,
-    title: 'Find Service Providers',
-    description: 'Browse through our list of verified service providers. Search by service type, view ratings, experience, and service fees.',
-    icon: 'search',
-    iconColor: '#27AE60',
-  },
-  {
-    id: 3,
-    title: 'Request Services',
-    description: 'Select a provider, choose an available time slot, and request your service. Pay securely through the app.',
-    icon: 'calendar',
-    iconColor: '#E67E22',
-  },
-  {
-    id: 4,
-    title: 'Track Your Service',
-    description: 'Once requested, you can track your service in real-time, chat with your provider, and get updates directly in the app.',
-    icon: 'chatbubbles',
-    iconColor: '#9B59B6',
-  },
-  {
-    id: 5,
-    title: 'View Service History',
-    description: 'Access all your service requests and history anytime. Keep track of your service records securely.',
-    icon: 'document-text',
-    iconColor: '#E74C3C',
-  },
-];
+function buildCustomerSteps(brandName: string): OnboardingStep[] {
+  return [
+    {
+      id: 1,
+      title: `Welcome to ${brandName}`,
+      description:
+        'Your trusted home services platform. Find verified service providers for plumbing, electrical work, carpentry, and more - all in one place.',
+      icon: 'construct',
+      iconColor: '#4A90E2',
+    },
+    {
+      id: 2,
+      title: 'Find Service Providers',
+      description:
+        'Browse through our list of verified service providers. Search by service type, view ratings, experience, and service fees.',
+      icon: 'search',
+      iconColor: '#27AE60',
+    },
+    {
+      id: 3,
+      title: 'Request Services',
+      description:
+        'Select a provider, choose an available time slot, and request your service. Pay securely through the app.',
+      icon: 'calendar',
+      iconColor: '#E67E22',
+    },
+    {
+      id: 4,
+      title: 'Track Your Service',
+      description:
+        'Once requested, you can track your service in real-time, chat with your provider, and get updates directly in the app.',
+      icon: 'chatbubbles',
+      iconColor: '#9B59B6',
+    },
+    {
+      id: 5,
+      title: 'View Service History',
+      description:
+        'Access all your service requests and history anytime. Keep track of your service records securely.',
+      icon: 'document-text',
+      iconColor: '#E74C3C',
+    },
+  ];
+}
 
-const providerSteps: OnboardingStep[] = [
-  {
-    id: 1,
-    title: 'Welcome Service Provider',
-    description: 'Thank you for joining HomeServices. Let us guide you through setting up your profile and managing service requests.',
-    icon: 'construct',
-    iconColor: '#4A90E2',
-  },
-  {
-    id: 2,
-    title: 'Complete Your Profile',
-    description: 'Set up your professional profile with qualifications, specialties, experience, and service fees. Your profile will be reviewed by our admin team.',
-    icon: 'person',
-    iconColor: '#27AE60',
-  },
-  {
-    id: 3,
-    title: 'Set Your Availability',
-    description: 'Manage your schedule by setting available time slots. Customers can request services during these slots.',
-    icon: 'time',
-    iconColor: '#E67E22',
-  },
-  {
-    id: 4,
-    title: 'Manage Service Requests',
-    description: 'View upcoming and past service requests. Chat with customers and provide service updates.',
-    icon: 'calendar',
-    iconColor: '#9B59B6',
-  },
-  {
-    id: 5,
-    title: 'Track Your Services',
-    description: 'Manage all your service requests and track your service history. Customers can access their service records anytime.',
-    icon: 'create',
-    iconColor: '#E74C3C',
-  },
-];
+function buildProviderSteps(brandName: string): OnboardingStep[] {
+  return [
+    {
+      id: 1,
+      title: 'Welcome Service Provider',
+      description: `Thank you for joining ${brandName}. Let us guide you through setting up your profile and managing service requests.`,
+      icon: 'construct',
+      iconColor: '#4A90E2',
+    },
+    {
+      id: 2,
+      title: 'Complete Your Profile',
+      description:
+        'Set up your professional profile with qualifications, specialties, experience, and service fees. Your profile will be reviewed by our admin team.',
+      icon: 'person',
+      iconColor: '#27AE60',
+    },
+    {
+      id: 3,
+      title: 'Set Your Availability',
+      description:
+        'Manage your schedule by setting available time slots. Customers can request services during these slots.',
+      icon: 'time',
+      iconColor: '#E67E22',
+    },
+    {
+      id: 4,
+      title: 'Manage Service Requests',
+      description:
+        'View upcoming and past service requests. Chat with customers and provide service updates.',
+      icon: 'calendar',
+      iconColor: '#9B59B6',
+    },
+    {
+      id: 5,
+      title: 'Track Your Services',
+      description:
+        'Manage all your service requests and track your service history. Customers can access their service records anytime.',
+      icon: 'create',
+      iconColor: '#E74C3C',
+    },
+  ];
+}
 
 interface OnboardingScreenProps {
   navigation: any;
@@ -112,9 +129,20 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation, route}) 
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const [currentStep, setCurrentStep] = useState(0);
+  const [brandName, setBrandName] = useState(getBrandName());
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const steps = userRole === 'customer' ? customerSteps : providerSteps;
+  useEffect(() => {
+    return subscribeBranding(() => setBrandName(getBrandName()));
+  }, []);
+
+  const steps = useMemo(
+    () =>
+      userRole === 'customer'
+        ? buildCustomerSteps(brandName)
+        : buildProviderSteps(brandName),
+    [userRole, brandName],
+  );
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {

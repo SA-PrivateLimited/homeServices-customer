@@ -15,6 +15,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
+import {getUserFacingErrorMessage} from '../utils/userFacingError';
 
 interface CancelTaskModalProps {
   visible: boolean;
@@ -49,7 +50,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
       return;
     }
 
-    if (reason.trim().length < 10) {
+    if (reason.trim().length < 5) {
       setError(t('common.provideDetailedReason'));
       return;
     }
@@ -60,7 +61,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
       await onCancel(reason.trim());
       setReason('');
     } catch (err: any) {
-      setError(err.message || t('activeService.failedToCancelService'));
+      setError(getUserFacingErrorMessage(err, 'request'));
     } finally {
       setCancelling(false);
     }

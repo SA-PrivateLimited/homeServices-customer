@@ -70,5 +70,11 @@
   "defaultAddressSetSuccess": "Default address set successfully",
   "locationPermissionDenied": "Location permission denied",
   "locationDetectionFailed": "Failed to detect location",
-  "addressFetchFailed": "Failed to fetch address from coordinates"
+  "addressFetchFailed": "Failed to fetch address from coordinates",
+  "activeRequestTitle": "Active request",
+  "activeRequestMessage": "You already have an active request for {{service}}. Please wait for it to complete or cancel it before creating another.",
+  "activeRequestView": "View Request",
+  "activeRequestInProgress": "Your service is currently in progress.",
+  "activeRequestAccepted": "You already have an accepted request for this service.",
+  "activeRequestWaiting": "Waiting for provider"
 }

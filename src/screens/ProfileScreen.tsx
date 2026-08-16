@@ -16,7 +16,9 @@ import {Select} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import authService from '../services/authService';
-import {getStoredJwt, logoutCustomer} from '../services/session';
+import {getStoredJwt} from '../services/session';
+import {uploadMyProfileImage} from '../services/api/usersApi';
+import {getUserFacingErrorMessage} from '../utils/userFacingError';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
@@ -100,12 +102,46 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
 
 
   const pickImage = () => {
-    launchImageLibrary({mediaType: 'photo', quality: 0.8}, response => {
-      if (response.assets && response.assets[0].uri) {
-        setProfileImage(response.assets[0].uri);
+    launchImageLibrary(
+      {mediaType: 'photo', quality: 0.8, selectionLimit: 1},
+      async response => {
+        if (response.didCancel || !response.assets?.[0]?.uri) {
+          return;
+        }
+        const asset = response.assets[0];
+        const uri = asset.uri;
+        if (!uri) return;
+        setUploadingImage(true);
         setImageError(false);
-      }
-    });
+        setProfileImage(uri);
+        try {
+          const uploaded = await uploadMyProfileImage({
+            uri,
+            name: asset.fileName || 'profile.jpg',
+            type: asset.type || 'image/jpeg',
+            fileSize: asset.fileSize,
+          });
+          const url = uploaded.profileImage || uploaded.url || '';
+          if (!url) {
+            throw new Error(t('profile.failedToUploadImage'));
+          }
+          setProfileImage(url);
+          if (currentUser) {
+            await setCurrentUser({...currentUser, profileImage: url});
+          }
+        } catch (error) {
+          setProfileImage(currentUser?.profileImage || null);
+          setAlertModal({
+            visible: true,
+            title: t('common.error'),
+            message: getUserFacingErrorMessage(error, 'upload'),
+            type: 'error',
+          });
+        } finally {
+          setUploadingImage(false);
+        }
+      },
+    );
   };
 
   const applyUserToForm = (user: User) => {
@@ -246,50 +282,35 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       let imageUrl = currentUser?.profileImage || '';
       if (
         profileImage &&
-        (profileImage.startsWith('file://') ||
-          profileImage.startsWith('content://'))
-      ) {
-        // Profile image upload to cloud storage is not available without Firebase.
-        // Keep previous remote URL if any.
-        setAlertModal({
-          visible: true,
-          title: t('common.warning') || 'Warning',
-          message:
-            t('profile.failedToUploadImage') ||
-            'Profile photo upload is unavailable. Other profile fields will still be saved.',
-          type: 'warning',
-        });
-      } else if (
-        profileImage &&
         (profileImage.startsWith('http://') ||
           profileImage.startsWith('https://'))
       ) {
         imageUrl = profileImage;
       }
 
-      const updates: any = {
+      const updates: Partial<User> = {
         name,
         gender,
-        homeAddress:
-          homeAddress.address || homeAddress.pincode ? homeAddress : null,
-        officeAddress:
-          finalOfficeAddress.address || finalOfficeAddress.pincode
-            ? finalOfficeAddress
-            : null,
-        profileImage: imageUrl || null,
+        profileImage: imageUrl || undefined,
       };
+      if (homeAddress.address || homeAddress.pincode) {
+        updates.homeAddress = homeAddress;
+      }
+      if (finalOfficeAddress.address || finalOfficeAddress.pincode) {
+        updates.officeAddress = finalOfficeAddress;
+      }
 
       const updatedUser = await authService.updateUserProfile(userId, updates);
       await setCurrentUser(updatedUser);
       setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
+      setSuccessMessage(t('profile.profileUpdated'));
       setShowSuccessModal(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating profile:', error);
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to update profile',
+        title: t('common.error'),
+        message: getUserFacingErrorMessage(error, 'profile'),
         type: 'error',
       });
     } finally {
@@ -306,7 +327,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
   const handleConfirmLogout = async () => {
     setShowLogoutModal(false);
     try {
-      await logoutCustomer();
+      await authService.logout();
       await setCurrentUser(null);
       navigation.reset({
         index: 0,
@@ -335,7 +356,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
         ]}>
         <ActivityIndicator size="large" color={theme.primary} />
         <Text style={[styles.notLoggedInText, {color: theme.textSecondary, marginTop: 20}]}>
-          Loading profile...
+          {t('common.loading')}
         </Text>
       </View>
     );
@@ -506,7 +527,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={{flex: 1, alignItems: 'flex-end'}}>
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
               <Text style={[styles.infoValue, {color: phone ? theme.text : theme.textSecondary}]}>
-                {phone || 'Not set'}
+                {phone || t('profile.notSet')}
               </Text>
               {currentUser?.phoneVerified ? (
                 <Icon name="lock-closed" size={16} color={theme.textSecondary} />
@@ -519,7 +540,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
             )}
             {!currentUser?.phoneVerified && phone && (
               <Text style={[styles.verifiedBadge, {color: theme.textSecondary}]}>
-                Not Verified
+                {t('profile.notVerified')}
               </Text>
             )}
           </View>

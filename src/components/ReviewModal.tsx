@@ -174,14 +174,24 @@ export default function ReviewModal({
         }
       }
       
-      const remotePhotos = photos.filter(
-        p => p.startsWith('http://') || p.startsWith('https://'),
-      );
+      const uploadedPhotos: string[] = [];
+      for (const photo of photos) {
+        if (!photo) continue;
+        if (/^https?:\/\//i.test(photo) && !/^data:/i.test(photo)) {
+          uploadedPhotos.push(photo);
+          continue;
+        }
+        const {uploadAssetFromUri} = await import('../services/api/assetsApi');
+        const ref = await uploadAssetFromUri(photo, {
+          purpose: 'temp',
+        });
+        uploadedPhotos.push(ref.url);
+      }
       await createReview(
         jobCardId,
         rating,
         finalComment || undefined,
-        remotePhotos.length > 0 ? remotePhotos : undefined,
+        uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
       );
       setAlertModal({
         visible: true,

@@ -70,5 +70,11 @@
   "defaultAddressSetSuccess": "डिफ़ॉल्ट पता सफलतापूर्वक सेट किया गया",
   "locationPermissionDenied": "स्थान अनुमति अस्वीकृत",
   "locationDetectionFailed": "स्थान पहचानने में विफल",
-  "addressFetchFailed": "निर्देशांक से पता प्राप्त करने में विफल"
+  "addressFetchFailed": "निर्देशांक से पता प्राप्त करने में विफल",
+  "activeRequestTitle": "सक्रिय अनुरोध",
+  "activeRequestMessage": "आपके पास {{service}} के लिए पहले से एक सक्रिय अनुरोध है। दूसरा अनुरोध बनाने से पहले कृपया इसे पूरा होने दें या रद्द करें।",
+  "activeRequestView": "अनुरोध देखें",
+  "activeRequestInProgress": "आपकी सेवा का काम अभी चल रहा है।",
+  "activeRequestAccepted": "आपके पास इस सेवा के लिए पहले से एक स्वीकृत अनुरोध है।",
+  "activeRequestWaiting": "प्रदाता की प्रतीक्षा"
 }

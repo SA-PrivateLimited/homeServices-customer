@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
@@ -19,6 +18,9 @@ import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import useTranslation from '../hooks/useTranslation';
 import ProviderRequestModal from '../components/ProviderRequestModal';
+import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
+import {activeRequestCopy} from '../utils/activeRequestUx';
+import {contactHintMessage} from '../utils/providerContact';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -58,6 +60,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     title: string;
     message: string;
     type: 'success' | 'error' | 'info' | 'warning';
+    buttonText?: string;
     onClose?: () => void;
   }>({
     visible: false,
@@ -67,6 +70,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [checkingActive, setCheckingActive] = useState(false);
 
   // Poll online status from Mongo/backend API
   useEffect(() => {
@@ -113,14 +117,82 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
 
   // Browse list only shows approved providers; missing status should not block requests.
   // Only block when explicitly pending/rejected.
-  const handleRequestService = () => {
+  const showActiveConflict = (active: {
+    serviceRequestId: string;
+    serviceType: string;
+    status: string;
+  }) => {
+    const copy = activeRequestCopy(t, active);
+    setAlertModal({
+      visible: true,
+      title: copy.title,
+      message: copy.message,
+      type: 'info',
+      buttonText: copy.viewLabel,
+      onClose: () => {
+        setAlertModal(prev => ({...prev, visible: false}));
+        navigation.navigate('Services', {
+          screen: 'ActiveService',
+          params: {serviceRequestId: active.serviceRequestId},
+        });
+      },
+    });
+  };
+
+  const handleRequestService = async () => {
     const phoneVerified = currentUser?.phoneVerified === true;
     const customerId = currentUser?.id || currentUser?._id;
     if (!currentUser || !customerId || !phoneVerified) {
       setShowLoginModal(true);
       return;
     }
-    setRequestModalVisible(true);
+    if (checkingActive) return;
+    setCheckingActive(true);
+    try {
+      const serviceType =
+        (provider as any).specialization ||
+        (provider as any).specialty ||
+        (provider as any).serviceType ||
+        'Service';
+      const active = await getActiveServiceRequest(serviceType);
+      if (active?.serviceRequestId) {
+        showActiveConflict(active);
+        return;
+      }
+      setRequestModalVisible(true);
+    } catch {
+      setRequestModalVisible(true);
+    } finally {
+      setCheckingActive(false);
+    }
+  };
+
+  const handleContactProvider = () => {
+    const phoneVerified = currentUser?.phoneVerified === true;
+    const customerId = currentUser?.id || currentUser?._id;
+    if (!currentUser || !customerId || !phoneVerified) {
+      setAlertModal({
+        visible: true,
+        title: t('providers.contactSignInTitle'),
+        message: t('providers.contactSignInMessage'),
+        type: 'info',
+        onClose: () => {
+          setAlertModal(prev => ({...prev, visible: false}));
+          setShowLoginModal(true);
+        },
+      });
+      return;
+    }
+    setAlertModal({
+      visible: true,
+      title: t('providers.contactUnavailable'),
+      message: contactHintMessage(
+        key => String(t(key)),
+        undefined,
+        provider.providerContactPolicy,
+      ),
+      type: 'info',
+    });
   };
 
   return (
@@ -210,29 +282,6 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
                 {((provider as any).totalConsultations || provider.totalReviews || 0) === 1 ? t('providers.service') : t('providers.services')})
               </Text>
             </View>
-
-            {(provider.phoneNumber || (provider as any).phone) && (
-              <TouchableOpacity
-                style={styles.contactRow}
-                onPress={() => {
-                  const phoneNumber = (provider.phoneNumber || (provider as any).phone || '').replace(/[^\d+]/g, '');
-                  Linking.openURL(`tel:${phoneNumber}`).catch(() => {
-                    setAlertModal({
-                      visible: true,
-                      title: t('common.error'),
-                      message: t('providers.unableToCall'),
-                      type: 'error',
-                    });
-                  });
-                }}
-                activeOpacity={0.7}>
-                <Icon name="call-outline" size={16} color={theme.primary} />
-                <Text style={[styles.contactText, {color: theme.primary}]}>
-                  {provider.phoneNumber || (provider as any).phone}
-                </Text>
-                <Icon name="call" size={14} color={theme.primary} />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
@@ -316,6 +365,21 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       {/* Book Button */}
       <View style={[styles.footer, {backgroundColor: theme.card}]}>
         <TouchableOpacity
+          style={[
+            styles.bookButton,
+            {
+              backgroundColor: 'transparent',
+              borderWidth: 1,
+              borderColor: theme.primary,
+              marginBottom: 8,
+            },
+          ]}
+          onPress={handleContactProvider}>
+          <Text style={[styles.bookButtonText, {color: theme.primary}]}>
+            {t('providers.contactProvider')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.bookButton, {backgroundColor: theme.primary}]}
           onPress={handleRequestService}>
           <Text style={styles.bookButtonText}>{t('providers.requestService')}</Text>
@@ -333,6 +397,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             params: {serviceRequestId},
           });
         }}
+        onActiveConflict={(active) => {
+          setRequestModalVisible(false);
+          showActiveConflict(active);
+        }}
       />
 
       {/* Alert Modal */}
@@ -341,6 +409,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         title={alertModal.title}
         message={alertModal.message}
         type={alertModal.type}
+        buttonText={alertModal.buttonText}
         onClose={() => {
           if (alertModal.onClose) {
             alertModal.onClose();

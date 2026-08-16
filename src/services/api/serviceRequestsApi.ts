@@ -33,8 +33,16 @@ export interface ServiceRequest {
   providerImage?: string;
   providerAddress?: any;
   consultationId?: string;
-  questionnaireAnswers?: any;
-  photos?: string[];
+  questionnaireAnswers?: Record<string, unknown>;
+  photos?: Array<string | {key?: string; url?: string}>;
+  contact?: {
+    providerPhoneAvailable?: boolean;
+    customerPhoneAvailable?: boolean;
+    canCallProvider?: boolean;
+    canCallCustomer?: boolean;
+    providerContactPolicy?: string;
+    providerContactHint?: string;
+  };
   cancellationReason?: string;
   rejectionReason?: string;
   rejectedAt?: string | Date;
@@ -101,10 +109,32 @@ export async function getServiceRequests(filters?: ServiceRequestFilters): Promi
 }
 
 /**
- * Create a new service request
+ * Create a new service request.
+ * On conflict throws ApiError status 409 / code ACTIVE_SERVICE_REQUEST_EXISTS with data summary.
  */
 export async function createServiceRequest(data: Partial<ServiceRequest>): Promise<ServiceRequest> {
   return apiPost<ServiceRequest>('/customer/serviceRequests', data);
+}
+
+export interface ActiveServiceRequestSummary {
+  serviceRequestId: string;
+  serviceType: string;
+  status: string;
+  providerId?: string | null;
+  providerName?: string | null;
+  createdAt?: string | Date | null;
+}
+
+/**
+ * Active request for a service type (null when none).
+ */
+export async function getActiveServiceRequest(
+  serviceType: string,
+): Promise<ActiveServiceRequestSummary | null> {
+  const params = new URLSearchParams({serviceType});
+  return apiGet<ActiveServiceRequestSummary | null>(
+    `/customer/serviceRequests/active?${params.toString()}`,
+  );
 }
 
 /**
@@ -172,6 +202,7 @@ export async function findServiceRequestByConsultationId(
 export const serviceRequestsApi = {
   getById: getServiceRequestById,
   getAll: getServiceRequests,
+  getActive: getActiveServiceRequest,
   create: createServiceRequest,
   requestAreaProviders,
   updateStatus: updateServiceRequestStatus,

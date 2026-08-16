@@ -9,7 +9,8 @@
     "start:debug": "react-native start --port 8081 --experimental-debugger",
     "start:reset": "react-native start --reset-cache",
     "test": "jest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.21.0",
@@ -71,5 +72,11 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "jest": {
+    "preset": "react-native",
+    "setupFiles": ["./jest.setup.js"],
+    "testMatch": ["**/__tests__/**/*.test.ts"],
+    "modulePathIgnorePatterns": ["<rootDir>/functions/"]
   }
 }

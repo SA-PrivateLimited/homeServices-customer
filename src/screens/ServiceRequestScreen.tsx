@@ -15,10 +15,15 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {launchImageLibrary} from 'react-native-image-picker';
+import RequestPhotoPicker, {
+  photosBusy,
+  photosHaveError,
+  readyPhotoRefs,
+  type RequestPhotoItem,
+} from '../components/RequestPhotoPicker';
+import {getUserFacingErrorMessage} from '../utils/userFacingError';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
@@ -33,7 +38,6 @@ import {
   type SavedAddress,
 } from '../services/addressService';
 import type {UserLocation} from '../types/common';
-import Toast from '../components/Toast';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -43,10 +47,15 @@ import ServiceAddressPicker, {
 } from '../components/ServiceAddressPicker';
 import ServiceQuestionnaireFields from '../components/ServiceQuestionnaireFields';
 import PhoneNumberInput from '../components/PhoneNumberInput';
-import {Select} from 'sapvt-ltd-app-packages';
+import {Select, Button, toast} from 'sapvt-ltd-app-packages';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import {usersApi} from '../services/api/usersApi';
 import {providersApi, type Provider} from '../services/api/providersApi';
+import {
+  activeConflictFromError,
+  activeRequestCopy,
+  isActiveServiceRequestConflict,
+} from '../utils/activeRequestUx';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -149,7 +158,7 @@ export default function ServiceRequestScreen({
   /** '' = any available provider in area (open request) */
   const [preferredProviderId, setPreferredProviderId] = useState<string>('');
   const [secondaryMobile, setSecondaryMobile] = useState('');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<RequestPhotoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
@@ -169,8 +178,6 @@ export default function ServiceRequestScreen({
   const [editCustomLabel, setEditCustomLabel] = useState('');
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isFetchingAddress, setIsFetchingAddress] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
   const [submittedServiceRequestId, setSubmittedServiceRequestId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -179,6 +186,8 @@ export default function ServiceRequestScreen({
     title: string;
     message: string;
     type: 'success' | 'error' | 'info' | 'warning';
+    buttonText?: string;
+    onClose?: () => void;
   }>({
     visible: false,
     title: '',
@@ -590,13 +599,12 @@ export default function ServiceRequestScreen({
               ...prev,
               [category.name]: true,
             }));
-            setToastMessage(
+            toast.success(
               String(
                 t('services.requestProvidersSuccess') ||
                   'Admin notified. We will work on getting providers in your area.',
               ).replace('{{serviceType}}', serviceName),
             );
-            setShowToast(true);
           } catch (e: any) {
             setAlertModal({
               visible: true,
@@ -1042,36 +1050,6 @@ export default function ServiceRequestScreen({
     return 'location-on';
   };
 
-  const handleAddPhoto = async () => {
-    try {
-      const result = await launchImageLibrary({
-        mediaType: 'photo',
-        quality: 0.8,
-        selectionLimit: 3 - photos.length,
-      });
-
-      if (result.didCancel || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const newPhotos = result.assets
-        .filter(asset => asset.uri)
-        .map(asset => asset.uri!);
-      setPhotos([...photos, ...newPhotos]);
-    } catch (error) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: t('services.selectPhotoError'),
-        type: 'error',
-      });
-    }
-  };
-
-  const handleRemovePhoto = (index: number) => {
-    setPhotos(photos.filter((_, i) => i !== index));
-  };
-
   const requirePhoneLogin = () => {
     setRedirectAfterLogin({
       route: 'ServiceRequest',
@@ -1088,6 +1066,19 @@ export default function ServiceRequestScreen({
 
   const handleSubmit = async (opts?: {requestAdminHelp?: boolean}) => {
     const requestAdminHelp = opts?.requestAdminHelp === true;
+    if (loading || photosBusy(photos)) return;
+    if (photosHaveError(photos)) {
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: String(
+          t('services.photosMustBeReady') ||
+            'Please wait for photos to finish uploading, or remove failed ones.',
+        ),
+        type: 'warning',
+      });
+      return;
+    }
     const customerId = currentUser?.id || currentUser?._id;
     const isPhoneVerified = currentUser?.phoneVerified === true;
 
@@ -1203,6 +1194,30 @@ export default function ServiceRequestScreen({
       }
 
       try {
+        const existing = await serviceRequestsApi.getActive(selectedServiceType);
+        if (existing?.serviceRequestId) {
+          const copy = activeRequestCopy(t, existing);
+          setAlertModal({
+            visible: true,
+            title: copy.title,
+            message: copy.message,
+            type: 'info',
+            buttonText: copy.viewLabel,
+            onClose: () => {
+              setAlertModal(prev => ({...prev, visible: false}));
+              navigation.navigate('ActiveService', {
+                serviceRequestId: existing.serviceRequestId,
+              });
+            },
+          });
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Pre-check failed — continue; server still enforces 409.
+      }
+
+      try {
         await usersApi.updateMe({
           phoneVerified: true,
           phone:
@@ -1290,14 +1305,6 @@ export default function ServiceRequestScreen({
       if (assignProviderId && assignProvider) {
         serviceRequestDataRaw.providerId = String(assignProviderId);
         serviceRequestDataRaw.providerName = assignProvider?.name || '';
-        const phone =
-          (assignProvider as any)?.phone ||
-          (assignProvider as any)?.phoneNumber ||
-          (assignProvider as any)?.primaryPhone ||
-          '';
-        if (phone) {
-          serviceRequestDataRaw.providerPhone = phone;
-        }
         const specialization =
           (assignProvider as any)?.specialization ||
           (assignProvider as any)?.specialty ||
@@ -1327,12 +1334,9 @@ export default function ServiceRequestScreen({
       }
 
 
-      // Only include photos if there are any (filter out undefined/null/empty)
-      if (photos.length > 0) {
-        const validPhotos = photos.filter(photo => photo && photo !== undefined && photo !== null && photo !== '');
-        if (validPhotos.length > 0) {
-          serviceRequestDataRaw.photos = validPhotos;
-        }
+      const uploadedRefs = readyPhotoRefs(photos);
+      if (uploadedRefs.length > 0) {
+        serviceRequestDataRaw.photos = uploadedRefs;
       }
 
       // Include questionnaire answers if available
@@ -1369,7 +1373,7 @@ export default function ServiceRequestScreen({
 
       // Show toast notification
       setSubmittedServiceRequestId(serviceRequestId);
-      setToastMessage(
+      toast.success(
         isTargetedRequest
           ? String(t('services.requestSentToProvider') || `Your request has been sent to ${targetedProvider?.name || 'the provider'}.`)
           : requestAdminHelp
@@ -1382,7 +1386,6 @@ export default function ServiceRequestScreen({
                   'Your service request has been submitted. Providers in your area will be notified.',
               ),
       );
-      setShowToast(true);
       
       // Navigate to ActiveService after a short delay
       setTimeout(() => {
@@ -1394,10 +1397,37 @@ export default function ServiceRequestScreen({
         }
       }, 2000);
     } catch (error: any) {
+      if (isActiveServiceRequestConflict(error)) {
+        let active = activeConflictFromError(error);
+        if (!active?.serviceRequestId && selectedServiceType) {
+          try {
+            active = await serviceRequestsApi.getActive(selectedServiceType);
+          } catch {
+            active = null;
+          }
+        }
+        if (active?.serviceRequestId) {
+          const copy = activeRequestCopy(t, active);
+          setAlertModal({
+            visible: true,
+            title: copy.title,
+            message: copy.message,
+            type: 'info',
+            buttonText: copy.viewLabel,
+            onClose: () => {
+              setAlertModal(prev => ({...prev, visible: false}));
+              navigation.navigate('ActiveService', {
+                serviceRequestId: active!.serviceRequestId,
+              });
+            },
+          });
+          return;
+        }
+      }
       setAlertModal({
         visible: true,
         title: t('common.error'),
-        message: error.message || t('services.submitError'),
+        message: getUserFacingErrorMessage(error, 'request'),
         type: 'error',
       });
     } finally {
@@ -1688,59 +1718,21 @@ export default function ServiceRequestScreen({
 
       {/* Photos */}
       <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {t('services.addPhotosOptional')}
-        </Text>
-        {photos.length < 3 && (
-          <TouchableOpacity
-            style={[
-              styles.addPhotoButton,
-              {borderColor: theme.border, backgroundColor: theme.card},
-            ]}
-            onPress={handleAddPhoto}>
-            <Icon name="add-photo-alternate" size={24} color={theme.primary} />
-            <Text style={[styles.addPhotoText, {color: theme.primary}]}>
-              {t('services.addPhoto', {count: photos.length, max: 3})}
-            </Text>
-          </TouchableOpacity>
-        )}
-        {photos.length > 0 && (
-          <View style={styles.photosContainer}>
-            {photos.map((photo, index) => (
-              <View key={index} style={styles.photoWrapper}>
-                <Image source={{uri: photo}} style={styles.photo} />
-                <TouchableOpacity
-                  style={styles.removePhotoButton}
-                  onPress={() => handleRemovePhoto(index)}>
-                  <Icon name="close" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
+        <RequestPhotoPicker
+          items={photos}
+          onChange={setPhotos}
+          theme={theme}
+          t={t}
+          disabled={loading}
+        />
       </View>
 
       {/* Submit Button */}
-      <TouchableOpacity
-        style={[
-          styles.submitButton,
-          {
-            backgroundColor:
-              selectedServiceType &&
-              selectedAddress?.address &&
-              selectedAddress?.pincode &&
-              (questionnaire.length > 0 || problem.trim())
-                ? theme.primary
-                : theme.border,
-            opacity:
-              selectedServiceType &&
-              selectedAddress?.address &&
-              selectedAddress?.pincode &&
-              (questionnaire.length > 0 || problem.trim())
-                ? 1
-                : 0.5,
-          },
-        ]}
+      <Button
+        title={t('services.requestService')}
+        block
+        size="lg"
+        loading={loading}
         onPress={handleSubmit}
         disabled={
           !selectedServiceType ||
@@ -1748,17 +1740,12 @@ export default function ServiceRequestScreen({
           !selectedAddress?.pincode ||
           (questionnaire.length === 0 && !problem.trim()) ||
           loading ||
+          photosBusy(photos) ||
+          photosHaveError(photos) ||
           addressSel.mode === 'edit'
-        }>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <>
-            <Text style={styles.submitButtonText}>{t('services.requestService')}</Text>
-            <Icon name="arrow-forward" size={20} color="#fff" />
-          </>
-        )}
-      </TouchableOpacity>
+        }
+        style={styles.submitButton}
+      />
 
       {/* Service Type Modal */}
       <Modal
@@ -2366,21 +2353,19 @@ export default function ServiceRequestScreen({
 
       {/* Date/Time Picker Modal */}
 
-      {/* Toast Notification */}
-      <Toast
-        visible={showToast}
-        message={toastMessage}
-        type="success"
-        duration={3000}
-        onHide={() => setShowToast(false)}
-      />
-      
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
         message={alertModal.message}
         type={alertModal.type}
-        onClose={() => setAlertModal({visible: false, title: '', message: '', type: 'info'})}
+        buttonText={alertModal.buttonText}
+        onClose={() => {
+          if (alertModal.onClose) {
+            alertModal.onClose();
+          } else {
+            setAlertModal({visible: false, title: '', message: '', type: 'info'});
+          }
+        }}
       />
       
       <ConfirmationModal
@@ -2533,14 +2518,8 @@ const styles = StyleSheet.create({
 
 
   submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
     marginHorizontal: 20,
     marginBottom: 40,
-    borderRadius: 12,
-    gap: 8,
   },
   submitButtonText: {
     color: '#fff',
