@@ -755,11 +755,6 @@ export default function ActiveServiceScreen({
           setJobCard(jobCardWithPIN);
           setStatus(jobCardData?.status || 'pending');
           
-          // Log PIN if available
-          if (jobCardData?.taskPIN) {
-            console.log('🔐 Customer PIN loaded:', jobCardData.taskPIN);
-          }
-          
           // Check if this is an immediate service (from job card or consultation)
           const hasScheduledTime = jobCardData?.scheduledTime;
           const isImmediate = !hasScheduledTime;
