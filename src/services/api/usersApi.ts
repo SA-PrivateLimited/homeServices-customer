@@ -3,7 +3,8 @@
  * Handles all user operations via backend API
  */
 
-import {apiGet, apiPut, apiUploadFormData, type RNUploadFile} from './apiClient';
+import {apiGet, apiPut, type RNUploadFile} from './apiClient';
+import {uploadAssetFromUri} from './assetsApi';
 
 export interface User {
   _id?: string;
@@ -113,7 +114,10 @@ const ALLOWED_PROFILE_TYPES = new Set([
   'image/webp',
 ]);
 
-/** POST /users/me/profile-image — field name `file` */
+/**
+ * Profile photo: POST /assets/upload-url (customer-profile) → PUT binary → PUT /users/me.
+ * Same S3 path as request photos. Does not send multipart or base64.
+ */
 export async function uploadMyProfileImage(
   file: RNUploadFile & {fileSize?: number},
 ): Promise<{profileImage?: string; url?: string} & Partial<User>> {
@@ -124,13 +128,14 @@ export async function uploadMyProfileImage(
   if (file.fileSize && file.fileSize > MAX_PROFILE_BYTES) {
     throw new Error('Please choose an image smaller than 5 MB.');
   }
-  const form = new FormData();
-  form.append('file', {
-    uri: file.uri,
-    name: file.name || 'profile.jpg',
-    type,
-  } as unknown as Blob);
-  return apiUploadFormData('/users/me/profile-image', form);
+  const ref = await uploadAssetFromUri(file.uri, {
+    purpose: 'customer-profile',
+    contentType: type,
+    fileName: file.name || 'profile.jpg',
+  });
+  const user = await updateMe({profileImage: ref.url});
+  const url = user.profileImage || ref.url;
+  return {...user, profileImage: url, url};
 }
 
 export const usersApi = {
