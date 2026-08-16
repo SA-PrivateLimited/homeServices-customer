@@ -12,6 +12,8 @@ export interface Provider {
   displayName?: string;
   email?: string;
   phoneNumber?: string;
+  phone?: string;
+  providerContactPolicy?: string;
   specialization?: string;
   serviceCategories?: string[];
   experience?: number;

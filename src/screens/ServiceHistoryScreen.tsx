@@ -26,6 +26,7 @@ import {getCustomerJobCards, JobCard} from '../services/jobCardService';
 import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
 import AdSlot from '../components/AdSlot';
+import ServiceRequestCard from '../components/ServiceRequestCard/ServiceRequestCard';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import {providersApi} from '../services/api/providersApi';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
@@ -502,161 +503,73 @@ export default function ServiceHistoryScreen({navigation}: any) {
     });
   };
 
-  const renderServiceCard = (jobCard: JobCard) => (
-    <TouchableOpacity
-      key={jobCard.id}
-      style={[styles.jobCard, {backgroundColor: theme.card}]}
-      activeOpacity={0.85}
-      onPress={() => openServiceDetails(jobCard)}>
-      {/* Header */}
-      <View style={styles.jobCardHeader}>
-        <View style={styles.serviceTypeContainer}>
-          <Icon name="build" size={24} color={theme.primary} />
-          <View style={styles.serviceTypeText}>
-            <Text style={[styles.serviceType, {color: theme.text}]}>
-              {jobCard.serviceType}
-            </Text>
-            <Text style={[styles.providerName, {color: theme.textSecondary}]}>
-              {jobCard.providerName || t('serviceHistory.waitingForProvider')}
-            </Text>
+  const urgencyChip = (jobCard: JobCard) => {
+    const urgency = (jobCard as any).urgency;
+    if (urgency === 'immediate') {
+      return {label: String(t('services.immediate')), color: '#FF9500'};
+    }
+    if (urgency === 'scheduled') {
+      return {label: String(t('services.scheduled')), color: '#007AFF'};
+    }
+    const hasScheduledTime =
+      jobCard.scheduledTime &&
+      jobCard.scheduledTime instanceof Date &&
+      !isNaN(jobCard.scheduledTime.getTime());
+    return hasScheduledTime
+      ? {label: String(t('services.scheduled')), color: '#007AFF'}
+      : {label: String(t('services.immediate')), color: '#FF9500'};
+  };
 
-            {/* Show provider phone for accepted and in-progress status */}
-            {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress') &&
-             providerPhones[jobCard.providerId] && (
-              <View style={styles.providerPhoneRow}>
-                <Icon name="phone" size={14} color={theme.primary} />
-                <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
-                  {providerPhones[jobCard.providerId]}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.callButton, {backgroundColor: theme.primary}]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleCallProvider(providerPhones[jobCard.providerId]);
-                  }}>
-                  <Icon name="phone" size={14} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            )}
+  const renderServiceCard = (jobCard: JobCard) => {
+    const address = jobCard.customerAddress
+      ? `${jobCard.customerAddress.address || ''}${
+          jobCard.customerAddress.pincode
+            ? `, ${jobCard.customerAddress.pincode}`
+            : ''
+        }`.trim()
+      : undefined;
+    const status = normalizeStatus(jobCard.status);
+    const phone =
+      (status === 'accepted' || status === 'in-progress') &&
+      jobCard.providerId
+        ? providerPhones[jobCard.providerId]
+        : undefined;
+    const pin =
+      status === 'in-progress' ? (jobCard as any).taskPIN : undefined;
 
-            {/* Show PIN for in-progress status */}
-            {normalizeStatus(jobCard.status) === 'in-progress' && (jobCard as any).taskPIN && (
-              <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
-                <Icon name="lock" size={16} color={theme.primary} />
-                <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                  {t('jobCard.yourVerificationPIN')}
-                </Text>
-                <Text style={[styles.pinValue, {color: theme.primary}]}>
-                  {(jobCard as any).taskPIN}
-                </Text>
-                <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                  {t('jobCard.sharePIN')}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={styles.statusChipsContainer}>
-          <View
-            style={[
-              styles.statusBadge,
-              {backgroundColor: getStatusColor(jobCard.status) + '20'},
-            ]}>
-            <Text
-              style={[
-                styles.statusText,
-                {color: getStatusColor(jobCard.status)},
-              ]}>
-              {getStatusText(jobCard.status)}
-            </Text>
-          </View>
-          {/* Service Type Chip */}
-          {(() => {
-            const urgency = (jobCard as any).urgency;
-            if (urgency === 'immediate') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#FF9500' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#FF9500'}]}>
-                    {t('services.immediate')}
-                  </Text>
-                </View>
-              );
-            }
-            if (urgency === 'scheduled') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#007AFF' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#007AFF'}]}>
-                    {t('services.scheduled')}
-                  </Text>
-                </View>
-              );
-            }
-            const hasScheduledTime = jobCard.scheduledTime && jobCard.scheduledTime instanceof Date && !isNaN(jobCard.scheduledTime.getTime());
-            const isImmediate = !hasScheduledTime;
-            return (
-              <View style={[styles.serviceTypeChip, {backgroundColor: isImmediate ? '#FF9500' + '20' : '#007AFF' + '20'}]}>
-                <Text style={[styles.serviceTypeChipText, {color: isImmediate ? '#FF9500' : '#007AFF'}]}>
-                  {isImmediate ? t('services.immediate') : t('services.scheduled')}
-                </Text>
-              </View>
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* Problem */}
-      {jobCard.problem && (
-        <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
-          {jobCard.problem}
-        </Text>
-      )}
-
-      {/* Address */}
-      {jobCard.customerAddress && (
-        <View style={styles.addressRow}>
-          <Icon name="location-on" size={16} color={theme.textSecondary} />
-          <Text style={[styles.addressText, {color: theme.textSecondary}]} numberOfLines={1}>
-            {jobCard.customerAddress.address}
-            {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
-          </Text>
-        </View>
-      )}
-
-      {/* Date */}
-      <View style={styles.dateRow}>
-        <Icon name="calendar-today" size={16} color={theme.textSecondary} />
-        <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-          {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
-        </Text>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        {jobCard.status === 'completed' && (
-          <TouchableOpacity
-            style={styles.reviewButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleReview(jobCard);
-            }}>
-            <Icon name="star" size={16} color="#FFD700" />
-            <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            openServiceDetails(jobCard);
-          }}>
-          <Text style={[styles.viewButtonText, {color: theme.primary}]}>
-            {t('jobCard.viewDetails')}
-          </Text>
-          <Icon name="chevron-right" size={20} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+    return (
+      <ServiceRequestCard
+        key={jobCard.id}
+        title={jobCard.serviceType}
+        subtitle={
+          jobCard.providerName || String(t('serviceHistory.waitingForProvider'))
+        }
+        chips={[
+          {label: getStatusText(jobCard.status), color: getStatusColor(jobCard.status)},
+          urgencyChip(jobCard),
+        ]}
+        description={jobCard.problem}
+        address={address || undefined}
+        date={formatDate(jobCard.scheduledTime || jobCard.createdAt)}
+        phone={phone || null}
+        pin={pin || null}
+        pinLabel={pin ? String(t('jobCard.yourVerificationPIN')) : undefined}
+        pinHint={pin ? String(t('jobCard.sharePIN')) : undefined}
+        theme={theme}
+        viewDetailsLabel={String(t('jobCard.viewDetails'))}
+        reviewLabel={
+          jobCard.status === 'completed' ? String(t('jobCard.review')) : undefined
+        }
+        callLabel={String(t('activeService.callProvider'))}
+        onPress={() => openServiceDetails(jobCard)}
+        onViewDetails={() => openServiceDetails(jobCard)}
+        onReview={
+          jobCard.status === 'completed' ? () => handleReview(jobCard) : undefined
+        }
+        onCall={phone ? () => handleCallProvider(phone) : undefined}
+      />
+    );
+  };
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>

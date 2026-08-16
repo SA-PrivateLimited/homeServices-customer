@@ -41,6 +41,14 @@
   "allDistricts": "All districts",
   "district": "District",
   "submitRequest": "Submit request",
-  "requestSentTitle": "Request submitted"
+  "requestSentTitle": "Request submitted",
+  "callProvider": "Call Provider",
+  "contactProvider": "Contact Provider",
+  "contactUnavailable": "Contact not available",
+  "afterAccept": "You can contact the provider after your service request is accepted.",
+  "masked": "Direct calling is not available. Send a service request to continue.",
+  "inactive": "The provider phone number is no longer available for this request.",
+  "activeOnly": "The provider phone number is shown only while your request is active.",
+  "unavailableGeneric": "Provider contact is not available right now."
 }
 
