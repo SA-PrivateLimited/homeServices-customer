@@ -16,10 +16,22 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import ragService from '../services/ragService';
-import {OPEN_AI_API_KEY} from '@env';
 import FormattedText from '../components/FormattedText';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
+
+// Never call OpenAI from the mobile client in release builds (secrets + Play policy).
+// AI chat is debug-only until a backend proxy exists.
+let OPEN_AI_API_KEY = '';
+if (__DEV__) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    OPEN_AI_API_KEY = require('@env').OPEN_AI_API_KEY || '';
+  } catch {
+    OPEN_AI_API_KEY = '';
+  }
+}
+const CLIENT_AI_ENABLED = __DEV__ && Boolean(OPEN_AI_API_KEY);
 
 interface ChatMessage {
   id: string;
@@ -55,12 +67,12 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
 
   useEffect(() => {
     // Check if API key is configured
-    if (!OPEN_AI_API_KEY) {
+    if (!CLIENT_AI_ENABLED) {
       setMessages([
         {
           id: '1',
           role: 'assistant',
-          content: '⚠️ OpenAI API key is not configured. Please add OPEN_AI_API_KEY to your .env file and rebuild the app to enable the AI assistant.',
+          content: String(t('helpSupport.aiUnavailable')),
           timestamp: new Date(),
         },
       ]);
@@ -72,7 +84,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
       {
         id: '1',
         role: 'assistant',
-        content: '👋 Hello! I\'m your service assistant. I can help you answer questions about your past service requests, appointments, and more. What would you like to know?',
+        content: String(t('helpSupport.greeting')),
         timestamp: new Date(),
       },
     ]);
@@ -95,7 +107,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
   };
 
   const indexServiceRequests = async () => {
-    if (!currentUser || consultations.length === 0 || !OPEN_AI_API_KEY) {
+    if (!currentUser || consultations.length === 0 || !CLIENT_AI_ENABLED) {
       return;
     }
 
@@ -127,9 +139,17 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
 
   const handleContactSupport = () => {
     const supportEmail = 'support@sa-privatelimited.com';
-    const subject = encodeURIComponent('HomeServices Support Request');
+    const subject = encodeURIComponent(String(t('helpSupport.emailSubject')));
     const body = encodeURIComponent(
-      `Dear Support Team,\n\nI need assistance with the following:\n\n[Please describe your issue here]\n\nThank you.\n\n---\nCustomer: ${currentUser?.name || 'User'}\nPhone: ${currentUser?.phone || currentUser?.phoneNumber || 'N/A'}`
+      String(
+        t('helpSupport.emailBody', {
+          name: currentUser?.name || t('helpSupport.userFallback'),
+          phone:
+            currentUser?.phone ||
+            currentUser?.phoneNumber ||
+            t('helpSupport.na'),
+        }),
+      ),
     );
     const mailtoLink = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
 
@@ -157,7 +177,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim() || isLoading || !OPEN_AI_API_KEY) {
+    if (!inputText.trim() || isLoading || !CLIENT_AI_ENABLED) {
       return;
     }
 
@@ -213,7 +233,11 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             role: 'assistant',
-            content: `I apologize, but I encountered an error: ${error.message}. Please contact our support team at support@sa-privatelimited.com for assistance.`,
+            content: String(
+              t('helpSupport.errorContactSupport', {
+                error: error.message,
+              }),
+            ),
             timestamp: new Date(),
             needsEscalation: true,
           },
@@ -298,11 +322,11 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
           <Text style={[styles.headerTitle, {color: theme.text}]}>{t('helpSupport.title')}</Text>
           {isIndexing ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              {t('helpSupport.indexingServiceRequests') || 'Indexing service requests...'}
+              {t('helpSupport.indexingServiceRequests')}
             </Text>
           ) : indexStats.count > 0 ? (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
-              {t('helpSupport.serviceRequestsIndexed', {count: indexStats.count}) || `${indexStats.count} service requests indexed`}
+              {t('helpSupport.serviceRequestsIndexed', {count: indexStats.count})}
             </Text>
           ) : (
             <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
@@ -344,7 +368,7 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
 
       {/* Input Area */}
       <View style={[styles.inputContainer, {backgroundColor: theme.card, borderTopColor: theme.border}]}>
-        {!OPEN_AI_API_KEY && (
+        {!CLIENT_AI_ENABLED && (
           <View style={[styles.warningBanner, {backgroundColor: '#FFF3CD', borderLeftColor: '#FFC107'}]}>
             <Icon name="warning" size={20} color="#856404" />
             <Text style={[styles.warningText, {color: '#856404'}]}>
@@ -362,25 +386,25 @@ const HelpSupportScreen: React.FC<{navigation: any}> = ({navigation}) => {
                 borderColor: theme.border,
               },
             ]}
-            placeholder={t('helpSupport.askAboutServiceRequests') || 'Ask about your service requests...'}
+            placeholder={t('helpSupport.askAboutServiceRequests')}
             placeholderTextColor={theme.textSecondary}
             value={inputText}
             onChangeText={setInputText}
             multiline
             maxLength={500}
-            editable={!isLoading && !!OPEN_AI_API_KEY}
+            editable={!isLoading && !!CLIENT_AI_ENABLED}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
               {
-                backgroundColor: isLoading || !inputText.trim() || !OPEN_AI_API_KEY
+                backgroundColor: isLoading || !inputText.trim() || !CLIENT_AI_ENABLED
                   ? theme.border
                   : theme.primary,
               },
             ]}
             onPress={handleSend}
-            disabled={isLoading || !inputText.trim() || !OPEN_AI_API_KEY}>
+            disabled={isLoading || !inputText.trim() || !CLIENT_AI_ENABLED}>
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (

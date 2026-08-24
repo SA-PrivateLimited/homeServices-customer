@@ -43,7 +43,7 @@ import ServiceAddressPicker, {
 } from '../components/ServiceAddressPicker';
 import ServiceQuestionnaireFields from '../components/ServiceQuestionnaireFields';
 import PhoneNumberInput from '../components/PhoneNumberInput';
-import {Select} from 'sapvt-ltd-app-packages';
+import {Select, matchesServiceSearch, bilingualProfessionLine, resolveServiceMeta} from 'sapvt-ltd-app-packages';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import {usersApi} from '../services/api/usersApi';
 import {providersApi, type Provider} from '../services/api/providersApi';
@@ -153,6 +153,7 @@ export default function ServiceRequestScreen({
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
   const [showEditAddressModal, setShowEditAddressModal] = useState(false);
@@ -504,11 +505,8 @@ export default function ServiceRequestScreen({
       if (requestedAreaTypes[category.name]) {
         setAlertModal({
           visible: true,
-          title: String(t('services.providerNotAvailable') || 'Not available'),
-          message: String(
-            t('services.requestProvidersSuccess') ||
-              'Request already sent. Admin will work on getting providers in your area.',
-          ).replace(
+          title: String(t('services.providerNotAvailable')),
+          message: String(t('services.requestProvidersSuccess')).replace(
             '{{serviceType}}',
             language === 'hi' && category.nameHi
               ? category.nameHi
@@ -531,11 +529,8 @@ export default function ServiceRequestScreen({
       setShowServiceTypeModal(false);
       setAlertModal({
         visible: true,
-        title: String(t('common.addressRequired') || 'Address required'),
-        message: String(
-          t('services.requestProvidersNeedAddress') ||
-            'Select a service address first so we know which area needs providers.',
-        ),
+        title: String(t('common.addressRequired')),
+        message: String(t('services.requestProvidersNeedAddress')),
         type: 'warning',
       });
       return;
@@ -553,17 +548,14 @@ export default function ServiceRequestScreen({
       (addr.city || (addr as any).district
         ? ` · ${addr.city || (addr as any).district}`
         : '');
-    const message = String(
-      t('services.requestProvidersConfirmMessage') ||
-        'Notify admin to arrange {{serviceType}} providers near {{area}}?',
-    )
+    const message = String(t('services.requestProvidersConfirmMessage'))
       .replace('{{serviceType}}', serviceName)
       .replace('{{area}}', areaLabel);
 
     setConfirmationModal({
       visible: true,
       title: String(
-        t('services.requestProvidersConfirmTitle') || 'Notify admin?',
+        t('services.requestProvidersConfirmTitle'),
       ),
       message,
       type: 'info',
@@ -592,20 +584,18 @@ export default function ServiceRequestScreen({
             }));
             setToastMessage(
               String(
-                t('services.requestProvidersSuccess') ||
-                  'Admin notified. We will work on getting providers in your area.',
+                t('services.requestProvidersSuccess'),
               ).replace('{{serviceType}}', serviceName),
             );
             setShowToast(true);
           } catch (e: any) {
             setAlertModal({
               visible: true,
-              title: String(t('common.error') || 'Error'),
+              title: String(t('common.error')),
               message:
                 e?.message ||
                 String(
-                  t('services.requestProvidersFailed') ||
-                    'Could not notify admin. Please try again.',
+                  t('services.requestProvidersFailed'),
                 ),
               type: 'error',
             });
@@ -794,8 +784,8 @@ export default function ServiceRequestScreen({
       if (hasPermission !== 'granted') {
         setAlertModal({
           visible: true,
-          title: t('common.warning') || 'Permission Required',
-          message: t('services.locationPermissionRequired') || 'Location permission is required to detect your address automatically.',
+          title: t('common.permissionRequired'),
+          message: t('services.locationPermissionRequired'),
           type: 'warning',
         });
         setIsDetectingLocation(false);
@@ -1110,10 +1100,9 @@ export default function ServiceRequestScreen({
     if (addressSel.mode === 'edit') {
       setAlertModal({
         visible: true,
-        title: t('common.warning') || 'Warning',
+        title: t('common.warning'),
         message:
-          t('services.saveAddressFirst') ||
-          'Please save or cancel address edits first.',
+          t('services.saveAddressFirst'),
         type: 'warning',
       });
       return;
@@ -1137,13 +1126,12 @@ export default function ServiceRequestScreen({
         const selectedCat = serviceCategories.find(cat => cat.name === selectedServiceType);
         const serviceName = language === 'hi' && selectedCat?.nameHi ? selectedCat.nameHi : selectedServiceType;
         const messageTemplate = String(
-          t('services.providerNotAvailableNotifyAdmin') ||
-            'No {{serviceType}} providers are available near this address. Notify admin so they can find and assign a provider?',
+          t('services.providerNotAvailableNotifyAdmin'),
         );
         const message = messageTemplate.replace('{{serviceType}}', serviceName);
         setConfirmationModal({
           visible: true,
-          title: String(t('services.providerNotAvailable') || 'No providers nearby'),
+          title: String(t('services.providerNotAvailable')),
           message,
           type: 'warning',
           onConfirm: () => {
@@ -1371,15 +1359,13 @@ export default function ServiceRequestScreen({
       setSubmittedServiceRequestId(serviceRequestId);
       setToastMessage(
         isTargetedRequest
-          ? String(t('services.requestSentToProvider') || `Your request has been sent to ${targetedProvider?.name || 'the provider'}.`)
+          ? String(t('services.requestSentToProvider'))
           : requestAdminHelp
             ? String(
-                t('services.adminNotifiedForUnavailable') ||
-                  'Admin has been notified. They will find a provider and assign your request.',
+                t('services.adminNotifiedForUnavailable'),
               )
             : String(
-                t('services.requestSubmittedProvidersNotified') ||
-                  'Your service request has been submitted. Providers in your area will be notified.',
+                t('services.requestSubmittedProvidersNotified'),
               ),
       );
       setShowToast(true);
@@ -1446,8 +1432,7 @@ export default function ServiceRequestScreen({
           </Text>
           <Text style={[{color: theme.textSecondary, fontSize: 13, marginTop: 4}]}>
             {String(
-              t('services.requestGoesToThisProvider') ||
-                'This request will be sent only to this provider, even if they are offline.',
+              t('services.requestGoesToThisProvider'),
             )}
           </Text>
         </View>
@@ -1466,14 +1451,14 @@ export default function ServiceRequestScreen({
           refreshKey={addressRefreshKey}
         />
         <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
-          Secondary mobile (optional)
+          {t('services.secondaryMobileOptional')}
         </Text>
         <PhoneNumberInput
           value={secondaryMobile}
           onChangeText={(text) =>
             setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
           }
-          placeholder="10-digit mobile"
+          placeholder={String(t('services.tenDigitMobile'))}
           borderColor={theme.border}
           backgroundColor={theme.card}
           prefixBackgroundColor={theme.background}
@@ -1541,7 +1526,7 @@ export default function ServiceRequestScreen({
           ) : (
             <Text style={[styles.placeholderText, {color: theme.textSecondary}]}>
               {!selectedAddress?.address || !selectedAddress?.pincode
-                ? 'Complete address first'
+                ? t('services.completeAddressFirst')
                 : t('services.selectServiceType')}
             </Text>
           )}
@@ -1565,7 +1550,7 @@ export default function ServiceRequestScreen({
       {!isTargetedRequest && selectedServiceType && selectedAddress?.pincode ? (
         <View style={styles.section}>
           <Text style={[styles.label, {color: theme.text}]}>
-            {t('services.providersInYourArea') || 'Providers in your area'}
+            {t('services.providersInYourArea')}
           </Text>
           {loadingAreaProviders ? (
             <ActivityIndicator color={theme.primary} style={{marginVertical: 8}} />
@@ -1588,8 +1573,7 @@ export default function ServiceRequestScreen({
                   {
                     value: '',
                     label:
-                      (t('services.anyAvailableProvider') ||
-                        'Any available provider') +
+                      (t('services.anyAvailableProvider')) +
                       ` (${areaProviders.length})`,
                   },
                   ...areaProviders.map(p => {
@@ -1598,7 +1582,7 @@ export default function ServiceRequestScreen({
                       p.rating != null
                         ? ` · ★ ${Number(p.rating).toFixed(1)}`
                         : '';
-                    const online = p.isOnline ? ' · Online' : '';
+                    const online = p.isOnline ? ` · ${t('providers.online')}` : '';
                     return {
                       value: id,
                       label: `${p.name || p.displayName || 'Provider'}${rating}${online}`,
@@ -1608,8 +1592,7 @@ export default function ServiceRequestScreen({
                 value={preferredProviderId}
                 onChange={setPreferredProviderId}
                 placeholder={
-                  t('services.selectProviderOptional') ||
-                  'Select a provider (optional)'
+                  t('services.selectProviderOptional')
                 }
               />
             </>
@@ -1626,20 +1609,13 @@ export default function ServiceRequestScreen({
             onChange={handleQuestionnaireAnswer}
             theme={theme}
             language={language}
-            title={String(t('services.serviceDetails') || 'Service Details')}
-            subtitle={String(
-              t('services.answerQuestionsToHelp') ||
-                'Please answer these questions to help us serve you better',
-            )}
+            title={String(t('services.serviceDetails'))}
+            subtitle={String(t('services.answerQuestionsToHelp'))}
             yesLabel={String(t('common.yes'))}
             noLabel={String(t('common.no'))}
-            selectPlaceholder={String(t('common.select') || 'Select…')}
-            textPlaceholder={String(
-              t('services.enterYourAnswer') || 'Enter your answer',
-            )}
-            numberPlaceholder={String(
-              t('services.enterANumber') || 'Enter a number',
-            )}
+            selectPlaceholder={String(t('common.select'))}
+            textPlaceholder={String(t('services.enterYourAnswer'))}
+            numberPlaceholder={String(t('services.enterANumber'))}
           />
         </View>
       )}
@@ -1648,7 +1624,7 @@ export default function ServiceRequestScreen({
       <View style={styles.section}>
         <Text style={[styles.label, {color: theme.text}]}>
           {questionnaire && questionnaire.length > 0
-            ? `${t('services.problemInBrief') || t('services.describeProblem')} (${t('common.optional') || 'optional'})`
+            ? `${t('services.problemInBrief')} (${t('common.optional')})`
             : `${t('services.describeProblem')} *`}
         </Text>
         {questionnaire && questionnaire.length > 0 ? (
@@ -1776,8 +1752,29 @@ export default function ServiceRequestScreen({
                 <Icon name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
+            <TextInput
+              value={serviceSearch}
+              onChangeText={setServiceSearch}
+              placeholder={String(t('browse.searchPlaceholder') || 'Search service')}
+              placeholderTextColor={theme.textSecondary}
+              style={{
+                marginHorizontal: 16,
+                marginBottom: 8,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                color: theme.text,
+              }}
+            />
             <FlatList
-              data={serviceCategories}
+              data={serviceCategories.filter(item =>
+                matchesServiceSearch(
+                  serviceSearch,
+                  resolveServiceMeta(item.name, {nameHi: item.nameHi}),
+                ),
+              )}
               keyExtractor={item => item.id}
               renderItem={({item}) => {
                 const count = providerCounts[item.name] || 0;
@@ -1810,9 +1807,7 @@ export default function ServiceRequestScreen({
                       <View style={styles.categoryText}>
                         <View style={styles.categoryNameRow}>
                           <Text style={[styles.categoryName, {color: theme.text}]}>
-                            {language === 'hi' && item.nameHi
-                              ? item.nameHi
-                              : item.name}
+                            {bilingualProfessionLine(item.name, {nameHi: item.nameHi})}
                           </Text>
                           {loadingProviderCounts ? (
                             <ActivityIndicator
@@ -1874,7 +1869,7 @@ export default function ServiceRequestScreen({
                         disabled={alreadyRequested || notifying}
                         onPress={() => handleRequestAreaProviders(item)}
                         accessibilityLabel={String(
-                          t('services.requestProviders') || 'Request',
+                          t('services.requestProviders'),
                         )}>
                         {notifying ? (
                           <ActivityIndicator size="small" color="#fff" />
@@ -1891,13 +1886,8 @@ export default function ServiceRequestScreen({
                             />
                             <Text style={styles.requestProvidersButtonText}>
                               {alreadyRequested
-                                ? String(
-                                    t('services.requestProvidersRequested') ||
-                                      'Requested',
-                                  )
-                                : String(
-                                    t('services.requestProviders') || 'Request',
-                                  )}
+                                ? t('services.requestProvidersRequested')
+                                : t('services.requestProviders')}
                             </Text>
                           </>
                         )}
@@ -2019,10 +2009,10 @@ export default function ServiceRequestScreen({
                 <View style={styles.emptyContainer}>
                   <Icon name="location-off" size={48} color={theme.textSecondary} />
                   <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
-                    No saved addresses
+                    {t('services.noSavedAddresses')}
                   </Text>
                   <Text style={[styles.emptySubtext, {color: theme.textSecondary}]}>
-                    Add an address to get started
+                    {t('services.addAddressToGetStarted')}
                   </Text>
                 </View>
               )}
@@ -2040,7 +2030,9 @@ export default function ServiceRequestScreen({
                 }}>
                 <Icon name="add-location" size={20} color={theme.primary} />
                 <Text style={[styles.addAddressText, {color: theme.primary}]}>
-                  {selectedAddress ? 'Save Current Address' : 'Use Current Location'}
+                  {selectedAddress
+                    ? t('services.saveCurrentAddress')
+                    : t('services.useCurrentLocation')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2107,7 +2099,11 @@ export default function ServiceRequestScreen({
                           color: newAddressLabel === label ? '#fff' : theme.text,
                         },
                       ]}>
-                      {label === 'home' ? 'Home' : label === 'office' ? 'Office' : 'Other'}
+                      {label === 'home'
+                        ? t('services.home')
+                        : label === 'office'
+                          ? t('services.office')
+                          : t('services.other')}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -2116,7 +2112,9 @@ export default function ServiceRequestScreen({
 
             {newAddressLabel === 'other' && (
               <View style={styles.section}>
-                <Text style={[styles.label, {color: theme.text}]}>Custom Label</Text>
+                <Text style={[styles.label, {color: theme.text}]}>
+                  {t('services.customLabel')}
+                </Text>
                 <TextInput
                   style={[
                     styles.customLabelInput,

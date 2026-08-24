@@ -43,5 +43,11 @@
   "email": "Email",
   "phone": "Phone",
   "emailUs": "Email Us",
-  "callUs": "Call Us"
+  "callUs": "Call Us",
+  "manageLead": "Manage your personal information and account settings",
+  "accountSubtitle": "Manage your account and security",
+  "deleteAccount": "Delete account",
+  "deleteAccountHint": "Permanently remove your data from this app",
+  "deleteAccountConfirm": "This permanently deletes your account and Partner access on the same phone. This cannot be undone.",
+  "deleteAccountFailed": "Could not delete your account. Try again."
 }

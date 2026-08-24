@@ -177,12 +177,26 @@ const GuestStack = () => {
       <Stack.Screen
         name="GuestProviders"
         component={ProvidersListScreen}
-        options={{title: t('providers.selectProfession') || t('providers.browseProviders')}}
+        options={({navigation}) => ({
+          title: t('providers.selectProfession') || t('providers.browseProviders'),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ShareContactRecommendation')}
+              style={{marginRight: 4, padding: 6}}>
+              <Icon name="person-add-outline" size={22} color={theme.text} />
+            </TouchableOpacity>
+          ),
+        })}
       />
       <Stack.Screen
         name="ProviderDetails"
         component={ProviderDetailsScreen}
         options={{title: t('providers.providerDetails')}}
+      />
+      <Stack.Screen
+        name="ShareContactRecommendation"
+        component={ShareContactRecommendationScreen}
+        options={{title: t('recommendations.shareContact')}}
       />
     </Stack.Navigator>
   );

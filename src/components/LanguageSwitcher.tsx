@@ -14,7 +14,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({compact = false}) =>
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
-  const currentLanguage = language || 'en';
+  const currentLanguage = language || 'hi';
   const languageLabel = currentLanguage === 'hi' 
     ? String(t('settings.hindi') || 'Hindi') 
     : String(t('settings.english') || 'English');

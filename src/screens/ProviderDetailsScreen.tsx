@@ -19,6 +19,10 @@ import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import useTranslation from '../hooks/useTranslation';
 import ProviderRequestModal from '../components/ProviderRequestModal';
+import {
+  contactHintMessage,
+  providerPhoneFromApi,
+} from '../utils/providerContact';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -211,28 +215,42 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               </Text>
             </View>
 
-            {(provider.phoneNumber || (provider as any).phone) && (
-              <TouchableOpacity
-                style={styles.contactRow}
-                onPress={() => {
-                  const phoneNumber = (provider.phoneNumber || (provider as any).phone || '').replace(/[^\d+]/g, '');
-                  Linking.openURL(`tel:${phoneNumber}`).catch(() => {
-                    setAlertModal({
-                      visible: true,
-                      title: t('common.error'),
-                      message: t('providers.unableToCall'),
-                      type: 'error',
-                    });
-                  });
-                }}
-                activeOpacity={0.7}>
-                <Icon name="call-outline" size={16} color={theme.primary} />
-                <Text style={[styles.contactText, {color: theme.primary}]}>
-                  {provider.phoneNumber || (provider as any).phone}
+            {(() => {
+              const phone = providerPhoneFromApi(provider as any);
+              if (phone) {
+                return (
+                  <TouchableOpacity
+                    style={styles.contactRow}
+                    onPress={() => {
+                      Linking.openURL(`tel:${phone}`).catch(() => {
+                        setAlertModal({
+                          visible: true,
+                          title: t('common.error'),
+                          message: t('providers.unableToCall'),
+                          type: 'error',
+                        });
+                      });
+                    }}
+                    activeOpacity={0.7}>
+                    <Icon name="call-outline" size={16} color={theme.primary} />
+                    <Text style={[styles.contactText, {color: theme.primary}]}>
+                      {phone}
+                    </Text>
+                    <Icon name="call" size={14} color={theme.primary} />
+                  </TouchableOpacity>
+                );
+              }
+              const hint = contactHintMessage(
+                t,
+                (provider as any).providerContactHint,
+                (provider as any).providerContactPolicy,
+              );
+              return hint ? (
+                <Text style={[styles.statusText, {color: theme.textSecondary, marginTop: 8}]}>
+                  {hint}
                 </Text>
-                <Icon name="call" size={14} color={theme.primary} />
-              </TouchableOpacity>
-            )}
+              ) : null;
+            })()}
           </View>
         </View>
 

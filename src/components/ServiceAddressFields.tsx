@@ -25,6 +25,7 @@ import {
 } from '../services/api/geographyApi';
 import GeolocationService from '../services/geolocationService';
 import type {UserLocation} from '../types/common';
+import useTranslation from '../hooks/useTranslation';
 
 export interface ServiceAddressValue extends UserLocation {
   landmark?: string;
@@ -122,6 +123,7 @@ export function ServiceAddressFields({
   showSaveForFuture = false,
   editable = true,
 }: ServiceAddressFieldsProps) {
+  const {t} = useTranslation();
   const warm = peekGeographyMeta();
   const [states, setStates] = useState<GeographyState[]>(
     () => warm?.states || [],
@@ -201,8 +203,8 @@ export function ServiceAddressFields({
       const permission = await GeolocationService.requestLocationPermission();
       if (permission !== 'granted') {
         Alert.alert(
-          'Permission Required',
-          'Location permission is required to detect your address.',
+          String(t('common.permissionRequired')),
+          String(t('services.locationPermissionRequired')),
         );
         return;
       }
@@ -259,7 +261,10 @@ export function ServiceAddressFields({
         country: 'IN',
       });
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to detect location');
+      Alert.alert(
+        String(t('common.error')),
+        error?.message || String(t('services.detectLocationFailed')),
+      );
     } finally {
       setDetecting(false);
     }
@@ -288,7 +293,7 @@ export function ServiceAddressFields({
             <Icon name="my-location" size={18} color="#fff" />
           )}
           <Text style={styles.currentBtnText}>
-            {useCurrentLabel || 'Use current location'}
+            {useCurrentLabel || String(t('services.useCurrentLocation'))}
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -297,13 +302,15 @@ export function ServiceAddressFields({
         <View style={[styles.coordsRow, {borderColor: theme.border}]}>
           <Icon name="place" size={16} color={theme.primary} />
           <Text style={[styles.coordsText, {color: theme.textSecondary}]}>
-            {currentLocationLabel || 'Current location'}:{' '}
+            {currentLocationLabel || String(t('services.useCurrentLocation'))}:{' '}
             {value.latitude!.toFixed(5)}, {value.longitude!.toFixed(5)}
           </Text>
         </View>
       ) : null}
 
-      <Text style={[styles.label, {color: theme.textSecondary}]}>Address</Text>
+      <Text style={[styles.label, {color: theme.textSecondary}]}>
+        {t('services.address')}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -315,14 +322,14 @@ export function ServiceAddressFields({
         ]}
         value={value.address || ''}
         onChangeText={address => patch({address})}
-        placeholder="House / street / area"
+        placeholder={String(t('services.houseStreetArea'))}
         placeholderTextColor={theme.textSecondary}
         editable={editable}
         multiline
       />
 
       <Text style={[styles.label, {color: theme.textSecondary}]}>
-        Landmark (optional)
+        {t('services.landmarkOptional')}
       </Text>
       <TextInput
         style={[
@@ -335,7 +342,7 @@ export function ServiceAddressFields({
         ]}
         value={value.landmark || ''}
         onChangeText={landmark => patch({landmark})}
-        placeholder="Near park, temple, etc."
+        placeholder={String(t('services.landmarkPlaceholder'))}
         placeholderTextColor={theme.textSecondary}
         editable={editable}
       />
@@ -344,29 +351,33 @@ export function ServiceAddressFields({
         <ActivityIndicator style={{marginVertical: 8}} color={theme.primary} />
       ) : (
         <>
-          <Text style={[styles.label, {color: theme.textSecondary}]}>State</Text>
+          <Text style={[styles.label, {color: theme.textSecondary}]}>
+            {t('services.state')}
+          </Text>
           <Select
             options={stateOptions}
             value={value.stateId || ''}
-            placeholder="Select state"
+            placeholder={String(t('services.selectState'))}
             disabled={!editable}
             onChange={onStateChange}
           />
 
           <Text style={[styles.label, {color: theme.textSecondary}]}>
-            District
+            {t('services.districtLabel')}
           </Text>
           <Select
             options={districtOptions}
             value={value.districtId || ''}
-            placeholder="Select district"
+            placeholder={String(t('services.selectDistrict'))}
             disabled={!editable || !value.stateId}
             onChange={onDistrictChange}
           />
         </>
       )}
 
-      <Text style={[styles.label, {color: theme.textSecondary}]}>Pincode</Text>
+      <Text style={[styles.label, {color: theme.textSecondary}]}>
+        {t('services.pincode')}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -380,7 +391,7 @@ export function ServiceAddressFields({
         onChangeText={pincode =>
           patch({pincode: pincode.replace(/\D/g, '').slice(0, 6)})
         }
-        placeholder="Auto from district"
+        placeholder={String(t('services.cityAutoFromDistrict'))}
         placeholderTextColor={theme.textSecondary}
         keyboardType="number-pad"
         maxLength={6}
@@ -390,7 +401,7 @@ export function ServiceAddressFields({
       {showSaveForFuture && onSaveForFutureChange ? (
         <View style={styles.saveRow}>
           <Text style={[styles.saveLabel, {color: theme.text}]}>
-            Save for future
+            {t('services.saveAsAddress')}
           </Text>
           <Switch
             value={Boolean(saveForFuture)}

@@ -18,6 +18,8 @@ import enMessages from './locales/en/messages.json';
 import enNotifications from './locales/en/notifications.json';
 import enProviders from './locales/en/providers.json';
 import enRecommendations from './locales/en/recommendations.json';
+import enReview from './locales/en/review.json';
+import enHelpSupport from './locales/en/helpSupport.json';
 
 // Hindi translations
 import hiCommon from './locales/hi/common.json';
@@ -35,7 +37,8 @@ import hiMessages from './locales/hi/messages.json';
 import hiNotifications from './locales/hi/notifications.json';
 import hiProviders from './locales/hi/providers.json';
 import hiRecommendations from './locales/hi/recommendations.json';
-
+import hiReview from './locales/hi/review.json';
+import hiHelpSupport from './locales/hi/helpSupport.json';
 // Merge all translations
 const en = {
   common: enCommon,
@@ -53,6 +56,8 @@ const en = {
   notifications: enNotifications,
   providers: enProviders,
   recommendations: enRecommendations,
+  review: enReview,
+  helpSupport: enHelpSupport,
 };
 
 const hi = {
@@ -71,6 +76,8 @@ const hi = {
   notifications: hiNotifications,
   providers: hiProviders,
   recommendations: hiRecommendations,
+  review: hiReview,
+  helpSupport: hiHelpSupport,
 };
 
 const LANGUAGE_KEY = '@app_language';
@@ -79,9 +86,10 @@ const LANGUAGE_KEY = '@app_language';
 const getStoredLanguage = async (): Promise<string> => {
   try {
     const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
-    return stored || 'en';
+    // Hindi-first: first launch / empty storage → hi. Existing user choice is preserved.
+    return stored || 'hi';
   } catch {
-    return 'en';
+    return 'hi';
   }
 };
 
@@ -94,8 +102,8 @@ i18n
       en: {translation: en},
       hi: {translation: hi},
     },
-    lng: 'en', // Default language
-    fallbackLng: 'en',
+    lng: 'hi', // Default language (rural / semi-rural Hindi-first)
+    fallbackLng: 'en', // Missing HI keys still fall back to English
     interpolation: {
       escapeValue: false, // React already escapes values
     },
@@ -121,7 +129,7 @@ export const changeLanguage = async (language: 'en' | 'hi') => {
 
 // Get current language
 export const getCurrentLanguage = (): string => {
-  return i18n.language || 'en';
+  return i18n.language || 'hi';
 };
 
 export default i18n;

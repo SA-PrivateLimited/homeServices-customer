@@ -34,7 +34,7 @@ export async function registerPin(
     {
       phoneNumber,
       pin: options?.pin,
-      fullName: options?.fullName || 'Customer',
+      fullName: options?.fullName,
     },
     {skipAuth: true},
   );
@@ -92,7 +92,7 @@ export async function registerWithOtp(
   const body: Record<string, string> = {
     phoneNumber,
     pin,
-    fullName: opts.fullName || 'Customer',
+    fullName: opts.fullName || '',
     role: 'customer',
   };
   if ('idToken' in opts) body.idToken = opts.idToken;

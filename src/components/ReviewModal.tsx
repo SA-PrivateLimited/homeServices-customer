@@ -15,7 +15,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
-  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {launchImageLibrary} from 'react-native-image-picker';
@@ -24,6 +23,7 @@ import {lightTheme, darkTheme} from '../utils/theme';
 import {useStore} from '../store';
 import AlertModal from './AlertModal';
 import ConfirmationModal from './ConfirmationModal';
+import useTranslation from '../hooks/useTranslation';
 
 interface ReviewModalProps {
   visible: boolean;
@@ -33,6 +33,35 @@ interface ReviewModalProps {
   onReviewSubmitted: () => void;
   onSkip: () => void;
 }
+
+const POSITIVE_KEYS = [
+  'professional',
+  'onTime',
+  'cleanTidy',
+  'goodCommunication',
+  'qualityWork',
+  'friendly',
+  'wellEquipped',
+  'solvedProblem',
+] as const;
+
+const NEUTRAL_KEYS = [
+  'averageService',
+  'couldBeBetter',
+  'roomForImprovement',
+  'satisfactory',
+] as const;
+
+const NEGATIVE_KEYS = [
+  'lateArrival',
+  'poorQuality',
+  'unprofessional',
+  'notClean',
+  'poorCommunication',
+  'didNotComplete',
+  'overcharged',
+  'rudeBehavior',
+] as const;
 
 export default function ReviewModal({
   visible,
@@ -44,6 +73,7 @@ export default function ReviewModal({
 }: ReviewModalProps) {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -64,57 +94,23 @@ export default function ReviewModal({
   });
   const [showSkipModal, setShowSkipModal] = useState(false);
 
-  // Rating suggestions based on rating
-  const getSuggestions = (): string[] => {
-    if (rating >= 4) {
-      // Positive suggestions for good ratings
-      return [
-        'Professional',
-        'On Time',
-        'Clean & Tidy',
-        'Good Communication',
-        'Quality Work',
-        'Friendly',
-        'Well Equipped',
-        'Solved Problem',
-      ];
-    } else if (rating === 3) {
-      // Neutral suggestions
-      return [
-        'Average Service',
-        'Could Be Better',
-        'Room for Improvement',
-        'Satisfactory',
-      ];
-    } else if (rating >= 1 && rating <= 2) {
-      // Negative suggestions for poor ratings
-      return [
-        'Late Arrival',
-        'Poor Quality',
-        'Unprofessional',
-        'Not Clean',
-        'Poor Communication',
-        'Did Not Complete',
-        'Overcharged',
-        'Rude Behavior',
-      ];
-    }
+  const getSuggestionKeys = (): readonly string[] => {
+    if (rating >= 4) return POSITIVE_KEYS;
+    if (rating === 3) return NEUTRAL_KEYS;
+    if (rating >= 1 && rating <= 2) return NEGATIVE_KEYS;
     return [];
   };
 
   const handleStarPress = (star: number) => {
     setRating(star);
-    // Clear suggestions when rating changes
     setSelectedSuggestions([]);
   };
 
-  const handleSuggestionPress = (suggestion: string) => {
-    if (selectedSuggestions.includes(suggestion)) {
-      // Remove if already selected
-      setSelectedSuggestions(selectedSuggestions.filter(s => s !== suggestion));
+  const handleSuggestionPress = (key: string) => {
+    if (selectedSuggestions.includes(key)) {
+      setSelectedSuggestions(selectedSuggestions.filter(s => s !== key));
     } else {
-      // Add if not selected
-      setSelectedSuggestions([...selectedSuggestions, suggestion]);
+      setSelectedSuggestions([...selectedSuggestions, key]);
     }
   };
 
@@ -130,16 +126,15 @@ export default function ReviewModal({
         return;
       }
 
-      // Keep local URIs for preview; cloud upload removed with Firebase.
       const localUris = result.assets
         .map(a => a.uri)
         .filter((uri): uri is string => !!uri);
       setPhotos([...photos, ...localUris].slice(0, 3));
-    } catch (error: any) {
+    } catch {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: 'Failed to add photo. Please try again.',
+        title: String(t('review.error')),
+        message: String(t('review.photoError')),
         type: 'error',
       });
     }
@@ -153,8 +148,8 @@ export default function ReviewModal({
     if (rating === 0) {
       setAlertModal({
         visible: true,
-        title: 'Rating Required',
-        message: 'Please select a rating',
+        title: String(t('review.ratingRequiredTitle')),
+        message: String(t('review.ratingRequiredMessage')),
         type: 'warning',
       });
       return;
@@ -162,18 +157,19 @@ export default function ReviewModal({
 
     try {
       setSubmitting(true);
-      
-      // Combine suggestions and comment
+
       let finalComment = comment.trim();
       if (selectedSuggestions.length > 0) {
-        const suggestionsText = selectedSuggestions.join(', ');
+        const suggestionsText = selectedSuggestions
+          .map(key => String(t(`review.suggestion.${key}`)))
+          .join(', ');
         if (finalComment) {
           finalComment = `${suggestionsText}. ${finalComment}`;
         } else {
           finalComment = suggestionsText;
         }
       }
-      
+
       const remotePhotos = photos.filter(
         p => p.startsWith('http://') || p.startsWith('https://'),
       );
@@ -185,13 +181,12 @@ export default function ReviewModal({
       );
       setAlertModal({
         visible: true,
-        title: 'Thank You!',
-        message: 'Your review has been submitted.',
+        title: String(t('review.thankYouTitle')),
+        message: String(t('review.thankYouMessage')),
         type: 'success',
       });
       setTimeout(() => {
         onReviewSubmitted();
-        // Reset form
         setRating(0);
         setComment('');
         setSelectedSuggestions([]);
@@ -200,8 +195,8 @@ export default function ReviewModal({
     } catch (error: any) {
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to submit review. Please try again.',
+        title: String(t('review.error')),
+        message: error.message || String(t('review.submitError')),
         type: 'error',
       });
     } finally {
@@ -213,6 +208,24 @@ export default function ReviewModal({
     setShowSkipModal(true);
   };
 
+  const ratingLabel =
+    rating === 5
+      ? t('review.excellent')
+      : rating === 4
+        ? t('review.great')
+        : rating === 3
+          ? t('review.good')
+          : rating === 2
+            ? t('review.fair')
+            : t('review.poor');
+
+  const suggestionPrompt =
+    rating >= 4
+      ? t('review.whatMadeItGreat')
+      : rating === 3
+        ? t('review.whatMadeItAverage')
+        : t('review.whatMadeItPoor');
+
   return (
     <Modal
       visible={visible}
@@ -222,20 +235,20 @@ export default function ReviewModal({
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Header */}
             <View style={styles.header}>
               <Text style={[styles.title, {color: theme.text}]}>
-                How was your service?
+                {t('review.title')}
               </Text>
               <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
-                {serviceType} by {providerName}
+                {String(t('review.subtitle'))
+                  .replace('{{service}}', serviceType)
+                  .replace('{{name}}', providerName)}
               </Text>
             </View>
 
-            {/* Rating Stars */}
             <View style={styles.ratingContainer}>
               <Text style={[styles.ratingLabel, {color: theme.text}]}>
-                Rate your experience
+                {t('review.rateExperience')}
               </Text>
               <View style={styles.starsContainer}>
                 {[1, 2, 3, 4, 5].map(star => (
@@ -251,64 +264,61 @@ export default function ReviewModal({
                   </TouchableOpacity>
                 ))}
               </View>
-              {rating > 0 && (
+              {rating > 0 ? (
                 <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
-                  {rating === 5
-                    ? 'Excellent!'
-                    : rating === 4
-                    ? 'Great!'
-                    : rating === 3
-                    ? 'Good'
-                    : rating === 2
-                    ? 'Fair'
-                    : 'Poor'}
+                  {ratingLabel}
                 </Text>
-              )}
+              ) : null}
             </View>
 
-            {/* Rating Suggestions */}
-            {rating > 0 && getSuggestions().length > 0 && (
+            {rating > 0 && getSuggestionKeys().length > 0 ? (
               <View style={styles.suggestionsContainer}>
                 <Text style={[styles.suggestionsLabel, {color: theme.text}]}>
-                  What made it {rating >= 4 ? 'great' : rating === 3 ? 'average' : 'poor'}?
+                  {suggestionPrompt}
                 </Text>
                 <View style={styles.suggestionsGrid}>
-                  {getSuggestions().map((suggestion, index) => {
-                    const isSelected = selectedSuggestions.includes(suggestion);
+                  {getSuggestionKeys().map(key => {
+                    const isSelected = selectedSuggestions.includes(key);
                     return (
                       <TouchableOpacity
-                        key={index}
+                        key={key}
                         style={[
                           styles.suggestionChip,
                           {
-                            backgroundColor: isSelected ? theme.primary : theme.background,
-                            borderColor: isSelected ? theme.primary : theme.border,
+                            backgroundColor: isSelected
+                              ? theme.primary
+                              : theme.background,
+                            borderColor: isSelected
+                              ? theme.primary
+                              : theme.border,
                           },
                         ]}
-                        onPress={() => handleSuggestionPress(suggestion)}>
+                        onPress={() => handleSuggestionPress(key)}>
                         <Text
                           style={[
                             styles.suggestionText,
-                            {
-                              color: isSelected ? '#fff' : theme.text,
-                            },
+                            {color: isSelected ? '#fff' : theme.text},
                           ]}>
-                          {suggestion}
+                          {t(`review.suggestion.${key}`)}
                         </Text>
-                        {isSelected && (
-                          <Icon name="check" size={16} color="#fff" style={styles.checkIcon} />
-                        )}
+                        {isSelected ? (
+                          <Icon
+                            name="check"
+                            size={16}
+                            color="#fff"
+                            style={styles.checkIcon}
+                          />
+                        ) : null}
                       </TouchableOpacity>
                     );
                   })}
                 </View>
               </View>
-            )}
+            ) : null}
 
-            {/* Comment Input */}
             <View style={styles.commentContainer}>
               <Text style={[styles.commentLabel, {color: theme.text}]}>
-                Tell us more (optional)
+                {t('review.tellUsMore')}
               </Text>
               <TextInput
                 style={[
@@ -321,7 +331,7 @@ export default function ReviewModal({
                 ]}
                 value={comment}
                 onChangeText={setComment}
-                placeholder="Share your experience..."
+                placeholder={String(t('review.commentPlaceholder'))}
                 placeholderTextColor={theme.textSecondary}
                 multiline
                 numberOfLines={4}
@@ -332,8 +342,7 @@ export default function ReviewModal({
               </Text>
             </View>
 
-            {/* Photos */}
-            {photos.length < 3 && (
+            {photos.length < 3 ? (
               <TouchableOpacity
                 style={[styles.addPhotoButton, {borderColor: theme.border}]}
                 onPress={handleAddPhoto}
@@ -342,17 +351,23 @@ export default function ReviewModal({
                   <ActivityIndicator color={theme.primary} />
                 ) : (
                   <>
-                    <Icon name="add-photo-alternate" size={24} color={theme.primary} />
+                    <Icon
+                      name="add-photo-alternate"
+                      size={24}
+                      color={theme.primary}
+                    />
                     <Text style={[styles.addPhotoText, {color: theme.primary}]}>
-                      Add Photo ({photos.length}/3)
+                      {String(t('review.addPhoto')).replace(
+                        '{{count}}',
+                        String(photos.length),
+                      )}
                     </Text>
                   </>
                 )}
               </TouchableOpacity>
-            )}
+            ) : null}
 
-            {/* Photo Preview */}
-            {photos.length > 0 && (
+            {photos.length > 0 ? (
               <View style={styles.photosContainer}>
                 {photos.map((photo, index) => (
                   <View key={index} style={styles.photoWrapper}>
@@ -365,16 +380,16 @@ export default function ReviewModal({
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
 
-            {/* Action Buttons */}
             <View style={styles.actionsContainer}>
               <TouchableOpacity
                 style={[styles.skipButton, {borderColor: theme.border}]}
                 onPress={handleSkip}
                 disabled={submitting}>
-                <Text style={[styles.skipButtonText, {color: theme.textSecondary}]}>
-                  Skip
+                <Text
+                  style={[styles.skipButtonText, {color: theme.textSecondary}]}>
+                  {t('review.skip')}
                 </Text>
               </TouchableOpacity>
 
@@ -391,7 +406,9 @@ export default function ReviewModal({
                 {submitting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Submit Review</Text>
+                  <Text style={styles.submitButtonText}>
+                    {t('review.submitReview')}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -399,7 +416,6 @@ export default function ReviewModal({
         </View>
       </View>
 
-      {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -408,13 +424,12 @@ export default function ReviewModal({
         onClose={() => setAlertModal({...alertModal, visible: false})}
       />
 
-      {/* Skip Confirmation Modal */}
       <ConfirmationModal
         visible={showSkipModal}
-        title="Skip Review?"
-        message="You can review this service later from your history."
-        confirmText="Skip"
-        cancelText="Cancel"
+        title={String(t('review.skipTitle'))}
+        message={String(t('review.skipMessage'))}
+        confirmText={String(t('review.skipConfirm'))}
+        cancelText={String(t('common.cancel'))}
         type="info"
         onConfirm={() => {
           setShowSkipModal(false);
@@ -591,4 +606,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

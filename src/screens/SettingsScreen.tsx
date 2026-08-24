@@ -6,17 +6,15 @@ import {
   TouchableOpacity,
   Switch,
   ScrollView,
-  Image,
   Linking,
   Modal,
-  TextInput,
-  ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {Select} from 'sapvt-ltd-app-packages';
+import {Button, customerDisplayName, isCustomerProfileIncomplete} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
@@ -27,7 +25,12 @@ import SuccessModal from '../components/SuccessModal';
 import ServiceAddressFields, {
   type ServiceAddressValue,
 } from '../components/ServiceAddressFields';
+import {SettingsProfileHeader} from '../components/settings/SettingsProfileHeader';
+import {SettingsPersonalInformation} from '../components/settings/SettingsPersonalInformation';
+import {SettingsAccountSection} from '../components/settings/SettingsAccountSection';
 import {updateUserProfile} from '../services/authService';
+import {deleteMe} from '../services/api/usersApi';
+import {PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL} from '../config/legal';
 import useTranslation from '../hooks/useTranslation';
 
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);
@@ -180,22 +183,47 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
 
   const handlePrivacy = () => {
     closeSidebar();
-    setAlertModal({
-      visible: true,
-      title: t('settings.privacyPolicy'),
-      message: t('settings.privacyPolicyMessage'),
-      type: 'info',
-    });
+    void Linking.openURL(PRIVACY_POLICY_URL);
   };
 
   const handleTerms = () => {
     closeSidebar();
-    setAlertModal({
-      visible: true,
-      title: t('settings.termsOfService'),
-      message: t('settings.termsOfServiceMessage'),
-      type: 'info',
-    });
+    void Linking.openURL(TERMS_OF_SERVICE_URL);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      String(t('settings.deleteAccount') || 'Delete account'),
+      String(
+        t('settings.deleteAccountConfirm') ||
+          'This permanently deletes your account. This cannot be undone.',
+      ),
+      [
+        {text: String(t('common.cancel') || 'Cancel'), style: 'cancel'},
+        {
+          text: String(t('settings.deleteAccount') || 'Delete account'),
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await deleteMe();
+                await logoutCustomer();
+                await setCurrentUser(null);
+              } catch (error: any) {
+                setAlertModal({
+                  visible: true,
+                  title: String(t('common.error')),
+                  message:
+                    error?.message ||
+                    String(t('settings.deleteAccountFailed')),
+                  type: 'error',
+                });
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -256,13 +284,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
       });
       await setCurrentUser(updatedUser);
       setIsEditing(false);
-      setSuccessMessage(t('profile.profileUpdated') || 'Profile updated');
+      setSuccessMessage(String(t('profile.profileUpdated')));
       setShowSuccessModal(true);
     } catch (error: any) {
       setAlertModal({
         visible: true,
         title: t('common.error'),
-        message: error.message || 'Failed to update profile',
+        message: error.message || String(t('profile.failedToUpdateProfile')),
         type: 'error',
       });
     } finally {
@@ -317,6 +345,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const [imageError, setImageError] = useState(false);
   const phoneDisplay =
     currentUser?.phone || currentUser?.phoneNumber || t('profile.notAvailable');
+  const identityName = customerDisplayName(currentUser);
+  const profileIncomplete = isCustomerProfileIncomplete(currentUser);
 
   return (
     <View style={[styles.root, {backgroundColor: theme.background}]}>
@@ -328,281 +358,186 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
         <Text style={[styles.topBarTitle, {color: theme.text}]}>
           {t('settings.title') || 'Settings'}
         </Text>
-        <TouchableOpacity onPress={openSidebar} style={styles.menuBtn}>
+        <TouchableOpacity
+          onPress={openSidebar}
+          style={styles.menuBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.menu') || 'Menu'}>
           <Icon name="menu" size={26} color={theme.text} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {!currentUser ? (
-          <TouchableOpacity
-            style={[styles.profileHeader, {backgroundColor: theme.card}]}
-            onPress={() => navigation.navigate('Login')}
-            activeOpacity={0.7}>
-            <View
-              style={[
-                styles.profileHeaderImage,
-                styles.profileHeaderImagePlaceholder,
-                {backgroundColor: theme.primary},
-              ]}>
-              <Icon name="person" size={50} color="#fff" />
-            </View>
-            <Text style={[styles.profileHeaderName, {color: theme.text}]}>
-              {t('auth.continueAsGuest')}
-            </Text>
-            <Text style={[styles.profileHeaderPhone, {color: theme.primary}]}>
-              {t('auth.loginWithMobile')}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.profileHeader, {backgroundColor: theme.card}]}>
-            {(() => {
-              const imageUrl = (currentUser.profileImage || '').trim();
-              const hasValidImage =
-                imageUrl !== '' &&
-                !imageError &&
-                (imageUrl.startsWith('http') ||
-                  imageUrl.startsWith('file://') ||
-                  imageUrl.startsWith('content://'));
-              if (hasValidImage) {
-                return (
-                  <Image
-                    source={{uri: imageUrl}}
-                    style={styles.profileHeaderImage}
-                    onError={() => setImageError(true)}
-                    resizeMode="cover"
-                  />
-                );
-              }
-              return (
-                <View
-                  style={[
-                    styles.profileHeaderImage,
-                    styles.profileHeaderImagePlaceholder,
-                    {backgroundColor: theme.primary},
-                  ]}>
-                  <Text style={styles.profileHeaderInitials}>
-                    {getInitials(currentUser.name || '')}
-                  </Text>
-                </View>
-              );
-            })()}
-            <Text style={[styles.profileHeaderName, {color: theme.text}]}>
-              {currentUser.name}
-            </Text>
-            <Text style={[styles.profileHeaderPhone, {color: theme.primary}]}>
-              {phoneDisplay}
-            </Text>
-          </View>
-        )}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsHorizontalScrollIndicator={false}>
+        <SettingsProfileHeader
+          theme={theme}
+          isGuest={!currentUser}
+          name={identityName}
+          phone={phoneDisplay}
+          lead={
+            profileIncomplete
+              ? String(t('profile.incomplete') || 'Profile incomplete')
+              : t('settings.manageLead')
+          }
+          verifiedLabel={t('profile.verified')}
+          guestLabel={t('auth.continueAsGuest')}
+          guestSubtitle={t('auth.loginWithMobile')}
+          imageUrl={(currentUser?.profileImage || '').trim()}
+          imageError={imageError}
+          initials={getInitials(identityName || '')}
+          onImageError={() => setImageError(true)}
+          onGuestPress={() => navigation.navigate('Login')}
+        />
 
         {currentUser ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitleInline, {color: theme.textSecondary}]}>
-                {(t('profile.personalInformation') || 'PERSONAL INFORMATION').toUpperCase()}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (isEditing) void handleSaveProfile();
-                  else setIsEditing(true);
-                }}
-                style={styles.editBtn}
-                disabled={savingProfile}>
-                {savingProfile ? (
-                  <ActivityIndicator size="small" color={theme.primary} />
-                ) : (
-                  <Icon
-                    name={isEditing ? 'checkmark' : 'create-outline'}
-                    size={22}
-                    color={theme.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.infoCard, {backgroundColor: theme.card}]}>
-              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
-                {t('profile.fullName') || 'Full Name'}
-              </Text>
-              {isEditing ? (
-                <TextInput
-                  style={[
-                    styles.fieldInput,
-                    {color: theme.text, borderColor: theme.border},
-                  ]}
-                  value={name}
-                  onChangeText={setName}
-                />
-              ) : (
-                <Text style={[styles.fieldValue, {color: theme.text}]}>
-                  {name || '—'}
-                </Text>
-              )}
-
-              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
-                {t('profile.primaryPhone') || 'Primary Phone'}
-              </Text>
-              <View style={styles.lockedRow}>
-                <Text style={[styles.fieldValue, {color: theme.text, flex: 1}]}>
-                  {phoneDisplay}
-                </Text>
-                <Icon name="lock-closed" size={16} color={theme.textSecondary} />
-              </View>
-              <Text style={styles.verifiedHint}>
-                {t('profile.verifiedCannotChange') ||
-                  'Verified (Cannot be changed)'}
-              </Text>
-
-              <Text style={[styles.fieldLabel, {color: theme.textSecondary}]}>
-                {t('profile.gender') || 'Gender'}
-              </Text>
-              {isEditing ? (
-                <Select
-                  options={genderOptions.map((o) => ({value: o, label: o}))}
-                  value={gender}
-                  placeholder={t('profile.selectGender') || 'Select gender'}
-                  onChange={setGender}
-                />
-              ) : (
-                <Text style={[styles.fieldValue, {color: theme.text}]}>
-                  {gender || '—'}
-                </Text>
-              )}
-
-              <Text
-                style={[
-                  styles.fieldLabel,
-                  {color: theme.textSecondary, marginTop: 12},
-                ]}>
-                {t('profile.serviceAddress') || 'Service Address'}
-              </Text>
-              {isEditing ? (
-                <ServiceAddressFields
-                  value={serviceAddress}
-                  onChange={setServiceAddress}
-                  theme={theme}
-                  editable
-                  showUseCurrentLocation
-                  useCurrentLabel={
-                    t('profile.useCurrentLocation') || 'Use current location'
-                  }
-                  currentLocationLabel={
-                    t('profile.currentLocation') || 'Current location'
-                  }
-                />
-              ) : (
-                <View>
-                  {typeof serviceAddress.latitude === 'number' &&
-                  typeof serviceAddress.longitude === 'number' ? (
-                    <>
-                      <Text
-                        style={[
-                          styles.fieldLabel,
-                          {color: theme.textSecondary, marginTop: 4},
-                        ]}>
-                        {t('profile.currentLocation') || 'Current location'}
-                      </Text>
-                      <Text style={[styles.fieldValue, {color: theme.text}]}>
-                        {serviceAddress.latitude.toFixed(5)},{' '}
-                        {serviceAddress.longitude.toFixed(5)}
-                      </Text>
-                    </>
-                  ) : null}
-                  <Text
-                    style={[
-                      styles.fieldLabel,
-                      {color: theme.textSecondary, marginTop: 8},
-                    ]}>
-                    {t('profile.address') || 'Address'}
-                  </Text>
-                  <Text style={[styles.fieldValue, {color: theme.text}]}>
-                    {serviceAddress.address || '—'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.fieldLabel,
-                      {color: theme.textSecondary, marginTop: 8},
-                    ]}>
-                    {t('profile.landmark') || 'Landmark'}
-                  </Text>
-                  <Text style={[styles.fieldValue, {color: theme.text}]}>
-                    {serviceAddress.landmark || '—'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.fieldLabel,
-                      {color: theme.textSecondary, marginTop: 8},
-                    ]}>
-                    {t('profile.state') || 'State'}
-                  </Text>
-                  <Text style={[styles.fieldValue, {color: theme.text}]}>
-                    {serviceAddress.state || '—'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.fieldLabel,
-                      {color: theme.textSecondary, marginTop: 8},
-                    ]}>
-                    {t('profile.district') || 'District'}
-                  </Text>
-                  <Text style={[styles.fieldValue, {color: theme.text}]}>
-                    {serviceAddress.district || serviceAddress.city || '—'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.fieldLabel,
-                      {color: theme.textSecondary, marginTop: 8},
-                    ]}>
-                    {t('profile.pincode') || 'Pincode'}
-                  </Text>
-                  <Text style={[styles.fieldValue, {color: theme.text}]}>
-                    {serviceAddress.pincode || '—'}
-                  </Text>
-                </View>
-              )}
-
-              {isEditing ? (
-                <View style={styles.editActions}>
-                  <TouchableOpacity
-                    style={[styles.cancelBtn, {borderColor: theme.border}]}
-                    onPress={() => setIsEditing(false)}>
-                    <Text style={{color: theme.text}}>{t('common.cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.saveBtn, {backgroundColor: theme.primary}]}
-                    onPress={() => void handleSaveProfile()}
-                    disabled={savingProfile}>
-                    <Text style={{color: '#fff', fontWeight: '600'}}>
-                      {t('common.save')}
+          <SettingsPersonalInformation
+            theme={theme}
+            title={(
+              t('profile.personalInformation') || 'PERSONAL INFORMATION'
+            ).toUpperCase()}
+            editLabel={t('common.edit')}
+            saveLabel={t('common.save')}
+            cancelLabel={t('common.cancel')}
+            isEditing={isEditing}
+            saving={savingProfile}
+            nameLabel={t('profile.fullName') || 'Full Name'}
+            name={name}
+            onNameChange={setName}
+            phoneLabel={t('profile.primaryPhone') || 'Primary Phone'}
+            phone={phoneDisplay}
+            phoneLockedHint={String(t('profile.verifiedCannotChange'))}
+            verifiedLabel={t('profile.verified')}
+            genderLabel={t('profile.gender') || 'Gender'}
+            genderPlaceholder={t('profile.selectGender') || 'Select gender'}
+            gender={gender}
+            genderOptions={genderOptions}
+            onGenderChange={setGender}
+            addressLabel={t('profile.serviceAddress') || 'Service Address'}
+            addressEditor={
+              <ServiceAddressFields
+                value={serviceAddress}
+                onChange={setServiceAddress}
+                theme={theme}
+                editable
+                showUseCurrentLocation
+                useCurrentLabel={
+                  t('profile.useCurrentLocation') || 'Use current location'
+                }
+                currentLocationLabel={
+                  t('profile.currentLocation') || 'Current location'
+                }
+              />
+            }
+            addressView={
+              <View>
+                {typeof serviceAddress.latitude === 'number' &&
+                typeof serviceAddress.longitude === 'number' ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.fieldLabel,
+                        {color: theme.textSecondary, marginTop: 4},
+                      ]}>
+                      {t('profile.currentLocation') || 'Current location'}
                     </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-          </View>
+                    <Text style={[styles.fieldValue, {color: theme.text}]}>
+                      {serviceAddress.latitude.toFixed(5)},{' '}
+                      {serviceAddress.longitude.toFixed(5)}
+                    </Text>
+                  </>
+                ) : null}
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {color: theme.textSecondary, marginTop: 8},
+                  ]}>
+                  {t('profile.address') || 'Address'}
+                </Text>
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {serviceAddress.address || '—'}
+                </Text>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {color: theme.textSecondary, marginTop: 8},
+                  ]}>
+                  {t('profile.landmark') || 'Landmark'}
+                </Text>
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {serviceAddress.landmark || '—'}
+                </Text>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {color: theme.textSecondary, marginTop: 8},
+                  ]}>
+                  {t('profile.state') || 'State'}
+                </Text>
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {serviceAddress.state || '—'}
+                </Text>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {color: theme.textSecondary, marginTop: 8},
+                  ]}>
+                  {t('profile.district') || 'District'}
+                </Text>
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {serviceAddress.district || serviceAddress.city || '—'}
+                </Text>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {color: theme.textSecondary, marginTop: 8},
+                  ]}>
+                  {t('profile.pincode') || 'Pincode'}
+                </Text>
+                <Text style={[styles.fieldValue, {color: theme.text}]}>
+                  {serviceAddress.pincode || '—'}
+                </Text>
+              </View>
+            }
+            successMessage={successMessage}
+            onToggleEdit={() => {
+              if (isEditing) void handleSaveProfile();
+              else setIsEditing(true);
+            }}
+            onSave={() => void handleSaveProfile()}
+            onCancel={() => setIsEditing(false)}
+          />
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, {color: theme.textSecondary}]}>
-            ACCOUNT
-          </Text>
-          {currentUser ? (
-            <SettingItem
-              icon="log-out-outline"
-              title={t('auth.logout')}
-              subtitle={t('settings.logoutSubtitle')}
-              onPress={() => setShowLogoutModal(true)}
-            />
-          ) : (
-            <SettingItem
-              icon="log-in-outline"
-              title={t('auth.login')}
-              subtitle={t('auth.loginWithPinLead')}
-              onPress={() => navigation.navigate('Login')}
-            />
-          )}
-        </View>
+        <SettingsAccountSection
+          theme={theme}
+          title={(t('profile.account') || 'ACCOUNT').toUpperCase()}
+          actionLabel={currentUser ? t('auth.logout') : t('auth.login')}
+          actionHint={
+            currentUser
+              ? t('settings.logoutSubtitle')
+              : t('auth.loginWithPinLead')
+          }
+          variant={currentUser ? 'logout' : 'login'}
+          onAction={() => {
+            if (currentUser) setShowLogoutModal(true);
+            else navigation.navigate('Login');
+          }}
+        />
+        {currentUser ? (
+          <SettingsAccountSection
+            theme={theme}
+            title=""
+            actionLabel={t('settings.deleteAccount') || 'Delete account'}
+            actionHint={
+              t('settings.deleteAccountHint') ||
+              'Permanently remove your data from this app'
+            }
+            variant="logout"
+            onAction={handleDeleteAccount}
+          />
+        ) : null}
       </ScrollView>
 
       {showSidebar ? (
@@ -712,16 +647,30 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                 <Icon name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.actionButton, {backgroundColor: theme.primary}]}
-              onPress={handleEmailSupport}>
-              <Text style={styles.actionButtonText}>{t('settings.emailUs')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, {backgroundColor: '#4CAF50'}]}
-              onPress={handleCallSupport}>
-              <Text style={styles.actionButtonText}>{t('settings.callUs')}</Text>
-            </TouchableOpacity>
+            <Button
+              title={t('settings.emailUs')}
+              variant="primary"
+              block
+              onPress={handleEmailSupport}
+              colors={{
+                primary: theme.primary,
+                card: theme.card,
+                text: theme.text,
+                border: theme.border,
+              }}
+            />
+            <Button
+              title={t('settings.callUs')}
+              variant="primary"
+              block
+              onPress={handleCallSupport}
+              colors={{
+                primary: theme.success,
+                card: theme.card,
+                text: theme.text,
+                border: theme.border,
+              }}
+            />
           </View>
         </View>
       </Modal>
@@ -735,7 +684,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
       />
       <SuccessModal
         visible={showSuccessModal}
-        title="Success"
+        title={String(t('common.success'))}
         message={successMessage}
         onClose={() => setShowSuccessModal(false)}
       />
@@ -744,7 +693,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  root: {flex: 1},
+  root: {flex: 1, overflow: 'hidden'},
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -754,9 +703,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   topBarTitle: {fontSize: 18, fontWeight: '700'},
-  menuBtn: {padding: 4},
+  menuBtn: {padding: 8, minWidth: 40, minHeight: 40, justifyContent: 'center', alignItems: 'center'},
   container: {flex: 1},
-  content: {paddingVertical: 16},
+  content: {paddingVertical: 12, paddingBottom: 24},
   section: {marginBottom: 20},
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -781,7 +730,7 @@ const styles = StyleSheet.create({
     ...commonStyles.shadowSmall,
   },
   fieldLabel: {fontSize: 12, fontWeight: '600', marginTop: 10, marginBottom: 4},
-  fieldValue: {fontSize: 15, lineHeight: 22},
+  fieldValue: {fontSize: 15, lineHeight: 22, fontWeight: '600'},
   fieldInput: {
     borderWidth: 1,
     borderRadius: 8,

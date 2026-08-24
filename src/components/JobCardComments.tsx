@@ -7,11 +7,11 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {Button} from 'sapvt-ltd-app-packages';
+import useTranslation from '../hooks/useTranslation';
 
 export type JobComment = {
   _id: string;
@@ -48,12 +48,6 @@ function roleIcon(role: JobComment['role']): string {
   return 'admin-panel-settings';
 }
 
-function roleLabel(role: JobComment['role']): string {
-  if (role === 'customer') return 'Customer';
-  if (role === 'provider') return 'Provider';
-  return 'Admin';
-}
-
 function formatTime(value?: string | Date): string {
   if (!value) return '';
   try {
@@ -74,14 +68,27 @@ export default function JobCardComments({
   theme,
   onSubmit,
   canComment = true,
-  title = 'Comments',
-  placeholder = 'Write a comment…',
-  emptyText = 'No comments yet',
-  postLabel = 'Post',
+  title,
+  placeholder,
+  emptyText,
+  postLabel,
 }: Props) {
+  const {t} = useTranslation();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resolvedTitle = title ?? String(t('jobCard.comments'));
+  const resolvedPlaceholder =
+    placeholder ?? String(t('jobCard.commentPlaceholder'));
+  const resolvedEmpty = emptyText ?? String(t('jobCard.noComments'));
+  const resolvedPost = postLabel ?? String(t('jobCard.postComment'));
+
+  const roleLabel = (role: JobComment['role']): string => {
+    if (role === 'customer') return String(t('review.role.customer'));
+    if (role === 'provider') return String(t('review.role.provider'));
+    return String(t('review.role.admin'));
+  };
 
   const handlePost = async () => {
     const trimmed = text.trim();
@@ -92,7 +99,7 @@ export default function JobCardComments({
       await onSubmit(trimmed);
       setText('');
     } catch (e: any) {
-      setError(e?.message || 'Failed to post comment');
+      setError(e?.message || String(t('review.comments.postFailed')));
     } finally {
       setBusy(false);
     }
@@ -104,11 +111,13 @@ export default function JobCardComments({
     <View style={[styles.wrap, {backgroundColor: theme.card, borderColor: theme.border}]}>
       <View style={styles.header}>
         <Icon name="chat" size={18} color={theme.primary} />
-        <Text style={[styles.title, {color: theme.text}]}>{title}</Text>
+        <Text style={[styles.title, {color: theme.text}]}>{resolvedTitle}</Text>
       </View>
 
       {list.length === 0 ? (
-        <Text style={[styles.empty, {color: theme.textSecondary}]}>{emptyText}</Text>
+        <Text style={[styles.empty, {color: theme.textSecondary}]}>
+          {resolvedEmpty}
+        </Text>
       ) : (
         list.map(c => (
           <View
@@ -120,7 +129,9 @@ export default function JobCardComments({
                 {roleLabel(c.role)}
               </Text>
               {c.authorName ? (
-                <Text style={[styles.author, {color: theme.textSecondary}]} numberOfLines={1}>
+                <Text
+                  style={[styles.author, {color: theme.textSecondary}]}
+                  numberOfLines={1}>
                   {c.authorName}
                 </Text>
               ) : null}
@@ -146,30 +157,26 @@ export default function JobCardComments({
             ]}
             value={text}
             onChangeText={setText}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             placeholderTextColor={theme.textSecondary}
             multiline
             editable={!busy}
           />
-          <TouchableOpacity
-            style={[
-              styles.postBtn,
-              {
-                backgroundColor: theme.primary,
-                opacity: busy || !text.trim() ? 0.5 : 1,
-              },
-            ]}
+          <Button
+            title={resolvedPost}
+            variant="primary"
+            size="sm"
             onPress={() => void handlePost()}
-            disabled={busy || !text.trim()}>
-            {busy ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Icon name="send" size={16} color="#fff" />
-                <Text style={styles.postText}>{postLabel}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            disabled={busy || !text.trim()}
+            loading={busy}
+            style={{alignSelf: 'flex-end'}}
+            colors={{
+              primary: theme.primary,
+              card: theme.card,
+              text: '#fff',
+              border: theme.primary,
+            }}
+          />
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
@@ -238,20 +245,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     textAlignVertical: 'top',
-  },
-  postBtn: {
-    alignSelf: 'flex-end',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  postText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
   },
   error: {
     color: '#E53E3E',

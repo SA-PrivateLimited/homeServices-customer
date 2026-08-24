@@ -157,23 +157,13 @@ export default function ProviderRequestModal({
     }
 
     if (addressSel.mode === 'edit') {
-      setError(
-        String(
-          t('services.saveAddressFirst') ||
-            'Please save or cancel address edits first.',
-        ),
-      );
+      setError(String(t('services.saveAddressFirst')));
       return;
     }
 
     const cleaned = cleanAddress(addressSel.address);
     if (!cleaned) {
-      setError(
-        String(
-          t('common.invalidAddressMessage') ||
-            'Please enter a valid address with pincode.',
-        ),
-      );
+      setError(String(t('services.validAddressWithPincode')));
       return;
     }
 
@@ -195,15 +185,11 @@ export default function ProviderRequestModal({
         return false;
       });
       if (missing.length > 0) {
-        setError(
-          String(t('common.requiredQuestions') || 'Please answer required questions.'),
-        );
+        setError(String(t('common.pleaseAnswerRequiredQuestions')));
         return;
       }
     } else if (!problem.trim()) {
-      setError(
-        String(t('services.problemRequired') || 'Please describe the problem.'),
-      );
+      setError(String(t('services.problemRequired')));
       return;
     }
 
@@ -358,27 +344,20 @@ export default function ProviderRequestModal({
                   }
                   theme={theme}
                   language={language}
-                  title={String(t('services.serviceDetails') || 'Service details')}
-                  subtitle={String(
-                    t('services.answerQuestionsToHelp') ||
-                      'Please answer these questions to help us serve you better',
-                  )}
+                  title={String(t('services.serviceDetails'))}
+                  subtitle={String(t('services.answerQuestionsToHelp'))}
                   yesLabel={String(t('common.yes'))}
                   noLabel={String(t('common.no'))}
-                  selectPlaceholder={String(t('common.select') || 'Select…')}
-                  textPlaceholder={String(
-                    t('services.enterYourAnswer') || 'Enter your answer',
-                  )}
-                  numberPlaceholder={String(
-                    t('services.enterANumber') || 'Enter a number',
-                  )}
+                  selectPlaceholder={String(t('common.select'))}
+                  textPlaceholder={String(t('services.enterYourAnswer'))}
+                  numberPlaceholder={String(t('services.enterANumber'))}
                 />
               </View>
             )}
 
             <Text style={[styles.label, {color: theme.text, marginTop: 16}]}>
-              {t('services.describeProblem') || 'Describe the problem'}
-              {questionnaire.length === 0 ? ' *' : ` (${t('common.optional') || 'optional'})`}
+              {t('services.describeProblem')}
+              {questionnaire.length === 0 ? ' *' : ` (${t('common.optional')})`}
             </Text>
             <TextInput
               style={[
@@ -392,10 +371,7 @@ export default function ProviderRequestModal({
               multiline
               numberOfLines={4}
               textAlignVertical="top"
-              placeholder={
-                t('services.problemPlaceholder') ||
-                'What do you need help with?'
-              }
+              placeholder={String(t('services.problemPlaceholder'))}
               placeholderTextColor={theme.textSecondary}
               value={problem}
               onChangeText={setProblem}

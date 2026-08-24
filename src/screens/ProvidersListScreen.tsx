@@ -13,7 +13,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Image,
   Linking,
   StatusBar,
 } from 'react-native';
@@ -32,6 +31,7 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import EmptyState from '../components/EmptyState';
 import AdSlot from '../components/AdSlot';
+import {ProviderCard} from '../components/ProviderCard';
 import {getDistanceToCustomer} from '../services/providerLocationService';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
@@ -53,6 +53,7 @@ interface ProviderWithStatus {
   serviceType?: string;
   experience?: number;
   rating?: number;
+  totalReviews?: number;
   totalConsultations?: number;
   profileImage?: string;
   isOnline?: boolean;
@@ -214,6 +215,7 @@ export default function ProvidersListScreen({navigation}: any) {
           serviceType: (data as any).serviceType,
           experience: data.experience,
           rating: data.rating,
+          totalReviews: (data as any).totalReviews,
           totalConsultations: (data as any).totalConsultations,
           profileImage: (data as any).profileImage,
           isOnline: data.isOnline,
@@ -364,47 +366,29 @@ export default function ProvidersListScreen({navigation}: any) {
     }
   };
 
-  // Guest: name + profession + phone only
+  // Guest: no photo; same professional card, existing contact fields only
   const renderGuestProvider = ({item}: {item: ProviderWithStatus}) => {
     const phone = phoneOf(item);
     const profession = professionOf(item);
+    const location = districtOf(item, geoDistricts);
     return (
-      <View
-        style={[
-          styles.guestCard,
-          {backgroundColor: theme.card, borderColor: theme.border},
-        ]}>
-        <View style={styles.guestInfo}>
-          <Text style={[styles.name, {color: theme.text}]} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text
-            style={[styles.specialization, {color: theme.textSecondary}]}
-            numberOfLines={1}>
-            {profession}
-          </Text>
-          <Text style={[styles.guestPhone, {color: theme.text}]} numberOfLines={1}>
-            {phone || t('providers.noPhoneNumber')}
-          </Text>
-          {districtOf(item, geoDistricts) ? (
-            <Text style={[styles.guestPhone, {color: theme.textSecondary}]} numberOfLines={1}>
-              {t('providers.district')}: {districtOf(item, geoDistricts)}
-            </Text>
-          ) : null}
-        </View>
-        {phone ? (
-          <TouchableOpacity
-            style={[styles.callBtn, {backgroundColor: theme.primary}]}
-            onPress={() => handleCallProvider(item)}
-            activeOpacity={0.7}>
-            <Icon name="phone" size={20} color="#fff" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <ProviderCard
+        theme={theme}
+        name={item.name}
+        profession={profession}
+        location={location || undefined}
+        isOnline={Boolean(item.isOnline)}
+        onlineLabel={String(t('providers.online'))}
+        phone={phone || null}
+        callLabel={String(t('providers.callProvider'))}
+        requestLabel={String(t('providers.requestService'))}
+        hidePhoto
+        onCall={phone ? () => handleCallProvider(item) : undefined}
+        onRequest={() => openRequestModal(item)}
+      />
     );
   };
 
-  // Logged-in: richer card
   const openRequestModal = (item: ProviderWithStatus) => {
     const phoneVerified = currentUser?.phoneVerified === true;
     const customerId = currentUser?.id || (currentUser as any)?._id;
@@ -420,110 +404,48 @@ export default function ProvidersListScreen({navigation}: any) {
     setRequestProvider(item);
   };
 
-  const renderProvider = ({item}: {item: ProviderWithStatus}) => (
-    <View
-      style={[styles.card, {backgroundColor: theme.card, borderColor: theme.border}]}>
-      <TouchableOpacity
-        style={styles.cardMain}
+  const renderProvider = ({item}: {item: ProviderWithStatus}) => {
+    const phone = phoneOf(item);
+    const location = districtOf(item, geoDistricts);
+    const experienceLabel =
+      item.experience !== undefined && item.experience > 0
+        ? String(
+            t('providers.experienceWithYears', {
+              years: item.experience,
+              count: item.experience,
+            }),
+          )
+        : undefined;
+    const reviewsLabel =
+      item.totalReviews !== undefined && item.totalReviews > 0
+        ? `${item.totalReviews} ${
+            item.totalReviews === 1
+              ? t('providers.review')
+              : t('providers.reviews')
+          }`
+        : undefined;
+
+    return (
+      <ProviderCard
+        theme={theme}
+        name={item.name}
+        profession={professionOf(item)}
+        location={location || undefined}
+        experienceLabel={experienceLabel}
+        rating={item.rating}
+        reviewsLabel={reviewsLabel}
+        image={item.profileImage}
+        isOnline={Boolean(item.isOnline)}
+        onlineLabel={String(t('providers.online'))}
+        phone={phone || null}
+        callLabel={String(t('providers.callProvider'))}
+        requestLabel={String(t('providers.requestService'))}
         onPress={() => navigation.navigate('ProviderDetails', {provider: item})}
-        activeOpacity={0.7}>
-        <View style={styles.imageWrap}>
-          {item.profileImage ? (
-            <Image source={{uri: item.profileImage}} style={styles.image} />
-          ) : (
-            <View style={[styles.placeholder, {backgroundColor: theme.border}]}>
-              <Icon name="person" size={36} color={theme.textSecondary} />
-            </View>
-          )}
-          {item.isOnline && <View style={styles.onlineDot} />}
-        </View>
-
-        <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, {color: theme.text}]} numberOfLines={1}>
-              {item.name}
-            </Text>
-            {item.isOnline && (
-              <View style={styles.onlineBadge}>
-                <Text style={styles.onlineBadgeText}>{t('providers.online')}</Text>
-              </View>
-            )}
-          </View>
-
-          <Text style={[styles.specialization, {color: theme.textSecondary}]} numberOfLines={1}>
-            {professionOf(item)}
-          </Text>
-
-          {districtOf(item, geoDistricts) ? (
-            <View style={styles.locationItem}>
-              <Icon name="place" size={14} color={theme.primary} />
-              <Text style={[styles.locationText, {color: theme.textSecondary}]} numberOfLines={1}>
-                {districtOf(item, geoDistricts)}
-              </Text>
-            </View>
-          ) : null}
-
-          {item.rating !== undefined && item.rating > 0 && (
-            <View style={styles.ratingRow}>
-              <Icon name="star" size={14} color="#FFD700" />
-              <Text style={[styles.ratingText, {color: theme.text}]}>
-                {item.rating.toFixed(1)}
-              </Text>
-              {item.totalConsultations !== undefined && item.totalConsultations > 0 && (
-                <Text style={[styles.reviewsText, {color: theme.textSecondary}]}>
-                  ({item.totalConsultations} {item.totalConsultations === 1 ? t('providers.review') : t('providers.reviews')})
-                </Text>
-              )}
-            </View>
-          )}
-
-          {item.experience !== undefined && item.experience > 0 && (
-            <Text style={[styles.experience, {color: theme.textSecondary}]}>
-              {t('providers.experienceWithYears', {years: item.experience, count: item.experience})}
-            </Text>
-          )}
-
-          {(item.distance || item.eta) && (
-            <View style={styles.locationRow}>
-              {item.distance && (
-                <View style={styles.locationItem}>
-                  <Icon name="location-on" size={14} color={theme.primary} />
-                  <Text style={[styles.locationText, {color: theme.textSecondary}]}>
-                    {item.distance}
-                  </Text>
-                </View>
-              )}
-              {item.eta && (
-                <View style={styles.locationItem}>
-                  <Icon name="access-time" size={14} color={theme.primary} />
-                  <Text style={[styles.locationText, {color: theme.textSecondary}]}>
-                    ~{item.eta} min
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.cardActions}>
-        <TouchableOpacity
-          style={[styles.callBtn, {backgroundColor: theme.primary}]}
-          onPress={() => handleCallProvider(item)}
-          activeOpacity={0.7}>
-          <Icon name="phone" size={20} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.requestBtn, {backgroundColor: theme.primary}]}
-          onPress={() => openRequestModal(item)}
-          activeOpacity={0.7}>
-          <Text style={styles.requestBtnText} numberOfLines={2}>
-            {t('providers.requestService')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+        onCall={phone ? () => handleCallProvider(item) : undefined}
+        onRequest={() => openRequestModal(item)}
+      />
+    );
+  };
 
   const professionOptions = useMemo(() => {
     const fromProviders = providers
@@ -703,7 +625,7 @@ export default function ProvidersListScreen({navigation}: any) {
       {filteredProviders.length === 0 ? (
         <EmptyState
           icon="person-remove-outline"
-          title="No Providers Found"
+          title={String(t('providers.noProvidersFound'))}
           message={
             hasActiveFilters
               ? t('providers.tryAdjustingFilters')
@@ -863,11 +785,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   search: {
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
     marginBottom: 8,
-    padding: 12,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 999,
     borderWidth: 1,
+    fontSize: 15,
   },
   filterContainer: {
     marginBottom: 8,

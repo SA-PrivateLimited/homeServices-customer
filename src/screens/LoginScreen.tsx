@@ -347,7 +347,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         otpMode === 'signup'
           ? await registerWithOtp(fullPhone(), newPin.trim(), {
               idToken,
-              fullName: 'Customer',
             })
           : await resetPin(fullPhone(), newPin.trim(), {idToken});
       await firebasePhone.reset();

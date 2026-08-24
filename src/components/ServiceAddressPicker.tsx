@@ -183,12 +183,7 @@ export default function ServiceAddressPicker({
   const saveEdit = async () => {
     if (!value.selectedId) return;
     if (!value.address.address || !value.address.pincode) {
-      setEditError(
-        String(
-          t('common.invalidAddressMessage') ||
-            'Please enter a valid address with pincode.',
-        ),
-      );
+      setEditError(String(t('services.validAddressWithPincode')));
       return;
     }
     if (value.label === 'other' && !value.customLabel.trim()) {

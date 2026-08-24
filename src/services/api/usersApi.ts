@@ -3,7 +3,7 @@
  * Handles all user operations via backend API
  */
 
-import {apiGet, apiPut} from './apiClient';
+import {apiGet, apiPut, apiDelete} from './apiClient';
 
 export interface User {
   _id?: string;
@@ -66,6 +66,9 @@ export interface User {
   }>;
   profileImage?: string;
   gender?: string;
+  customerDisplayId?: number | string | null;
+  customerProfileComplete?: boolean;
+  canSwitchToPartner?: boolean;
   bloodGroup?: string;
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -92,6 +95,11 @@ export async function updateMe(updates: Partial<User>): Promise<User> {
   return apiPut<User>('/users/me', updates);
 }
 
+/** Permanently delete the signed-in customer account. */
+export async function deleteMe(): Promise<void> {
+  await apiDelete('/users/me');
+}
+
 /**
  * Get user by ID (if needed for admin/provider endpoints)
  */
@@ -109,5 +117,6 @@ export async function getUserById(userId: string): Promise<User | null> {
 export const usersApi = {
   getMe,
   updateMe,
+  deleteMe,
   getById: getUserById,
 };

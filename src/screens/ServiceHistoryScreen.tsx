@@ -26,12 +26,13 @@ import {getCustomerJobCards, JobCard} from '../services/jobCardService';
 import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
 import AdSlot from '../components/AdSlot';
+import {ServiceRequestCard} from '../components/ServiceRequestCard';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import {providersApi} from '../services/api/providersApi';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
 import useTranslation from '../hooks/useTranslation';
 
-type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed';
+type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
 type DateFilterType = 'all' | 'today' | 'week' | 'month';
 
 export default function ServiceHistoryScreen({navigation}: any) {
@@ -59,6 +60,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const [providerReview, setProviderReview] = useState<Review | null>(null);
   const [loadingProviderDetails, setLoadingProviderDetails] = useState(false);
   const [providerPhones, setProviderPhones] = useState<Record<string, string>>({});
+  const [providerImages, setProviderImages] = useState<Record<string, string>>({});
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -117,7 +119,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
       createdAt: req.createdAt ? new Date(req.createdAt) : new Date(),
       updatedAt: req.updatedAt ? new Date(req.updatedAt) : new Date(),
       urgency: req.urgency,
-    } as JobCard & {urgency?: string};
+      providerImage: req.providerImage,
+    } as JobCard & {urgency?: string; providerImage?: string};
   };
 
   const loadHistory = async () => {
@@ -168,6 +171,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       });
 
       const phoneMap: Record<string, string> = {};
+      const imageMap: Record<string, string> = {};
       const providerIds = new Set(allCards.map(card => card.providerId).filter(Boolean));
 
       await Promise.all(
@@ -181,6 +185,11 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 (provider as any).phone ||
                 (provider as any).primaryPhone;
               if (phone) phoneMap[providerId] = phone;
+              const image =
+                (provider as any).profileImage ||
+                (provider as any).photo ||
+                (provider as any).image;
+              if (image) imageMap[providerId] = image;
             }
           } catch (error) {
             console.error(`Error fetching phone for provider ${providerId}:`, error);
@@ -188,6 +197,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         }),
       );
       setProviderPhones(phoneMap);
+      setProviderImages(imageMap);
       setJobCards(allCards);
     } catch (error: any) {
       console.error('❌ Error loading history:', error);
@@ -297,9 +307,13 @@ export default function ServiceHistoryScreen({navigation}: any) {
       case 'completed':
         return '#34C759';
       case 'in-progress':
-        return '#FF6B35';
+        return theme.warning;
       case 'accepted':
-        return '#FF9500';
+        return theme.success;
+      case 'cancelled':
+        return theme.error;
+      case 'rejected':
+        return theme.error;
       case 'pending':
         return '#8E8E93';
       default:
@@ -307,12 +321,21 @@ export default function ServiceHistoryScreen({navigation}: any) {
     }
   };
 
-  const normalizeStatus = (status: string): 'pending' | 'accepted' | 'in-progress' | 'completed' => {
+  const normalizeStatus = (
+    status: string,
+  ): 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled' | 'rejected' => {
     const lowerStatus = status?.toLowerCase() || '';
 
-    // Completed statuses
     if (lowerStatus === 'completed' || lowerStatus === 'done' || lowerStatus === 'finished') {
       return 'completed';
+    }
+
+    if (lowerStatus === 'cancelled' || lowerStatus === 'canceled') {
+      return 'cancelled';
+    }
+
+    if (lowerStatus === 'rejected' || lowerStatus === 'declined') {
+      return 'rejected';
     }
 
     // In-progress statuses
@@ -328,7 +351,6 @@ export default function ServiceHistoryScreen({navigation}: any) {
       return 'accepted';
     }
 
-    // Everything else (pending, waiting, new, cancelled, etc.) is treated as pending
     return 'pending';
   };
 
@@ -341,6 +363,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
         return t('services.inProgress');
       case 'accepted':
         return t('services.accepted');
+      case 'cancelled':
+        return t('services.cancelled');
+      case 'rejected':
+        return t('activeService.declined');
       case 'pending':
         return t('services.pending');
       default:
@@ -418,6 +444,12 @@ export default function ServiceHistoryScreen({navigation}: any) {
       case 'completed':
         filtered = jobCards.filter(card => normalizeStatus(card.status) === 'completed');
         break;
+      case 'cancelled':
+        filtered = jobCards.filter(card => {
+          const ns = normalizeStatus(card.status);
+          return ns === 'cancelled' || ns === 'rejected';
+        });
+        break;
       default:
         filtered = jobCards;
     }
@@ -471,6 +503,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const acceptedCount = jobCards.filter(card => normalizeStatus(card.status) === 'accepted').length;
   const inProgressCount = jobCards.filter(card => normalizeStatus(card.status) === 'in-progress').length;
   const completedCount = jobCards.filter(card => normalizeStatus(card.status) === 'completed').length;
+  const cancelledCount = jobCards.filter(card => {
+    const ns = normalizeStatus(card.status);
+    return ns === 'cancelled' || ns === 'rejected';
+  }).length;
   const filteredCount = filteredCards.length;
 
   const getSelectedServiceTypeName = () => {
@@ -502,167 +538,108 @@ export default function ServiceHistoryScreen({navigation}: any) {
     });
   };
 
-  const renderServiceCard = (jobCard: JobCard) => (
-    <TouchableOpacity
-      key={jobCard.id}
-      style={[styles.jobCard, {backgroundColor: theme.card}]}
-      activeOpacity={0.85}
-      onPress={() => openServiceDetails(jobCard)}>
-      {/* Header */}
-      <View style={styles.jobCardHeader}>
-        <View style={styles.serviceTypeContainer}>
-          <Icon name="build" size={24} color={theme.primary} />
-          <View style={styles.serviceTypeText}>
-            <Text style={[styles.serviceType, {color: theme.text}]}>
-              {jobCard.serviceType}
-            </Text>
-            <Text style={[styles.providerName, {color: theme.textSecondary}]}>
-              {jobCard.providerName || t('serviceHistory.waitingForProvider')}
-            </Text>
+  const renderServiceCard = (jobCard: JobCard) => {
+    const ns = normalizeStatus(jobCard.status);
+    const assigned = ns === 'accepted' || ns === 'in-progress';
+    const allotted = ns !== 'pending' && Boolean(jobCard.providerId || jobCard.providerName);
+    const avatarSrc = allotted
+      ? providerImages[jobCard.providerId] || (jobCard as any).providerImage || null
+      : null;
+    const addressLine = [
+      jobCard.customerAddress?.address,
+      jobCard.customerAddress?.pincode,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const urgency = (jobCard as any).urgency;
+    const hasScheduledTime =
+      jobCard.scheduledTime &&
+      jobCard.scheduledTime instanceof Date &&
+      !isNaN(jobCard.scheduledTime.getTime());
+    const isImmediate =
+      urgency === 'immediate' || (!urgency && urgency !== 'scheduled' && !hasScheduledTime);
+    const phone =
+      assigned && jobCard.providerId ? providerPhones[jobCard.providerId] : undefined;
+    const facts = [
+      addressLine
+        ? {
+            icon: 'location-on',
+            label: String(t('serviceHistory.location')),
+            value: addressLine,
+          }
+        : null,
+      {
+        icon: 'calendar-today',
+        label: String(t('serviceHistory.requestedOn')),
+        value: formatDate(jobCard.scheduledTime || jobCard.createdAt),
+      },
+    ].filter(Boolean) as {icon: string; label: string; value: string}[];
 
-            {/* Show provider phone for accepted and in-progress status */}
-            {(normalizeStatus(jobCard.status) === 'accepted' || normalizeStatus(jobCard.status) === 'in-progress') &&
-             providerPhones[jobCard.providerId] && (
-              <View style={styles.providerPhoneRow}>
-                <Icon name="phone" size={14} color={theme.primary} />
-                <Text style={[styles.providerPhone, {color: theme.textSecondary}]}>
-                  {providerPhones[jobCard.providerId]}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.callButton, {backgroundColor: theme.primary}]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleCallProvider(providerPhones[jobCard.providerId]);
-                  }}>
-                  <Icon name="phone" size={14} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Show PIN for in-progress status */}
-            {normalizeStatus(jobCard.status) === 'in-progress' && (jobCard as any).taskPIN && (
-              <View style={[styles.pinDisplayCard, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
-                <Icon name="lock" size={16} color={theme.primary} />
-                <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                  {t('jobCard.yourVerificationPIN')}
-                </Text>
-                <Text style={[styles.pinValue, {color: theme.primary}]}>
-                  {(jobCard as any).taskPIN}
-                </Text>
-                <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                  {t('jobCard.sharePIN')}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={styles.statusChipsContainer}>
+    return (
+      <ServiceRequestCard
+        theme={theme}
+        title={jobCard.serviceType || t('common.services')}
+        subtitle={
+          assigned
+            ? jobCard.providerName || undefined
+            : ns === 'pending'
+              ? t('serviceHistory.waitingForProvider')
+              : jobCard.providerName || undefined
+        }
+        serviceType={jobCard.serviceType}
+        chips={[
+          {label: getStatusText(jobCard.status), color: getStatusColor(jobCard.status)},
+          {
+            label: isImmediate ? t('services.immediate') : t('services.scheduled'),
+            color: isImmediate ? '#FF9500' : '#007AFF',
+          },
+        ]}
+        facts={facts}
+        phone={phone || null}
+        phoneLabel={String(t('serviceHistory.phone'))}
+        callLabel={String(t('activeService.callProvider'))}
+        avatarSrc={avatarSrc}
+        avatarName={allotted ? jobCard.providerName || String(t('services.provider')) : null}
+        viewDetailsLabel={String(t('jobCard.viewDetails'))}
+        onPress={() => openServiceDetails(jobCard)}
+        onCall={phone ? () => handleCallProvider(phone) : undefined}
+        leadingAction={
+          jobCard.status === 'completed' ? (
+            <TouchableOpacity
+              style={styles.reviewButton}
+              onPress={() => handleReview(jobCard)}>
+              <Icon name="star" size={16} color="#FFD700" />
+              <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }>
+        {ns === 'in-progress' && (jobCard as any).taskPIN ? (
           <View
             style={[
-              styles.statusBadge,
-              {backgroundColor: getStatusColor(jobCard.status) + '20'},
+              styles.pinDisplayCard,
+              {backgroundColor: theme.primary + '15', borderColor: theme.primary},
             ]}>
-            <Text
-              style={[
-                styles.statusText,
-                {color: getStatusColor(jobCard.status)},
-              ]}>
-              {getStatusText(jobCard.status)}
+            <Icon name="lock" size={16} color={theme.primary} />
+            <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
+              {t('jobCard.yourVerificationPIN')}
+            </Text>
+            <Text style={[styles.pinValue, {color: theme.primary}]}>
+              {(jobCard as any).taskPIN}
             </Text>
           </View>
-          {/* Service Type Chip */}
-          {(() => {
-            const urgency = (jobCard as any).urgency;
-            if (urgency === 'immediate') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#FF9500' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#FF9500'}]}>
-                    {t('services.immediate')}
-                  </Text>
-                </View>
-              );
-            }
-            if (urgency === 'scheduled') {
-              return (
-                <View style={[styles.serviceTypeChip, {backgroundColor: '#007AFF' + '20'}]}>
-                  <Text style={[styles.serviceTypeChipText, {color: '#007AFF'}]}>
-                    {t('services.scheduled')}
-                  </Text>
-                </View>
-              );
-            }
-            const hasScheduledTime = jobCard.scheduledTime && jobCard.scheduledTime instanceof Date && !isNaN(jobCard.scheduledTime.getTime());
-            const isImmediate = !hasScheduledTime;
-            return (
-              <View style={[styles.serviceTypeChip, {backgroundColor: isImmediate ? '#FF9500' + '20' : '#007AFF' + '20'}]}>
-                <Text style={[styles.serviceTypeChipText, {color: isImmediate ? '#FF9500' : '#007AFF'}]}>
-                  {isImmediate ? t('services.immediate') : t('services.scheduled')}
-                </Text>
-              </View>
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* Problem */}
-      {jobCard.problem && (
-        <Text style={[styles.problemText, {color: theme.text}]} numberOfLines={2}>
-          {jobCard.problem}
-        </Text>
-      )}
-
-      {/* Address */}
-      {jobCard.customerAddress && (
-        <View style={styles.addressRow}>
-          <Icon name="location-on" size={16} color={theme.textSecondary} />
-          <Text style={[styles.addressText, {color: theme.textSecondary}]} numberOfLines={1}>
-            {jobCard.customerAddress.address}
-            {jobCard.customerAddress.pincode && `, ${jobCard.customerAddress.pincode}`}
-          </Text>
-        </View>
-      )}
-
-      {/* Date */}
-      <View style={styles.dateRow}>
-        <Icon name="calendar-today" size={16} color={theme.textSecondary} />
-        <Text style={[styles.dateText, {color: theme.textSecondary}]}>
-          {formatDate(jobCard.scheduledTime || jobCard.createdAt)}
-        </Text>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        {jobCard.status === 'completed' && (
-          <TouchableOpacity
-            style={styles.reviewButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleReview(jobCard);
-            }}>
-            <Icon name="star" size={16} color="#FFD700" />
-            <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            openServiceDetails(jobCard);
-          }}>
-          <Text style={[styles.viewButtonText, {color: theme.primary}]}>
-            {t('jobCard.viewDetails')}
-          </Text>
-          <Icon name="chevron-right" size={20} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+        ) : null}
+      </ServiceRequestCard>
+    );
+  };
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       {/* Header */}
       <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
         <Text style={[styles.headerTitle, {color: theme.text}]}>{t('services.myServices')}</Text>
+        <Text style={[styles.headerIntro, {color: theme.textSecondary}]}>
+          {t('serviceHistory.intro')}
+        </Text>
       </View>
 
       {/* Filter Buttons */}
@@ -674,8 +651,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === 'all' && styles.filterButtonActive,
-              {backgroundColor: filter === 'all' ? theme.primary : theme.card},
+              {
+                backgroundColor: filter === 'all' ? theme.primary : theme.card,
+                borderColor: filter === 'all' ? theme.primary : theme.border,
+              },
             ]}
             onPress={() => setFilter('all')}>
             <Text
@@ -689,8 +668,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === 'pending' && styles.filterButtonActive,
-              {backgroundColor: filter === 'pending' ? theme.primary : theme.card},
+              {
+                backgroundColor: filter === 'pending' ? theme.primary : theme.card,
+                borderColor: filter === 'pending' ? theme.primary : theme.border,
+              },
             ]}
             onPress={() => setFilter('pending')}>
             <Text
@@ -704,8 +685,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === 'accepted' && styles.filterButtonActive,
-              {backgroundColor: filter === 'accepted' ? theme.primary : theme.card},
+              {
+                backgroundColor: filter === 'accepted' ? theme.primary : theme.card,
+                borderColor: filter === 'accepted' ? theme.primary : theme.border,
+              },
             ]}
             onPress={() => setFilter('accepted')}>
             <Text
@@ -719,8 +702,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === 'in-progress' && styles.filterButtonActive,
-              {backgroundColor: filter === 'in-progress' ? theme.primary : theme.card},
+              {
+                backgroundColor: filter === 'in-progress' ? theme.primary : theme.card,
+                borderColor: filter === 'in-progress' ? theme.primary : theme.border,
+              },
             ]}
             onPress={() => setFilter('in-progress')}>
             <Text
@@ -734,8 +719,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === 'completed' && styles.filterButtonActive,
-              {backgroundColor: filter === 'completed' ? theme.primary : theme.card},
+              {
+                backgroundColor: filter === 'completed' ? theme.primary : theme.card,
+                borderColor: filter === 'completed' ? theme.primary : theme.border,
+              },
             ]}
             onPress={() => setFilter('completed')}>
             <Text
@@ -746,13 +733,30 @@ export default function ServiceHistoryScreen({navigation}: any) {
               {t('services.completed')} ({completedCount})
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              {
+                backgroundColor: filter === 'cancelled' ? theme.primary : theme.card,
+                borderColor: filter === 'cancelled' ? theme.primary : theme.border,
+              },
+            ]}
+            onPress={() => setFilter('cancelled')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                {color: filter === 'cancelled' ? '#fff' : theme.text},
+              ]}>
+              {t('services.cancelled')} ({cancelledCount})
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
       {/* Additional Filters Row */}
-      <View style={styles.additionalFiltersContainer}>
+      <View style={[styles.additionalFiltersContainer, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
         <TouchableOpacity
-          style={[styles.additionalFilterButton, {backgroundColor: theme.card}]}
+          style={[styles.additionalFilterButton, {backgroundColor: theme.card, borderColor: theme.border}]}
           onPress={() => setShowServiceTypeModal(true)}>
           <Icon name="build" size={18} color={theme.primary} />
           <Text style={[styles.additionalFilterText, {color: theme.text}]}>
@@ -762,7 +766,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.additionalFilterButton, {backgroundColor: theme.card}]}
+          style={[styles.additionalFilterButton, {backgroundColor: theme.card, borderColor: theme.border}]}
           onPress={() => setShowDateFilterModal(true)}>
           <Icon name="calendar-today" size={18} color={theme.primary} />
           <Text style={[styles.additionalFilterText, {color: theme.text}]}>
@@ -790,7 +794,17 @@ export default function ServiceHistoryScreen({navigation}: any) {
       {filteredCards.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Icon
-            name={filter === 'pending' ? 'schedule' : filter === 'accepted' ? 'check-circle' : filter === 'completed' ? 'check-circle' : 'history'}
+            name={
+              filter === 'pending'
+                ? 'schedule'
+                : filter === 'accepted'
+                  ? 'check-circle'
+                  : filter === 'completed'
+                    ? 'check-circle'
+                    : filter === 'cancelled'
+                      ? 'cancel'
+                      : 'history'
+            }
             size={64}
             color={theme.textSecondary}
           />
@@ -801,15 +815,19 @@ export default function ServiceHistoryScreen({navigation}: any) {
               ? t('services.noAcceptedServices')
               : filter === 'completed'
               ? t('services.noCompletedServices')
+              : filter === 'cancelled'
+              ? t('services.noCancelledServices')
               : t('services.noServices')}
           </Text>
           <Text style={[styles.emptySubtext, {color: theme.textSecondary}]}>
             {filter === 'pending'
-              ? t('services.noPendingServices')
+              ? t('serviceHistory.emptyPending')
               : filter === 'accepted'
-              ? t('services.noAcceptedServices')
+              ? t('serviceHistory.emptyAccepted')
               : filter === 'completed'
-              ? t('services.noCompletedServices')
+              ? t('serviceHistory.emptyCompleted')
+              : filter === 'cancelled'
+              ? t('serviceHistory.emptyCancelled')
               : t('services.noServices')}
           </Text>
         </View>
@@ -1262,8 +1280,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
   },
+  headerIntro: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   centerContent: {
     alignItems: 'center',
@@ -1486,12 +1510,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 12,
-    minWidth: 100,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginRight: 8,
     alignItems: 'center',
+    borderWidth: 1,
   },
   filterButtonActive: {
     // Active state handled by backgroundColor
@@ -1505,25 +1529,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
   additionalFilterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 12,
     gap: 6,
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
   },
   additionalFilterText: {
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
+    minWidth: 0,
   },
   clearFiltersButton: {
     flexDirection: 'row',

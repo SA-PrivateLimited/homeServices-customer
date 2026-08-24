@@ -66,7 +66,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   isDarkMode: false,
   isLoading: false,
-  language: 'en',
+  language: 'hi',
 
   // Service Request initial state
   currentUser: null,
@@ -202,7 +202,7 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem('notifications'),
       ]);
 
-      const storedLanguage = (language || 'en') as 'en' | 'hi';
+      const storedLanguage = (language || 'hi') as 'en' | 'hi';
       
       // Initialize i18n with stored language
       await changeLanguage(storedLanguage);

@@ -3,6 +3,9 @@
   "serviceProvider": "Service Provider",
   "loading": "Loading providers…",
   "searchProviders": "Search providers",
+  "callProvider": "Call Provider",
+  "contactProvider": "Contact Provider",
+  "offline": "Offline",
   "noProvidersFound": "No Providers Found",
   "noProvidersFoundMessage": "No providers found. Check back later!",
   "tryAdjustingFilters": "Try adjusting your filters",
@@ -41,6 +44,10 @@
   "allDistricts": "All districts",
   "district": "District",
   "submitRequest": "Submit request",
-  "requestSentTitle": "Request submitted"
+  "requestSentTitle": "Request submitted",
+  "contactAfterAccept": "You can contact the provider after your service request is accepted.",
+  "contactInactive": "The provider phone number is no longer available for this request.",
+  "contactMasked": "Direct calling is not available. Send a service request.",
+  "contactActiveOnly": "The provider phone number is shown only while your request is active.",
+  "contactUnavailable": "Provider contact is not available right now."
 }
-

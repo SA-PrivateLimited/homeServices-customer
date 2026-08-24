@@ -6,6 +6,7 @@ import React from 'react';
 import {View, Text, TextInput, StyleSheet, TouchableOpacity} from 'react-native';
 import {Select, MultiSelect} from 'sapvt-ltd-app-packages';
 import type {QuestionnaireQuestion} from '../services/serviceCategoriesService';
+import useTranslation from '../hooks/useTranslation';
 
 type ThemeColors = {
   text: string;
@@ -58,12 +59,21 @@ export default function ServiceQuestionnaireFields({
   language,
   title,
   subtitle,
-  yesLabel = 'Yes',
-  noLabel = 'No',
-  selectPlaceholder = 'Select…',
-  textPlaceholder = 'Enter your answer',
-  numberPlaceholder = 'Enter a number',
+  yesLabel,
+  noLabel,
+  selectPlaceholder,
+  textPlaceholder,
+  numberPlaceholder,
 }: Props) {
+  const {t} = useTranslation();
+  const resolvedYes = yesLabel ?? String(t('common.yes'));
+  const resolvedNo = noLabel ?? String(t('common.no'));
+  const resolvedSelect = selectPlaceholder ?? String(t('common.select'));
+  const resolvedText =
+    textPlaceholder ?? String(t('services.enterYourAnswer'));
+  const resolvedNumber =
+    numberPlaceholder ?? String(t('services.enterANumber'));
+
   if (!questions?.length) return null;
 
   return (
@@ -99,7 +109,7 @@ export default function ServiceQuestionnaireFields({
               onChangeText={text => onChange(question.id, text)}
               placeholder={placeholderText(
                 question,
-                textPlaceholder,
+                resolvedText,
                 language,
               )}
               placeholderTextColor={theme.textSecondary}
@@ -121,7 +131,7 @@ export default function ServiceQuestionnaireFields({
               onChangeText={text => onChange(question.id, text)}
               placeholder={placeholderText(
                 question,
-                numberPlaceholder,
+                resolvedNumber,
                 language,
               )}
               placeholderTextColor={theme.textSecondary}
@@ -146,7 +156,7 @@ export default function ServiceQuestionnaireFields({
                       answers[question.id] === true ? '#fff' : theme.text,
                     fontWeight: '600',
                   }}>
-                  {yesLabel}
+                  {resolvedYes}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -164,7 +174,7 @@ export default function ServiceQuestionnaireFields({
                       answers[question.id] === false ? '#fff' : theme.text,
                     fontWeight: '600',
                   }}>
-                  {noLabel}
+                  {resolvedNo}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -182,7 +192,7 @@ export default function ServiceQuestionnaireFields({
                   : ''
               }
               onChange={value => onChange(question.id, value)}
-              placeholder={selectPlaceholder}
+              placeholder={resolvedSelect}
             />
           ) : null}
 
@@ -199,7 +209,7 @@ export default function ServiceQuestionnaireFields({
                   : []
               }
               onChange={value => onChange(question.id, value)}
-              placeholder={selectPlaceholder}
+              placeholder={resolvedSelect}
             />
           ) : null}
         </View>
