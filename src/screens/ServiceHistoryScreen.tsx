@@ -27,25 +27,54 @@ import {getJobCardReview, getProviderReviews, Review} from '../services/reviewSe
 import ReviewModal from '../components/ReviewModal';
 import AdSlot from '../components/AdSlot';
 import {ServiceRequestCard} from '../components/ServiceRequestCard';
+import {CrystalFilterMenu} from '../components/CrystalFilterMenu';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
 import {providersApi} from '../services/api/providersApi';
 import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
+import {
+  isLiveStatus,
+  sortHistoryRows,
+} from '../utils/historyNowFilter';
 import useTranslation from '../hooks/useTranslation';
+import {bilingualProfessionLine} from 'sapvt-ltd-app-packages';
+import {
+  useClearHelpRequest,
+  useSetHelpRequestCandidates,
+} from '../components/help/helpRequestContext';
+import {pickHelpCandidates} from '../components/help/helpRequestMapper';
+import type {ServiceRequest} from '../services/api/serviceRequestsApi';
 
-type FilterType = 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
+type FilterType = 'now' | 'all' | 'pending' | 'accepted' | 'in-progress' | 'completed' | 'cancelled';
 type DateFilterType = 'all' | 'today' | 'week' | 'month';
+
+const DATE_OPTIONS: DateFilterType[] = ['all', 'today', 'week', 'month'];
+
+function dateFilterLabelKey(key: DateFilterType): string {
+  switch (key) {
+    case 'today':
+      return 'date.filter.today';
+    case 'week':
+      return 'date.filter.week';
+    case 'month':
+      return 'date.filter.month';
+    default:
+      return 'date.filter.all';
+  }
+}
 
 export default function ServiceHistoryScreen({navigation}: any) {
   const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+  const setHelpCandidates = useSetHelpRequestCandidates();
+  const clearHelpRequest = useClearHelpRequest();
 
   const [jobCards, setJobCards] = useState<JobCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedJobCard, setSelectedJobCard] = useState<JobCard | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [filter, setFilter] = useState<FilterType>('now');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
@@ -80,7 +109,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
   useFocusEffect(
     useCallback(() => {
       void loadHistory();
-    }, [currentUser?.id, currentUser?._id]),
+      return () => {
+        clearHelpRequest();
+      };
+    }, [currentUser?.id, currentUser?._id, clearHelpRequest]),
   );
 
   const loadServiceCategories = async () => {
@@ -199,6 +231,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
       setProviderPhones(phoneMap);
       setProviderImages(imageMap);
       setJobCards(allCards);
+      // Web HistoryPage: feed Help picker with live-ish request candidates
+      setHelpCandidates(
+        pickHelpCandidates((serviceRequests || []) as ServiceRequest[]),
+      );
     } catch (error: any) {
       console.error('❌ Error loading history:', error);
       setAlertModal({
@@ -208,6 +244,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         type: 'error',
       });
       setJobCards([]);
+      setHelpCandidates([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -432,6 +469,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
     // Status filter
     switch (filter) {
+      case 'now':
+        filtered = jobCards.filter(card => isLiveStatus(card as any));
+        filtered = sortHistoryRows(filtered as any, 'now') as typeof jobCards;
+        break;
       case 'pending':
         filtered = jobCards.filter(card => normalizeStatus(card.status) === 'pending');
         break;
@@ -487,6 +528,29 @@ export default function ServiceHistoryScreen({navigation}: any) {
     return filtered;
   }, [jobCards, filter, serviceTypeFilter, dateFilter]);
 
+  const serviceFilterOptions = useMemo(
+    () => [
+      {value: 'all', label: String(t('history.allServices'))},
+      ...availableServiceTypes.map(type => {
+        const cat = serviceCategories.find(c => c.name === type);
+        return {
+          value: type,
+          label: bilingualProfessionLine(type, {nameHi: cat?.nameHi}),
+        };
+      }),
+    ],
+    [availableServiceTypes, serviceCategories, t],
+  );
+
+  const dateFilterOptions = useMemo(
+    () =>
+      DATE_OPTIONS.map(opt => ({
+        value: opt,
+        label: String(t(dateFilterLabelKey(opt))),
+      })),
+    [t],
+  );
+
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.centerContent, {backgroundColor: theme.background}]}>
@@ -499,6 +563,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
   }
 
   const allCount = jobCards.length;
+  const nowCount = jobCards.filter(card => isLiveStatus(card as any)).length;
   const pendingCount = jobCards.filter(card => normalizeStatus(card.status) === 'pending').length;
   const acceptedCount = jobCards.filter(card => normalizeStatus(card.status) === 'accepted').length;
   const inProgressCount = jobCards.filter(card => normalizeStatus(card.status) === 'in-progress').length;
@@ -510,18 +575,14 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const filteredCount = filteredCards.length;
 
   const getSelectedServiceTypeName = () => {
-    if (serviceTypeFilter === 'all') return t('serviceHistory.allServices');
-    return serviceCategories.find(cat => cat.name === serviceTypeFilter)?.name || serviceTypeFilter;
+    if (serviceTypeFilter === 'all') return String(t('history.allServices'));
+    const cat = serviceCategories.find(c => c.name === serviceTypeFilter);
+    return bilingualProfessionLine(serviceTypeFilter, {
+      nameHi: cat?.nameHi,
+    });
   };
 
-  const getDateFilterLabel = () => {
-    switch (dateFilter) {
-      case 'today': return t('serviceHistory.today');
-      case 'week': return t('serviceHistory.thisWeek');
-      case 'month': return t('serviceHistory.thisMonth');
-      default: return t('serviceHistory.allTime');
-    }
-  };
+  const getDateFilterLabel = () => String(t(dateFilterLabelKey(dateFilter)));
 
   const openServiceDetails = (jobCard: JobCard) => {
     if (jobCard.status === 'completed') {
@@ -551,33 +612,25 @@ export default function ServiceHistoryScreen({navigation}: any) {
     ]
       .filter(Boolean)
       .join(', ');
-    const urgency = (jobCard as any).urgency;
-    const hasScheduledTime =
-      jobCard.scheduledTime &&
-      jobCard.scheduledTime instanceof Date &&
-      !isNaN(jobCard.scheduledTime.getTime());
-    const isImmediate =
-      urgency === 'immediate' || (!urgency && urgency !== 'scheduled' && !hasScheduledTime);
     const phone =
       assigned && jobCard.providerId ? providerPhones[jobCard.providerId] : undefined;
     const facts = [
       addressLine
         ? {
-            icon: 'location-on',
-            label: String(t('serviceHistory.location')),
+            icon: 'location_on',
             value: addressLine,
           }
         : null,
       {
-        icon: 'calendar-today',
-        label: String(t('serviceHistory.requestedOn')),
+        icon: 'schedule',
         value: formatDate(jobCard.scheduledTime || jobCard.createdAt),
       },
-    ].filter(Boolean) as {icon: string; label: string; value: string}[];
+    ].filter(Boolean) as {icon: string; value: string}[];
 
     return (
       <ServiceRequestCard
         theme={theme}
+        statusKey={ns}
         title={jobCard.serviceType || t('common.services')}
         subtitle={
           assigned
@@ -588,16 +641,14 @@ export default function ServiceHistoryScreen({navigation}: any) {
         }
         serviceType={jobCard.serviceType}
         chips={[
-          {label: getStatusText(jobCard.status), color: getStatusColor(jobCard.status)},
           {
-            label: isImmediate ? t('services.immediate') : t('services.scheduled'),
-            color: isImmediate ? '#FF9500' : '#007AFF',
+            label: String(getStatusText(jobCard.status) || ''),
+            color: getStatusColor(jobCard.status),
           },
         ]}
         facts={facts}
         phone={phone || null}
-        phoneLabel={String(t('serviceHistory.phone'))}
-        callLabel={String(t('activeService.callProvider'))}
+        callLabel={String(t('contact.callProvider') || t('activeService.callProvider') || 'Call')}
         avatarSrc={avatarSrc}
         avatarName={allotted ? jobCard.providerName || String(t('services.provider')) : null}
         viewDetailsLabel={String(t('jobCard.viewDetails'))}
@@ -634,158 +685,163 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      {/* Header */}
+      {/* Intro — title lives in the nav header (web AppShell). */}
       <View style={[styles.header, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
-        <Text style={[styles.headerTitle, {color: theme.text}]}>{t('services.myServices')}</Text>
         <Text style={[styles.headerIntro, {color: theme.textSecondary}]}>
-          {t('serviceHistory.intro')}
+          {t('history.intro')}
         </Text>
       </View>
 
-      {/* Filter Buttons */}
+      {/* Filter Buttons — web history-status-chip crystal pills */}
       <View style={styles.filterContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScrollContent}>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
+          {(
+            [
+              {key: 'now', label: `${t('status.filter.now')} (${nowCount})`},
+              {key: 'all', label: `${t('common.all')} (${allCount})`},
               {
-                backgroundColor: filter === 'all' ? theme.primary : theme.card,
-                borderColor: filter === 'all' ? theme.primary : theme.border,
+                key: 'pending',
+                label: `${t('services.pending')} (${pendingCount})`,
               },
-            ]}
-            onPress={() => setFilter('all')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'all' ? '#fff' : theme.text},
-              ]}>
-              {t('common.all')} ({allCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               {
-                backgroundColor: filter === 'pending' ? theme.primary : theme.card,
-                borderColor: filter === 'pending' ? theme.primary : theme.border,
+                key: 'accepted',
+                label: `${t('services.accepted')} (${acceptedCount})`,
               },
-            ]}
-            onPress={() => setFilter('pending')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'pending' ? '#fff' : theme.text},
-              ]}>
-              {t('services.pending')} ({pendingCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               {
-                backgroundColor: filter === 'accepted' ? theme.primary : theme.card,
-                borderColor: filter === 'accepted' ? theme.primary : theme.border,
+                key: 'in-progress',
+                label: `${t('services.inProgress')} (${inProgressCount})`,
               },
-            ]}
-            onPress={() => setFilter('accepted')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'accepted' ? '#fff' : theme.text},
-              ]}>
-              {t('services.accepted')} ({acceptedCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               {
-                backgroundColor: filter === 'in-progress' ? theme.primary : theme.card,
-                borderColor: filter === 'in-progress' ? theme.primary : theme.border,
+                key: 'completed',
+                label: `${t('services.completed')} (${completedCount})`,
               },
-            ]}
-            onPress={() => setFilter('in-progress')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'in-progress' ? '#fff' : theme.text},
-              ]}>
-              {t('services.inProgress')} ({inProgressCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
               {
-                backgroundColor: filter === 'completed' ? theme.primary : theme.card,
-                borderColor: filter === 'completed' ? theme.primary : theme.border,
+                key: 'cancelled',
+                label: `${t('services.cancelled')} (${cancelledCount})`,
               },
-            ]}
-            onPress={() => setFilter('completed')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'completed' ? '#fff' : theme.text},
-              ]}>
-              {t('services.completed')} ({completedCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              {
-                backgroundColor: filter === 'cancelled' ? theme.primary : theme.card,
-                borderColor: filter === 'cancelled' ? theme.primary : theme.border,
-              },
-            ]}
-            onPress={() => setFilter('cancelled')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                {color: filter === 'cancelled' ? '#fff' : theme.text},
-              ]}>
-              {t('services.cancelled')} ({cancelledCount})
-            </Text>
-          </TouchableOpacity>
+            ] as const
+          ).map(chip => {
+            const active = filter === chip.key;
+            return (
+              <TouchableOpacity
+                key={chip.key}
+                style={[
+                  styles.filterButton,
+                  {
+                    backgroundColor: active
+                      ? theme.primary
+                      : isDarkMode
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(255,255,255,0.82)',
+                    borderColor: active
+                      ? theme.primary
+                      : isDarkMode
+                        ? 'rgba(255,255,255,0.16)'
+                        : 'rgba(15,28,46,0.12)',
+                  },
+                ]}
+                onPress={() => setFilter(chip.key)}>
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    {color: active ? '#fff' : theme.text},
+                  ]}>
+                  {chip.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Additional Filters Row */}
-      <View style={[styles.additionalFiltersContainer, {backgroundColor: theme.card, borderBottomColor: theme.border}]}>
+      {/* Additional Filters Row — web crystal-filter-trigger (no border) */}
+      <View
+        style={[
+          styles.additionalFiltersContainer,
+          {borderBottomColor: `${theme.border}80`},
+        ]}>
         <TouchableOpacity
-          style={[styles.additionalFilterButton, {backgroundColor: theme.card, borderColor: theme.border}]}
-          onPress={() => setShowServiceTypeModal(true)}>
-          <Icon name="build" size={18} color={theme.primary} />
-          <Text style={[styles.additionalFilterText, {color: theme.text}]}>
+          style={[
+            styles.additionalFilterButton,
+            {
+              backgroundColor:
+                serviceTypeFilter !== 'all' || showServiceTypeModal
+                  ? isDarkMode
+                    ? `${theme.primary}33`
+                    : `${theme.primary}24`
+                  : isDarkMode
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'rgba(255,255,255,0.55)',
+            },
+          ]}
+          onPress={() => setShowServiceTypeModal(true)}
+          accessibilityRole="button"
+          accessibilityState={{expanded: showServiceTypeModal}}>
+          <Text
+            style={[styles.additionalFilterText, {color: theme.text}]}
+            numberOfLines={1}>
             {getSelectedServiceTypeName()}
           </Text>
-          <Icon name="arrow-drop-down" size={20} color={theme.textSecondary} />
+          <Icon
+            name="expand-more"
+            size={18}
+            color={theme.textSecondary}
+            style={
+              showServiceTypeModal ? {transform: [{rotate: '180deg'}]} : undefined
+            }
+          />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.additionalFilterButton, {backgroundColor: theme.card, borderColor: theme.border}]}
-          onPress={() => setShowDateFilterModal(true)}>
-          <Icon name="calendar-today" size={18} color={theme.primary} />
-          <Text style={[styles.additionalFilterText, {color: theme.text}]}>
+          style={[
+            styles.additionalFilterButton,
+            {
+              backgroundColor:
+                dateFilter !== 'all' || showDateFilterModal
+                  ? isDarkMode
+                    ? `${theme.primary}33`
+                    : `${theme.primary}24`
+                  : isDarkMode
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'rgba(255,255,255,0.55)',
+            },
+          ]}
+          onPress={() => setShowDateFilterModal(true)}
+          accessibilityRole="button"
+          accessibilityState={{expanded: showDateFilterModal}}>
+          <Text
+            style={[styles.additionalFilterText, {color: theme.text}]}
+            numberOfLines={1}>
             {getDateFilterLabel()}
           </Text>
-          <Icon name="arrow-drop-down" size={20} color={theme.textSecondary} />
+          <Icon
+            name="expand-more"
+            size={18}
+            color={theme.textSecondary}
+            style={
+              showDateFilterModal ? {transform: [{rotate: '180deg'}]} : undefined
+            }
+          />
         </TouchableOpacity>
 
         {(serviceTypeFilter !== 'all' || dateFilter !== 'all') && (
           <TouchableOpacity
-            style={[styles.clearFiltersButton, {backgroundColor: theme.card}]}
+            style={[
+              styles.clearFiltersButton,
+              {
+                backgroundColor: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.55)',
+              },
+            ]}
             onPress={() => {
               setServiceTypeFilter('all');
               setDateFilter('all');
             }}>
-            <Icon name="clear" size={18} color={theme.textSecondary} />
-            <Text style={[styles.clearFiltersText, {color: theme.textSecondary}]}>
-              {t('serviceHistory.clear')}
-            </Text>
+            <Icon name="close" size={18} color={theme.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -795,7 +851,9 @@ export default function ServiceHistoryScreen({navigation}: any) {
         <View style={styles.emptyContainer}>
           <Icon
             name={
-              filter === 'pending'
+              filter === 'now'
+                ? 'flash-on'
+                : filter === 'pending'
                 ? 'schedule'
                 : filter === 'accepted'
                   ? 'check-circle'
@@ -809,26 +867,34 @@ export default function ServiceHistoryScreen({navigation}: any) {
             color={theme.textSecondary}
           />
           <Text style={[styles.emptyText, {color: theme.text}]}>
-            {filter === 'pending'
-              ? t('services.noPendingServices')
+            {filter === 'now'
+              ? t('history.empty.now.title')
+              : filter === 'pending'
+              ? t('history.empty.pending.title')
               : filter === 'accepted'
-              ? t('services.noAcceptedServices')
+              ? t('history.empty.accepted.title')
+              : filter === 'in-progress'
+              ? t('history.empty.inProgress.title')
               : filter === 'completed'
-              ? t('services.noCompletedServices')
+              ? t('history.empty.completed.title')
               : filter === 'cancelled'
-              ? t('services.noCancelledServices')
-              : t('services.noServices')}
+              ? t('history.empty.cancelled.title')
+              : t('history.emptyTitle')}
           </Text>
           <Text style={[styles.emptySubtext, {color: theme.textSecondary}]}>
-            {filter === 'pending'
-              ? t('serviceHistory.emptyPending')
+            {filter === 'now'
+              ? t('history.empty.now.message')
+              : filter === 'pending'
+              ? t('history.empty.pending.message')
               : filter === 'accepted'
-              ? t('serviceHistory.emptyAccepted')
+              ? t('history.empty.accepted.message')
+              : filter === 'in-progress'
+              ? t('history.empty.inProgress.message')
               : filter === 'completed'
-              ? t('serviceHistory.emptyCompleted')
+              ? t('history.empty.completed.message')
               : filter === 'cancelled'
-              ? t('serviceHistory.emptyCancelled')
-              : t('services.noServices')}
+              ? t('history.empty.cancelled.message')
+              : t('history.emptyMessage')}
           </Text>
         </View>
       ) : (
@@ -844,120 +910,27 @@ export default function ServiceHistoryScreen({navigation}: any) {
         />
       )}
 
-      {/* Service Type Filter Modal */}
-      <Modal
-        visible={showServiceTypeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowServiceTypeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>
-                {t('serviceHistory.filterByServiceType')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowServiceTypeModal(false)}>
-                <Icon name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalScrollView}>
-              <TouchableOpacity
-                style={[
-                  styles.modalOption,
-                  serviceTypeFilter === 'all' && styles.modalOptionSelected,
-                  {backgroundColor: serviceTypeFilter === 'all' ? theme.primary + '20' : 'transparent'},
-                ]}
-                onPress={() => {
-                  setServiceTypeFilter('all');
-                  setShowServiceTypeModal(false);
-                }}>
-                <Text style={[
-                  styles.modalOptionText,
-                  {color: serviceTypeFilter === 'all' ? theme.primary : theme.text},
-                ]}>
-                  All Services
-                </Text>
-                {serviceTypeFilter === 'all' && (
-                  <Icon name="check-circle" size={24} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              {availableServiceTypes.map(serviceType => (
-                <TouchableOpacity
-                  key={serviceType}
-                  style={[
-                    styles.modalOption,
-                    serviceTypeFilter === serviceType && styles.modalOptionSelected,
-                    {backgroundColor: serviceTypeFilter === serviceType ? theme.primary + '20' : 'transparent'},
-                  ]}
-                  onPress={() => {
-                    setServiceTypeFilter(serviceType);
-                    setShowServiceTypeModal(false);
-                  }}>
-                  <Text style={[
-                    styles.modalOptionText,
-                    {color: serviceTypeFilter === serviceType ? theme.primary : theme.text},
-                  ]}>
-                    {serviceType}
-                  </Text>
-                  {serviceTypeFilter === serviceType && (
-                    <Icon name="check-circle" size={24} color={theme.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <CrystalFilterMenu
+        open={showServiceTypeModal}
+        onClose={() => setShowServiceTypeModal(false)}
+        title={String(t('history.filterServiceType'))}
+        options={serviceFilterOptions}
+        selected={serviceTypeFilter}
+        onSelect={setServiceTypeFilter}
+        theme={theme}
+        isDark={isDarkMode}
+      />
 
-      {/* Date Filter Modal */}
-      <Modal
-        visible={showDateFilterModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDateFilterModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>
-                {t('serviceHistory.filterByDate')}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowDateFilterModal(false)}
-                style={{padding: 4}}>
-                <Icon name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalScrollView}>
-              {(['all', 'today', 'week', 'month'] as DateFilterType[]).map(dateFilterOption => (
-                <TouchableOpacity
-                  key={dateFilterOption}
-                  style={[
-                    styles.modalOption,
-                    dateFilter === dateFilterOption && styles.modalOptionSelected,
-                    {backgroundColor: dateFilter === dateFilterOption ? theme.primary + '20' : 'transparent'},
-                  ]}
-                  onPress={() => {
-                    setDateFilter(dateFilterOption);
-                    setShowDateFilterModal(false);
-                  }}>
-                  <Text style={[
-                    styles.modalOptionText,
-                    {color: dateFilter === dateFilterOption ? theme.primary : theme.text},
-                  ]}>
-                    {dateFilterOption === 'all' ? 'All Time' :
-                     dateFilterOption === 'today' ? 'Today' :
-                     dateFilterOption === 'week' ? 'This Week' :
-                     'This Month'}
-                  </Text>
-                  {dateFilter === dateFilterOption && (
-                    <Icon name="check-circle" size={24} color={theme.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <CrystalFilterMenu
+        open={showDateFilterModal}
+        onClose={() => setShowDateFilterModal(false)}
+        title={String(t('history.filterDate'))}
+        options={dateFilterOptions}
+        selected={dateFilter}
+        onSelect={v => setDateFilter(v as DateFilterType)}
+        theme={theme}
+        isDark={isDarkMode}
+      />
 
       {/* Review Modal */}
       {selectedJobCard && (
@@ -1267,23 +1240,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    paddingTop: 4,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerIntro: {
-    marginTop: 6,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 17.5,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -1488,8 +1452,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 14,
+    paddingTop: 14,
     paddingBottom: 10,
     backgroundColor: 'transparent',
   },
@@ -1505,23 +1469,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5E5',
   },
   filterScrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     borderRadius: 999,
     marginRight: 8,
     alignItems: 'center',
-    borderWidth: 1,
+    minHeight: 30,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   filterButtonActive: {
     // Active state handled by backgroundColor
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   additionalFiltersContainer: {
@@ -1534,29 +1499,30 @@ const styles = StyleSheet.create({
   additionalFilterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
     gap: 6,
     flex: 1,
     minWidth: 0,
-    borderWidth: 1,
+    minHeight: 38,
+    borderWidth: 0,
   },
   additionalFilterText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     flex: 1,
     minWidth: 0,
   },
   clearFiltersButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    minHeight: 38,
+    borderWidth: 0,
   },
   clearFiltersText: {
     fontSize: 13,

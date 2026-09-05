@@ -1,10 +1,10 @@
 /**
  * Service Request Screen
- * Customer app — location first, then service type, then submit.
- * Flow: Address/location → Service type → Providers in area → Details → Submit
+ * Customer app — service first (web RequestPage parity).
+ * Flow: Service → Problem → Address → Photos → Submit
  */
 
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,11 @@ import {
   Modal,
   FlatList,
   Image,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {launchImageLibrary} from 'react-native-image-picker';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory, QuestionnaireQuestion, DEFAULT_SERVICE_CATEGORIES} from '../services/serviceCategoriesService';
@@ -42,11 +44,24 @@ import ServiceAddressPicker, {
   type ServiceAddressSelection,
 } from '../components/ServiceAddressPicker';
 import ServiceQuestionnaireFields from '../components/ServiceQuestionnaireFields';
-import PhoneNumberInput from '../components/PhoneNumberInput';
-import {Select, matchesServiceSearch, bilingualProfessionLine, resolveServiceMeta} from 'sapvt-ltd-app-packages';
-import {serviceRequestsApi} from '../services/api/serviceRequestsApi';
+import {Select, MobilePhotoPicker} from 'sapvt-ltd-app-packages';
+import {
+  getActiveServiceRequest,
+  serviceRequestsApi,
+} from '../services/api/serviceRequestsApi';
+import {ActiveRequestConflictBanner} from '../components/ActiveRequestConflictBanner';
+import {uploadRequestPhotos} from '../utils/uploadRequestPhotos';
 import {usersApi} from '../services/api/usersApi';
 import {providersApi, type Provider} from '../services/api/providersApi';
+import {isLiveActiveRequest} from '../utils/activeRequestUx';
+import {CrystalSurface} from '../components/CrystalSurface';
+import ServiceSelectionModal from '../components/ServiceSelectionModal';
+import {toSafeMaterialIcon} from '../utils/serviceIcons';
+import {
+  buildProblemPayload,
+  isMoreInfoOption,
+  resolveProblemFlow,
+} from '../utils/requestProblemFlow';
 
 interface ServiceRequestScreenProps {
   navigation: any;
@@ -59,6 +74,7 @@ interface ServiceRequestScreenProps {
        */
       requestMode?: 'open' | 'specificProvider';
       provider?: any;
+      editServiceRequestId?: string;
     };
   };
 }
@@ -92,6 +108,7 @@ export default function ServiceRequestScreen({
     null;
   const isTargetedRequest =
     route?.params?.requestMode === 'specificProvider' && !!targetedProviderId;
+  const editId = String(route?.params?.editServiceRequestId || '').trim();
   const lockedServiceType =
     (isTargetedRequest &&
       (route?.params?.serviceType ||
@@ -148,12 +165,10 @@ export default function ServiceRequestScreen({
   const [loadingAreaProviders, setLoadingAreaProviders] = useState(false);
   /** '' = any available provider in area (open request) */
   const [preferredProviderId, setPreferredProviderId] = useState<string>('');
-  const [secondaryMobile, setSecondaryMobile] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
-  const [serviceSearch, setServiceSearch] = useState('');
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
   const [showEditAddressModal, setShowEditAddressModal] = useState(false);
@@ -199,6 +214,9 @@ export default function ServiceRequestScreen({
     onConfirm: () => {},
     type: 'info',
   });
+  const [activeConflict, setActiveConflict] = useState<
+    import('../services/api/serviceRequestsApi').ActiveServiceRequestSummary | null
+  >(null);
 
   useEffect(() => {
     loadServiceCategories();
@@ -221,6 +239,68 @@ export default function ServiceRequestScreen({
       setSelectedAddress(a as UserLocation);
     }
   }, [addressSel]);
+
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    void serviceRequestsApi
+      .getById(editId)
+      .then(req => {
+        if (cancelled || !req) return;
+        if (String(req.status || '') !== 'pending') {
+          setAlertModal({
+            visible: true,
+            title: t('common.error'),
+            message: t('request.noLongerEditable') || t('request.editNotAllowed'),
+            type: 'warning',
+          });
+          navigation.goBack();
+          return;
+        }
+        setSelectedServiceType(req.serviceType || '');
+        setProblem(req.problem || '');
+        if (req.questionnaireAnswers && typeof req.questionnaireAnswers === 'object') {
+          setQuestionnaireAnswers(req.questionnaireAnswers);
+        }
+        const ca = req.customerAddress || ({} as any);
+        setAddressSel(
+          emptyAddressSelection({
+            mode: 'saved',
+            saveForFuture: false,
+            selectedId: null,
+            address: {
+              address: ca.address || '',
+              landmark: ca.landmark || '',
+              city: ca.district || ca.city || '',
+              district: ca.district || ca.city || '',
+              state: ca.state || '',
+              stateId: ca.stateId || '',
+              districtId: ca.districtId || '',
+              pincode: ca.pincode || '',
+              latitude: ca.latitude,
+              longitude: ca.longitude,
+            },
+          }),
+        );
+        const photoUrls = (Array.isArray(req.photos) ? req.photos : [])
+          .map(p => (typeof p === 'string' ? p : (p as any)?.url))
+          .filter((u): u is string => Boolean(u) && /^https?:\/\//i.test(String(u)));
+        if (photoUrls.length) setPhotos(photoUrls);
+        if (req.providerId) setPreferredProviderId(String(req.providerId));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAlertModal({
+          visible: true,
+          title: t('common.error'),
+          message: t('request.editNotAllowed') || t('errors.generic'),
+          type: 'error',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
 
   const loadAreaProviders = useCallback(async () => {
     if (isTargetedRequest) {
@@ -311,17 +391,6 @@ export default function ServiceRequestScreen({
       void loadProviderCounts();
     }
   }, [showServiceTypeModal]);
-
-  useEffect(() => {
-    if (currentPincode && !selectedAddress) {
-      // Try to auto-detect address
-      // Add a small delay to prevent race conditions
-      const timer = setTimeout(() => {
-        loadCurrentAddress();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [currentPincode]);
 
   useEffect(() => {
     if (showAddressModal) {
@@ -497,30 +566,15 @@ export default function ServiceRequestScreen({
     if (isTargetedRequest) {
       return;
     }
-
-    const count = providerCounts[category.name] || 0;
-
-    // Unavailable: ask admin to bring this service to the customer's area
-    if (count === 0) {
-      if (requestedAreaTypes[category.name]) {
-        setAlertModal({
-          visible: true,
-          title: String(t('services.providerNotAvailable')),
-          message: String(t('services.requestProvidersSuccess')).replace(
-            '{{serviceType}}',
-            language === 'hi' && category.nameHi
-              ? category.nameHi
-              : category.name,
-          ),
-          type: 'info',
-        });
-        return;
-      }
-      handleRequestAreaProviders(category);
-      return;
-    }
-
+    // Service-first (web parity): choose service without waiting for address /
+    // area provider counts. Zero-provider assist still runs on submit.
     applyServiceType(category);
+  };
+
+  const localizedCategoryName = (category: ServiceCategory | null | undefined, fallback = '') => {
+    if (!category) return fallback;
+    if (language === 'hi' && category.nameHi) return category.nameHi;
+    return category.name || fallback;
   };
 
   const handleRequestAreaProviders = (category: ServiceCategory) => {
@@ -691,15 +745,8 @@ export default function ServiceRequestScreen({
       setLoadingAddresses(true);
       const addresses = await getSavedAddresses();
       setSavedAddresses(addresses);
-      
-      // Set default address if available
-      const defaultAddress = addresses.find(addr => addr.isDefault);
-      if (defaultAddress) {
-        setSelectedAddress(cleanAddressObject(defaultAddress) as SavedAddress);
-      } else if (addresses.length > 0) {
-        // Use first address if no default
-        setSelectedAddress(cleanAddressObject(addresses[0]) as SavedAddress);
-      }
+      // Do not set selectedAddress here — ServiceAddressPicker selects
+      // isDefault → id "home" → first (same as customer-web).
     } catch (error) {
       console.error('Error loading saved addresses:', error);
     } finally {
@@ -1032,30 +1079,45 @@ export default function ServiceRequestScreen({
     return 'location-on';
   };
 
-  const handleAddPhoto = async () => {
-    try {
-      const result = await launchImageLibrary({
-        mediaType: 'photo',
-        quality: 0.8,
-        selectionLimit: 3 - photos.length,
-      });
+  const ensureCameraPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  };
 
-      if (result.didCancel || !result.assets || result.assets.length === 0) {
-        return;
-      }
+  const pickRequestPhotoFromCamera = async (): Promise<string | null> => {
+    const ok = await ensureCameraPermission();
+    if (!ok) return null;
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.8,
+      saveToPhotos: false,
+    });
+    if (result.didCancel || result.errorCode) return null;
+    return result.assets?.[0]?.uri || null;
+  };
 
-      const newPhotos = result.assets
-        .filter(asset => asset.uri)
-        .map(asset => asset.uri!);
-      setPhotos([...photos, ...newPhotos]);
-    } catch (error) {
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: t('services.selectPhotoError'),
-        type: 'error',
-      });
-    }
+  const pickRequestPhotoFromGallery = async (): Promise<string[] | null> => {
+    const remaining = 3 - photos.length;
+    if (remaining <= 0) return null;
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      selectionLimit: remaining,
+    });
+    if (result.didCancel || result.errorCode) return null;
+    const uris = (result.assets || [])
+      .map(a => a.uri)
+      .filter((u): u is string => Boolean(u));
+    return uris.length > 0 ? uris : null;
+  };
+
+  const onRequestPhotosPicked = (uris: string[]) => {
+    const clean = uris.map(u => String(u || '').trim()).filter(Boolean);
+    if (clean.length === 0) return;
+    setPhotos(prev => [...prev, ...clean].slice(0, 3));
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -1143,9 +1205,40 @@ export default function ServiceRequestScreen({
       }
     }
 
-    // Validate questionnaire answers
-    if (questionnaire && questionnaire.length > 0) {
-      const missingAnswers = questionnaire
+    // Validate problem flow (primary select + optional free text + follow-ups)
+    const submitProblemFlow = resolveProblemFlow(selectedCategory as any);
+    const submitPrimaryQ = submitProblemFlow.primary;
+    const submitFollowUps = submitProblemFlow.followUps;
+    const submitPrimaryAnswer = submitPrimaryQ
+      ? questionnaireAnswers[submitPrimaryQ.id]
+      : undefined;
+    const submitPrimarySelected = Boolean(
+      String(submitPrimaryAnswer ?? '').trim(),
+    );
+    const submitShowMore = submitPrimaryQ
+      ? isMoreInfoOption(submitPrimaryAnswer)
+      : false;
+
+    if (submitPrimaryQ) {
+      if (!submitPrimarySelected) {
+        setAlertModal({
+          visible: true,
+          title: t('common.requiredQuestions'),
+          message: String(t('request.selectProblem')),
+          type: 'warning',
+        });
+        return;
+      }
+      if (submitShowMore && !problem.trim()) {
+        setAlertModal({
+          visible: true,
+          title: t('common.problemDescriptionRequired'),
+          message: t('common.problemDescriptionRequiredMessage'),
+          type: 'warning',
+        });
+        return;
+      }
+      const missingFollowUps = submitFollowUps
         .filter(q => q.required)
         .filter(q => {
           const answer = questionnaireAnswers[q.id];
@@ -1157,20 +1250,16 @@ export default function ServiceRequestScreen({
           }
           return false;
         });
-
-      if (missingAnswers.length > 0) {
+      if (missingFollowUps.length > 0) {
         setAlertModal({
           visible: true,
           title: t('common.requiredQuestions'),
-          message: `${t('common.requiredQuestions')}:\n\n${missingAnswers.map(q => `• ${getQuestionText(q)}`).join('\n')}`,
+          message: `${t('common.requiredQuestions')}:\n\n${missingFollowUps.map(q => `• ${getQuestionText(q)}`).join('\n')}`,
           type: 'warning',
         });
         return;
       }
-    }
-
-    // Problem is optional when category questionnaire exists; otherwise required
-    if ((!questionnaire || questionnaire.length === 0) && !problem.trim()) {
+    } else if (!problem.trim()) {
       setAlertModal({
         visible: true,
         title: t('common.problemDescriptionRequired'),
@@ -1187,6 +1276,19 @@ export default function ServiceRequestScreen({
       if (!customerId || currentUser.phoneVerified !== true) {
         requirePhoneLogin();
         setLoading(false);
+        return;
+      }
+
+      const existing = await getActiveServiceRequest(selectedServiceType).catch(
+        () => null,
+      );
+      if (
+        existing &&
+        isLiveActiveRequest(existing) &&
+        (!editId || existing.serviceRequestId !== editId)
+      ) {
+        setLoading(false);
+        setActiveConflict(existing);
         return;
       }
 
@@ -1242,8 +1344,29 @@ export default function ServiceRequestScreen({
           : {}),
       };
 
-      if (secondaryMobile.trim().length === 10) {
-        serviceRequestDataRaw.secondaryPhone = `+91${secondaryMobile.trim()}`;
+      const problemBuilt = buildProblemPayload({
+        primary: submitPrimaryQ,
+        answers: questionnaireAnswers,
+        freeText: problem,
+      });
+      if (problemBuilt.problem) {
+        serviceRequestDataRaw.problem = problemBuilt.problem;
+      } else {
+        delete serviceRequestDataRaw.problem;
+      }
+      if (problemBuilt.questionnaireAnswers) {
+        serviceRequestDataRaw.questionnaireAnswers =
+          problemBuilt.questionnaireAnswers;
+      }
+
+      // Web: secondary phone comes from profile, not the request form.
+      const profileSecondary = String(
+        (currentUser as any)?.secondaryPhone || '',
+      )
+        .replace(/\D/g, '')
+        .slice(-10);
+      if (profileSecondary.length === 10) {
+        serviceRequestDataRaw.secondaryPhone = `+91${profileSecondary}`;
       }
 
       if (saveAddressForFuture && cleanAddress) {
@@ -1315,24 +1438,21 @@ export default function ServiceRequestScreen({
       }
 
 
-      // Only include photos if there are any (filter out undefined/null/empty)
+      // Photos uploaded after clean — never send local file:// URIs
       if (photos.length > 0) {
-        const validPhotos = photos.filter(photo => photo && photo !== undefined && photo !== null && photo !== '');
-        if (validPhotos.length > 0) {
-          serviceRequestDataRaw.photos = validPhotos;
-        }
+        serviceRequestDataRaw.photos = await uploadRequestPhotos(
+          photos.filter(Boolean),
+        );
       }
 
-      // Include questionnaire answers if available
-      if (questionnaire && questionnaire.length > 0 && Object.keys(questionnaireAnswers).length > 0) {
-        serviceRequestDataRaw.questionnaireAnswers = questionnaireAnswers;
-      }
+      // questionnaireAnswers already set via buildProblemPayload when present
 
       // Remove all undefined values before saving
       const serviceRequestData = removeUndefinedValues(serviceRequestDataRaw);
 
-      // Create service request in MongoDB (primary)
-      const created = await serviceRequestsApi.create({
+      const created = editId
+        ? await serviceRequestsApi.update(editId, serviceRequestData)
+        : await serviceRequestsApi.create({
         ...serviceRequestData,
       });
       const serviceRequestId =
@@ -1391,14 +1511,85 @@ export default function ServiceRequestScreen({
     }
   };
 
+  const problemFlow = useMemo(
+    () => resolveProblemFlow(selectedCategory as any),
+    [selectedCategory],
+  );
+  const primaryProblemQ = problemFlow.primary;
+  const followUpQs = problemFlow.followUps;
+  const primaryAnswer = primaryProblemQ
+    ? questionnaireAnswers[primaryProblemQ.id]
+    : undefined;
+  const primarySelected = Boolean(String(primaryAnswer ?? '').trim());
+  const showProblemDetails = primaryProblemQ
+    ? isMoreInfoOption(primaryAnswer)
+    : false;
+  const followUpComplete = !followUpQs.some(q => {
+    if (!q.required) return false;
+    const a = questionnaireAnswers[q.id];
+    if (a === undefined || a === '' || a === null) return true;
+    if (Array.isArray(a) && a.length === 0) return true;
+    return false;
+  });
+  const problemFlowComplete = primaryProblemQ
+    ? primarySelected && (!showProblemDetails || Boolean(problem.trim())) && followUpComplete
+    : Boolean(problem.trim());
+
+  const popularCategories = useMemo(() => {
+    const cats = serviceCategories.filter(c => c.name);
+    const popular = cats.filter(c => Boolean((c as {isPopular?: boolean}).isPopular));
+    const list = popular.length ? popular : cats.slice(0, 8);
+    const rank = (name: string) => {
+      const k = name.toLowerCase();
+      if (k.includes('plumb')) return 0;
+      if (k.includes('electric')) return 1;
+      return 9;
+    };
+    return [...list]
+      .sort(
+        (a, b) =>
+          rank(a.name) - rank(b.name) ||
+          (a.order ?? 999) - (b.order ?? 999) ||
+          a.name.localeCompare(b.name),
+      )
+      .slice(0, 6);
+  }, [serviceCategories]);
+
+  const primarySelectOptions = useMemo(() => {
+    if (!primaryProblemQ?.options?.length) return [];
+    return primaryProblemQ.options.map((opt, i) => ({
+      value: opt,
+      label:
+        language === 'hi' && primaryProblemQ.optionsHi?.[i]
+          ? primaryProblemQ.optionsHi[i]
+          : opt,
+    }));
+  }, [primaryProblemQ, language]);
+
+  const problemHeading =
+    language === 'hi'
+      ? primaryProblemQ?.questionHi ||
+        primaryProblemQ?.question ||
+        String(t('request.problemRequired'))
+      : primaryProblemQ?.question || String(t('request.problemRequired'));
+
+  const canSubmit =
+    Boolean(selectedServiceType) &&
+    Boolean(selectedAddress?.address) &&
+    Boolean(selectedAddress?.pincode) &&
+    problemFlowComplete &&
+    !loading &&
+    addressSel.mode !== 'edit';
+
   return (
     <ScrollView
       style={[styles.container, {backgroundColor: theme.background}]}
-      showsVerticalScrollIndicator={false}>
-      {/* Header */}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent}>
+      {/* Header — web request.pageTitle / pageSub */}
       <View style={styles.header}>
         <Text style={[styles.title, {color: theme.text}]}>
-          {t('services.requestAService')}
+          {editId ? t('request.editTitle') : t('request.pageTitle')}
         </Text>
         <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
           {isTargetedRequest
@@ -1406,502 +1597,335 @@ export default function ServiceRequestScreen({
                 t('services.requestSpecificProviderSubtitle') ||
                   `Requesting ${targetedProvider?.name || 'this provider'}`,
               )
-            : t('services.describeProblemSubtitle')}
+            : t('request.pageSub')}
         </Text>
       </View>
 
       {isTargetedRequest && targetedProvider ? (
-        <View
-          style={[
-            styles.section,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-              borderWidth: 1,
-              borderRadius: 12,
-              padding: 14,
-              marginHorizontal: 16,
-              marginBottom: 8,
-            },
-          ]}>
-          <Text style={[{color: theme.textSecondary, fontSize: 12, marginBottom: 4}]}>
-            {t('services.selectedProvider')}
-          </Text>
-          <Text style={[{color: theme.text, fontSize: 15, fontWeight: '600'}]}>
-            {targetedProvider.name || t('services.selectedProvider')}
-          </Text>
-          <Text style={[{color: theme.textSecondary, fontSize: 13, marginTop: 4}]}>
-            {String(
-              t('services.requestGoesToThisProvider'),
-            )}
-          </Text>
+        <View style={styles.step}>
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDarkMode}
+            radius={16}
+            style={styles.stepCardFlat}
+            contentStyle={styles.stepCardInner}>
+            <Text style={[{color: theme.textSecondary, fontSize: 12, marginBottom: 4}]}>
+              {t('services.selectedProvider')}
+            </Text>
+            <Text style={[{color: theme.text, fontSize: 15, fontWeight: '600'}]}>
+              {targetedProvider.name || t('services.selectedProvider')}
+            </Text>
+            <Text style={[{color: theme.textSecondary, fontSize: 13, marginTop: 4}]}>
+              {String(t('services.requestGoesToThisProvider'))}
+            </Text>
+          </CrystalSurface>
         </View>
       ) : null}
 
-      {/* 1. Service address first */}
-      <View style={[styles.section, {backgroundColor: theme.card, borderRadius: 12, padding: 12}]}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {t('services.serviceAddress')} *
-        </Text>
-        <ServiceAddressPicker
-          theme={theme}
-          value={addressSel}
-          onChange={setAddressSel}
-          t={t as any}
-          refreshKey={addressRefreshKey}
-        />
-        <Text style={[styles.label, {color: theme.text, marginTop: 12}]}>
-          {t('services.secondaryMobileOptional')}
-        </Text>
-        <PhoneNumberInput
-          value={secondaryMobile}
-          onChangeText={(text) =>
-            setSecondaryMobile(text.replace(/\D/g, '').slice(0, 10))
-          }
-          placeholder={String(t('services.tenDigitMobile'))}
-          borderColor={theme.border}
-          backgroundColor={theme.card}
-          prefixBackgroundColor={theme.background}
-          textColor={theme.text}
-          placeholderTextColor={theme.textSecondary}
-        />
-      </View>
-
-      {/* 2. Service Type — after location */}
-      <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {t('services.serviceType')} *
-        </Text>
-        {!selectedAddress?.address || !selectedAddress?.pincode ? (
-          <Text
-            style={{
-              color: theme.textSecondary,
-              fontSize: 13,
-              marginBottom: 8,
-            }}>
-            Enter your service address above to see providers available in your
-            area.
-          </Text>
-        ) : null}
-        <TouchableOpacity
-          style={[
-            styles.serviceTypeButton,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-              opacity:
-                isTargetedRequest ||
-                !selectedAddress?.address ||
-                !selectedAddress?.pincode
-                  ? 0.85
-                  : 1,
-            },
-          ]}
-          disabled={
-            isTargetedRequest ||
-            !selectedAddress?.address ||
-            !selectedAddress?.pincode
-          }
-          activeOpacity={isTargetedRequest ? 1 : 0.7}
-          onPress={() => {
-            if (
-              !isTargetedRequest &&
-              selectedAddress?.address &&
-              selectedAddress?.pincode
-            ) {
-              setShowServiceTypeModal(true);
-            }
-          }}>
-          {selectedCategory || selectedServiceType ? (
-            <View style={styles.selectedServiceType}>
-              <Icon
-                name={selectedCategory?.icon || 'build'}
-                size={24}
-                color={selectedCategory?.color || theme.primary}
-              />
-              <Text style={[styles.serviceTypeText, {color: theme.text}]}>
-                {selectedCategory?.name || selectedServiceType}
-              </Text>
-            </View>
-          ) : (
-            <Text style={[styles.placeholderText, {color: theme.textSecondary}]}>
-              {!selectedAddress?.address || !selectedAddress?.pincode
-                ? t('services.completeAddressFirst')
-                : t('services.selectServiceType')}
-            </Text>
-          )}
-          <Icon
-            name={isTargetedRequest ? 'lock' : 'chevron-right'}
-            size={22}
-            color={theme.textSecondary}
-          />
-        </TouchableOpacity>
-        {isTargetedRequest ? (
-          <Text style={[{color: theme.textSecondary, fontSize: 12, marginTop: 6}]}>
-            {String(
-              t('services.serviceTypeLockedForProvider') ||
-                'Service type is set from this provider and cannot be changed.',
-            )}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* 3. Providers in area */}
-      {!isTargetedRequest && selectedServiceType && selectedAddress?.pincode ? (
-        <View style={styles.section}>
-          <Text style={[styles.label, {color: theme.text}]}>
-            {t('services.providersInYourArea')}
-          </Text>
-          {loadingAreaProviders ? (
-            <ActivityIndicator color={theme.primary} style={{marginVertical: 8}} />
-          ) : (
-            <>
-              <Text
-                style={[
-                  styles.sectionSubheader,
-                  {color: theme.textSecondary, marginBottom: 8},
-                ]}>
-                {(
-                  t('services.providersInAreaCount') ||
-                  '{{count}} {{serviceType}} provider(s) near this address'
-                )
-                  .replace('{{count}}', String(areaProviders.length))
-                  .replace('{{serviceType}}', selectedServiceType)}
-              </Text>
-              <Select
-                options={[
-                  {
-                    value: '',
-                    label:
-                      (t('services.anyAvailableProvider')) +
-                      ` (${areaProviders.length})`,
-                  },
-                  ...areaProviders.map(p => {
-                    const id = String(p.id || p._id || '');
-                    const rating =
-                      p.rating != null
-                        ? ` · ★ ${Number(p.rating).toFixed(1)}`
-                        : '';
-                    const online = p.isOnline ? ` · ${t('providers.online')}` : '';
-                    return {
-                      value: id,
-                      label: `${p.name || p.displayName || 'Provider'}${rating}${online}`,
-                    };
-                  }),
-                ]}
-                value={preferredProviderId}
-                onChange={setPreferredProviderId}
-                placeholder={
-                  t('services.selectProviderOptional')
-                }
-              />
-            </>
-          )}
-        </View>
-      ) : null}
-
-      {/* 4. Questionnaire */}
-      {questionnaire && questionnaire.length > 0 && (
-        <View style={styles.section}>
-          <ServiceQuestionnaireFields
-            questions={questionnaire}
-            answers={questionnaireAnswers}
-            onChange={handleQuestionnaireAnswer}
-            theme={theme}
-            language={language}
-            title={String(t('services.serviceDetails'))}
-            subtitle={String(t('services.answerQuestionsToHelp'))}
-            yesLabel={String(t('common.yes'))}
-            noLabel={String(t('common.no'))}
-            selectPlaceholder={String(t('common.select'))}
-            textPlaceholder={String(t('services.enterYourAnswer'))}
-            numberPlaceholder={String(t('services.enterANumber'))}
-          />
-        </View>
-      )}
-
-      {/* 5. Problem (optional when questionnaire exists) */}
-      <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {questionnaire && questionnaire.length > 0
-            ? `${t('services.problemInBrief')} (${t('common.optional')})`
-            : `${t('services.describeProblem')} *`}
-        </Text>
-        {questionnaire && questionnaire.length > 0 ? (
-          <Text
-            style={[
-              styles.sectionSubheader,
-              {color: theme.textSecondary, marginBottom: 8},
-            ]}>
-            {t('services.additionalInfoDescription')}
-          </Text>
-        ) : null}
-        <TextInput
-          style={[
-            styles.problemInput,
-            {
-              backgroundColor: theme.card,
-              color: theme.text,
-              borderColor: theme.border,
-            },
-          ]}
-          value={problem}
-          onChangeText={setProblem}
-          placeholder={
-            questionnaire && questionnaire.length > 0
-              ? t('services.additionalInfoPlaceholder')
-              : t('services.problemPlaceholder') || t('services.describeProblem')
-          }
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          numberOfLines={4}
-          maxLength={500}
-        />
-        <Text style={[styles.charCount, {color: theme.textSecondary}]}>
-          {problem.length}/500
-        </Text>
-      </View>
-
-      {/* Photos */}
-      <View style={styles.section}>
-        <Text style={[styles.label, {color: theme.text}]}>
-          {t('services.addPhotosOptional')}
-        </Text>
-        {photos.length < 3 && (
-          <TouchableOpacity
-            style={[
-              styles.addPhotoButton,
-              {borderColor: theme.border, backgroundColor: theme.card},
-            ]}
-            onPress={handleAddPhoto}>
-            <Icon name="add-photo-alternate" size={24} color={theme.primary} />
-            <Text style={[styles.addPhotoText, {color: theme.primary}]}>
-              {t('services.addPhoto', {count: photos.length, max: 3})}
-            </Text>
-          </TouchableOpacity>
-        )}
-        {photos.length > 0 && (
-          <View style={styles.photosContainer}>
-            {photos.map((photo, index) => (
-              <View key={index} style={styles.photoWrapper}>
-                <Image source={{uri: photo}} style={styles.photo} />
-                <TouchableOpacity
-                  style={styles.removePhotoButton}
-                  onPress={() => handleRemovePhoto(index)}>
-                  <Icon name="close" size={20} color="#fff" />
-                </TouchableOpacity>
+      {/* 1. Service first */}
+      <View style={styles.step}>
+        {selectedServiceType ? (
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDarkMode}
+            radius={16}
+            style={styles.stepCardFlat}
+            contentStyle={styles.stepCardInner}>
+            <TouchableOpacity
+              style={styles.serviceSelectedRow}
+              activeOpacity={isTargetedRequest ? 1 : 0.7}
+              disabled={isTargetedRequest}
+              onPress={() => {
+                if (!isTargetedRequest) setShowServiceTypeModal(true);
+              }}>
+              <View style={styles.serviceSelectedMain}>
+                <View
+                  style={[
+                    styles.categoryIconWrap,
+                    {backgroundColor: `${theme.primary}24`},
+                  ]}>
+                  <Icon
+                    name={toSafeMaterialIcon(
+                      selectedCategory?.icon,
+                      selectedCategory?.name || selectedServiceType,
+                    )}
+                    size={22}
+                    color={selectedCategory?.color || theme.primary}
+                  />
+                </View>
+                <Text
+                  style={[styles.serviceSelectedName, {color: theme.text}]}
+                  numberOfLines={2}>
+                  {localizedCategoryName(selectedCategory, selectedServiceType)}
+                </Text>
               </View>
-            ))}
+              {isTargetedRequest ? (
+                <Icon name="lock" size={18} color={theme.textSecondary} />
+              ) : (
+                <Text style={[styles.changeService, {color: theme.primary}]}>
+                  {t('request.changeService')}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </CrystalSurface>
+        ) : (
+          <View style={styles.serviceEntry}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => setShowServiceTypeModal(true)}>
+              <CrystalSurface
+                primary={theme.primary}
+                card={theme.card}
+                isDark={isDarkMode}
+                radius={14}
+                contentStyle={styles.serviceSearchCta}>
+                <Icon name="search" size={20} color={theme.textSecondary} />
+                <Text
+                  style={[styles.serviceSearchLabel, {color: theme.textSecondary}]}
+                  numberOfLines={1}>
+                  {t('request.chooseServiceCta')}
+                </Text>
+              </CrystalSurface>
+            </TouchableOpacity>
+            {!editId && popularCategories.length > 0 ? (
+              <View style={styles.serviceGrid}>
+                {popularCategories.map(c => (
+                  <TouchableOpacity
+                    key={c.id || c.name}
+                    style={styles.serviceTile}
+                    activeOpacity={0.8}
+                    onPress={() => applyServiceType(c)}>
+                    <CrystalSurface
+                      primary={theme.primary}
+                      card={theme.card}
+                      isDark={isDarkMode}
+                      accent
+                      radius={18}
+                      style={styles.serviceTileSurface}
+                      contentStyle={styles.serviceTileInner}>
+                      <View
+                        style={[
+                          styles.serviceTileIcon,
+                          {backgroundColor: `${theme.primary}24`},
+                        ]}>
+                        <Icon
+                          name={toSafeMaterialIcon(c.icon, c.name)}
+                          size={22}
+                          color={c.color || theme.primary}
+                        />
+                      </View>
+                      <Text
+                        style={[styles.serviceTileName, {color: theme.text}]}
+                        numberOfLines={2}>
+                        {localizedCategoryName(c)}
+                      </Text>
+                    </CrystalSurface>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
           </View>
         )}
       </View>
 
-      {/* Submit Button */}
+      {/* 2. Problem — only after service */}
+      {selectedServiceType ? (
+        <View style={styles.step}>
+          <Text style={[styles.stepHeading, {color: theme.text}]}>
+            {problemHeading}
+          </Text>
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDarkMode}
+            radius={16}
+            style={styles.stepCardFlat}
+            contentStyle={styles.stepCardInner}>
+            {primaryProblemQ ? (
+              <Select
+                variant="crystal"
+                colors={{
+                  card: isDarkMode
+                    ? 'rgba(255,255,255,0.12)'
+                    : 'rgba(255,255,255,0.72)',
+                }}
+                style={{marginBottom: 0}}
+                options={primarySelectOptions}
+                value={String(primaryAnswer ?? '')}
+                onChange={v =>
+                  handleQuestionnaireAnswer(primaryProblemQ.id, v)
+                }
+                placeholder={String(t('request.selectProblem'))}
+                title={String(t('request.selectProblem'))}
+              />
+            ) : null}
+
+            {showProblemDetails ? (
+              <View style={styles.problemMore}>
+                <Text style={[styles.fieldLabel, {color: theme.text}]}>
+                  {t('request.tellUsMore')}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.problemInput,
+                    {
+                      backgroundColor: theme.background,
+                      color: theme.text,
+                      borderColor: 'transparent',
+                    },
+                  ]}
+                  value={problem}
+                  onChangeText={text => setProblem(text.slice(0, 500))}
+                  placeholder={String(t('request.problemPlaceholder'))}
+                  placeholderTextColor={theme.textSecondary}
+                  multiline
+                  numberOfLines={2}
+                  maxLength={500}
+                />
+                <Text style={[styles.charCount, {color: theme.textSecondary}]}>
+                  {problem.length}/500
+                </Text>
+              </View>
+            ) : null}
+
+            {followUpQs.length > 0 ? (
+              <View style={styles.followUps}>
+                <ServiceQuestionnaireFields
+                  questions={followUpQs as QuestionnaireQuestion[]}
+                  answers={questionnaireAnswers}
+                  onChange={handleQuestionnaireAnswer}
+                  theme={theme}
+                  language={language}
+                  title=""
+                  subtitle=""
+                  yesLabel={String(t('common.yes'))}
+                  noLabel={String(t('common.no'))}
+                  selectPlaceholder={String(t('request.selectProblem'))}
+                  textPlaceholder={String(t('services.enterYourAnswer'))}
+                  numberPlaceholder={String(t('services.enterANumber'))}
+                  crystalSelect
+                  isDark={isDarkMode}
+                />
+              </View>
+            ) : null}
+          </CrystalSurface>
+        </View>
+      ) : null}
+
+      {/* 3. Address — only after service */}
+      {selectedServiceType ? (
+        <View style={styles.step}>
+          <Text style={[styles.stepHeading, {color: theme.text}]}>
+            {t('request.serviceAddress')}
+          </Text>
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDarkMode}
+            radius={16}
+            style={styles.stepCardFlat}
+            contentStyle={styles.stepCardInner}>
+            <ServiceAddressPicker
+              theme={theme}
+              value={addressSel}
+              onChange={setAddressSel}
+              t={t as any}
+              refreshKey={addressRefreshKey}
+            />
+          </CrystalSurface>
+        </View>
+      ) : null}
+
+      {/* Photos optional — web PhotoAttachments parity */}
+      {selectedServiceType ? (
+        <View style={styles.step}>
+          <Text style={[styles.stepHeading, {color: theme.text}]}>
+            {t('request.photosOptional')}
+          </Text>
+          <Text style={[styles.photosHint, {color: theme.textSecondary}]}>
+            {t('request.photosHint', {max: 3})}
+          </Text>
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDarkMode}
+            radius={16}
+            style={styles.stepCardFlat}
+            contentStyle={styles.stepCardInner}>
+            {photos.length > 0 && (
+              <View style={styles.photosContainer}>
+                {photos.map((photo, index) => (
+                  <View key={index} style={styles.photoWrapper}>
+                    <Image source={{uri: photo}} style={styles.photo} />
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => handleRemovePhoto(index)}>
+                      <Icon name="close" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+            {photos.length < 3 ? (
+              <MobilePhotoPicker
+                layout="stack"
+                cameraLabel={String(t('photo.takePhoto') || 'Take photo')}
+                galleryLabel={String(
+                  t('photo.chooseGallery') || 'Choose from gallery',
+                )}
+                onPickCamera={pickRequestPhotoFromCamera}
+                onPickGallery={pickRequestPhotoFromGallery}
+                onChange={onRequestPhotosPicked}
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: theme.text,
+                  textSecondary: theme.textSecondary,
+                  border: theme.border,
+                  background: theme.background,
+                }}
+              />
+            ) : null}
+          </CrystalSurface>
+        </View>
+      ) : null}
+
+      {/* Submit */}
       <TouchableOpacity
         style={[
           styles.submitButton,
           {
-            backgroundColor:
-              selectedServiceType &&
-              selectedAddress?.address &&
-              selectedAddress?.pincode &&
-              (questionnaire.length > 0 || problem.trim())
-                ? theme.primary
-                : theme.border,
-            opacity:
-              selectedServiceType &&
-              selectedAddress?.address &&
-              selectedAddress?.pincode &&
-              (questionnaire.length > 0 || problem.trim())
-                ? 1
-                : 0.5,
+            backgroundColor: canSubmit ? theme.primary : theme.border,
+            opacity: canSubmit ? 1 : 0.5,
           },
         ]}
         onPress={handleSubmit}
-        disabled={
-          !selectedServiceType ||
-          !selectedAddress?.address ||
-          !selectedAddress?.pincode ||
-          (questionnaire.length === 0 && !problem.trim()) ||
-          loading ||
-          addressSel.mode === 'edit'
-        }>
+        disabled={!canSubmit}>
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Text style={styles.submitButtonText}>{t('services.requestService')}</Text>
+            <Text style={styles.submitButtonText}>
+              {editId ? t('request.saveChanges') : t('request.submit')}
+            </Text>
             <Icon name="arrow-forward" size={20} color="#fff" />
           </>
         )}
       </TouchableOpacity>
 
-      {/* Service Type Modal */}
-      <Modal
-        visible={showServiceTypeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowServiceTypeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: theme.card}]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, {color: theme.text}]}>
-                {t('services.selectServiceType')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowServiceTypeModal(false)}>
-                <Icon name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              value={serviceSearch}
-              onChangeText={setServiceSearch}
-              placeholder={String(t('browse.searchPlaceholder') || 'Search service')}
-              placeholderTextColor={theme.textSecondary}
-              style={{
-                marginHorizontal: 16,
-                marginBottom: 8,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 10,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                color: theme.text,
-              }}
-            />
-            <FlatList
-              data={serviceCategories.filter(item =>
-                matchesServiceSearch(
-                  serviceSearch,
-                  resolveServiceMeta(item.name, {nameHi: item.nameHi}),
-                ),
-              )}
-              keyExtractor={item => item.id}
-              renderItem={({item}) => {
-                const count = providerCounts[item.name] || 0;
-                const unavailable = !loadingProviderCounts && count === 0;
-                const alreadyRequested = !!requestedAreaTypes[item.name];
-                const notifying = notifyingDemandFor === item.name;
-
-                return (
-                  <View
-                    style={[
-                      styles.categoryItem,
-                      {
-                        backgroundColor:
-                          selectedServiceType === item.name
-                            ? theme.primary + '20'
-                            : 'transparent',
-                      },
-                    ]}>
-                    <TouchableOpacity
-                      style={styles.categorySelectArea}
-                      activeOpacity={unavailable ? 1 : 0.7}
-                      onPress={() => handleSelectServiceType(item)}>
-                      <View
-                        style={[
-                          styles.categoryIcon,
-                          {backgroundColor: item.color + '20'},
-                        ]}>
-                        <Icon name={item.icon} size={24} color={item.color} />
-                      </View>
-                      <View style={styles.categoryText}>
-                        <View style={styles.categoryNameRow}>
-                          <Text style={[styles.categoryName, {color: theme.text}]}>
-                            {bilingualProfessionLine(item.name, {nameHi: item.nameHi})}
-                          </Text>
-                          {loadingProviderCounts ? (
-                            <ActivityIndicator
-                              size="small"
-                              color={theme.primary}
-                              style={styles.countLoader}
-                            />
-                          ) : (
-                            <View
-                              style={[
-                                styles.providerCountBadge,
-                                {
-                                  backgroundColor: unavailable
-                                    ? '#e74c3c'
-                                    : theme.primary + '20',
-                                },
-                              ]}>
-                              <Text
-                                style={[
-                                  styles.providerCountText,
-                                  {
-                                    color: unavailable ? '#fff' : theme.primary,
-                                  },
-                                ]}>
-                                {unavailable
-                                  ? String(t('services.noProviders'))
-                                  : `${count} ${String(
-                                      t('services.providersAvailable'),
-                                    )}`}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        {(item.description || item.descriptionHi) && (
-                          <Text
-                            style={[
-                              styles.categoryDescription,
-                              {color: theme.textSecondary},
-                            ]}>
-                            {language === 'hi' && item.descriptionHi
-                              ? item.descriptionHi
-                              : item.description || ''}
-                          </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-
-                    {unavailable ? (
-                      <TouchableOpacity
-                        style={[
-                          styles.requestProvidersButton,
-                          {
-                            backgroundColor: alreadyRequested
-                              ? theme.border
-                              : theme.primary,
-                            opacity: notifying ? 0.7 : 1,
-                          },
-                        ]}
-                        disabled={alreadyRequested || notifying}
-                        onPress={() => handleRequestAreaProviders(item)}
-                        accessibilityLabel={String(
-                          t('services.requestProviders'),
-                        )}>
-                        {notifying ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <>
-                            <Icon
-                              name={
-                                alreadyRequested
-                                  ? 'notifications'
-                                  : 'notifications-active'
-                              }
-                              size={16}
-                              color="#fff"
-                            />
-                            <Text style={styles.requestProvidersButtonText}>
-                              {alreadyRequested
-                                ? t('services.requestProvidersRequested')
-                                : t('services.requestProviders')}
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    ) : selectedServiceType === item.name ? (
-                      <Icon name="check-circle" size={24} color={theme.primary} />
-                    ) : null}
-                  </View>
-                );
-              }}
-            />
-          </View>
-        </View>
-      </Modal>
+      {/* Service Type Modal — web ServiceSelectionModal parity */}
+      <ServiceSelectionModal
+        open={showServiceTypeModal}
+        onClose={() => setShowServiceTypeModal(false)}
+        categories={serviceCategories}
+        selectedName={selectedServiceType || undefined}
+        onSelect={handleSelectServiceType}
+        theme={theme}
+        isDark={isDarkMode}
+        language={language}
+      />
 
       {/* Address Selection Modal */}
       <Modal
@@ -2393,6 +2417,20 @@ export default function ServiceRequestScreen({
         }}
         onCancel={() => setConfirmationModal({visible: false, title: '', message: '', onConfirm: () => {}})}
       />
+      {activeConflict ? (
+        <ActiveRequestConflictBanner
+          active={activeConflict}
+          onDismiss={() => setActiveConflict(null)}
+          onView={action => {
+            setActiveConflict(null);
+            if (action.screen === 'ActiveService') {
+              navigation.navigate('ActiveService', action.params);
+            } else {
+              navigation.navigate('ServiceHistory');
+            }
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -2401,26 +2439,145 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 24,
+  },
   header: {
-    padding: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  step: {
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  stepHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    marginBottom: 6,
+  },
+  photosHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  /** Android elevation draws a hard outline — web crystal cards have no border */
+  stepCardFlat: {
+    elevation: 0,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: {width: 0, height: 2},
+  },
+  stepCardInner: {
+    padding: 10,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   section: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
     marginBottom: 24,
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
+  },
+  serviceEntry: {
+    gap: 10,
+  },
+  serviceSearchCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 52,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+  },
+  serviceSearchLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  serviceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  serviceTile: {
+    width: '48%',
+    flexGrow: 1,
+    maxWidth: '48.5%',
+  },
+  serviceTileSurface: {
+    width: '100%',
+  },
+  serviceTileInner: {
+    minHeight: 100,
+    maxHeight: 120,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  serviceTileIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceTileName: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  serviceSelectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    minHeight: 44,
+  },
+  serviceSelectedMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+  },
+  categoryIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceSelectedName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  changeService: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   serviceTypeButton: {
     flexDirection: 'row',
@@ -2442,38 +2599,33 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 16,
   },
+  problemMore: {
+    marginTop: 10,
+  },
+  followUps: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(100,116,139,0.35)',
+  },
   problemInput: {
-    borderWidth: 1,
+    borderWidth: 0,
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    minHeight: 100,
+    padding: 12,
+    fontSize: 15,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   charCount: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 2,
     textAlign: 'right',
-  },
-  addPhotoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 16,
-    gap: 8,
-  },
-  addPhotoText: {
-    fontSize: 16,
-    fontWeight: '500',
   },
   photosContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginTop: 12,
+    marginBottom: 12,
   },
   photoWrapper: {
     position: 'relative',
@@ -2534,15 +2686,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
-    marginHorizontal: 20,
+    padding: 16,
+    marginHorizontal: 14,
+    marginTop: 4,
     marginBottom: 40,
     borderRadius: 12,
     gap: 8,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
   },
   modalOverlay: {

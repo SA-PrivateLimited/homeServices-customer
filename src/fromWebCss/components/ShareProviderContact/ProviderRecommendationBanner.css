@@ -1,0 +1,72 @@
+.recommend-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 18px 20px;
+  background: color-mix(in srgb, var(--primary) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, white);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.recommend-banner--inline {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.recommend-banner__art {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  object-fit: cover;
+  object-position: center;
+  background: transparent;
+  display: block;
+}
+
+.recommend-banner__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.recommend-banner__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.recommend-banner__text {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--textSecondary);
+}
+
+.recommend-banner .hs-btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 700px) {
+  .recommend-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recommend-banner__art {
+    align-self: center;
+  }
+
+  .recommend-banner .hs-btn {
+    width: 100%;
+  }
+}

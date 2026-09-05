@@ -7,14 +7,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import {Button, Select} from 'sapvt-ltd-app-packages';
 import type {Theme} from '../../utils/theme';
-import {commonStyles} from '../../utils/theme';
+
+export type GenderOption = {value: string; label: string};
 
 export interface SettingsPersonalInformationProps {
   theme: Theme;
   title: string;
+  subtitle?: string;
   editLabel: string;
   saveLabel: string;
   cancelLabel: string;
@@ -27,10 +29,17 @@ export interface SettingsPersonalInformationProps {
   phone: string;
   phoneLockedHint: string;
   verifiedLabel: string;
+  secondaryPhoneLabel?: string;
+  secondaryPhoneHint?: string;
+  secondaryPhonePlaceholder?: string;
+  secondaryPhone?: string;
+  secondaryPhoneDisplay?: string;
+  onSecondaryPhoneChange?: (value: string) => void;
   genderLabel: string;
   genderPlaceholder: string;
   gender: string;
-  genderOptions: string[];
+  genderDisplay?: string;
+  genderOptions: GenderOption[];
   onGenderChange: (value: string) => void;
   addressLabel: string;
   addressEditor: React.ReactNode;
@@ -44,6 +53,7 @@ export interface SettingsPersonalInformationProps {
 export function SettingsPersonalInformation({
   theme,
   title,
+  subtitle,
   editLabel,
   saveLabel,
   cancelLabel,
@@ -56,9 +66,16 @@ export function SettingsPersonalInformation({
   phone,
   phoneLockedHint,
   verifiedLabel,
+  secondaryPhoneLabel,
+  secondaryPhoneHint,
+  secondaryPhonePlaceholder,
+  secondaryPhone = '',
+  secondaryPhoneDisplay,
+  onSecondaryPhoneChange,
   genderLabel,
   genderPlaceholder,
   gender,
+  genderDisplay,
   genderOptions,
   onGenderChange,
   addressLabel,
@@ -69,31 +86,46 @@ export function SettingsPersonalInformation({
   onSave,
   onCancel,
 }: SettingsPersonalInformationProps) {
+  const isDark = theme.background.toLowerCase() === '#0b1220';
+
   return (
     <View style={styles.section}>
-      <View style={styles.kickerRow}>
-        <Text style={[styles.kicker, {color: theme.textSecondary}]}>
-          {title}
-        </Text>
-        <TouchableOpacity
-          onPress={onToggleEdit}
-          style={styles.editBtn}
-          disabled={saving}
-          accessibilityRole="button"
-          accessibilityLabel={isEditing ? saveLabel : editLabel}>
-          {saving ? (
-            <ActivityIndicator size="small" color={theme.primary} />
-          ) : (
-            <Icon
-              name={isEditing ? 'checkmark' : 'create-outline'}
-              size={22}
-              color={theme.primary}
-            />
-          )}
-        </TouchableOpacity>
-      </View>
+      <View
+        style={[
+          styles.card,
+          {backgroundColor: theme.card, borderColor: theme.border},
+        ]}>
+        {/* Web `.personal-info-header` — title inside card; Edit only when not editing */}
+        <View style={styles.header}>
+          <View style={styles.heading}>
+            <Text style={[styles.title, {color: theme.text}]}>{title}</Text>
+            {isEditing && subtitle ? (
+              <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {!isEditing ? (
+            <TouchableOpacity
+              onPress={onToggleEdit}
+              style={styles.editBtn}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel={editLabel}>
+              {saving ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <>
+                  <Icon name="edit" size={16} color={theme.primary} />
+                  <Text style={[styles.editText, {color: theme.primary}]}>
+                    {editLabel}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
-      <View style={[styles.card, {backgroundColor: theme.card}]}>
         <Text style={[styles.label, {color: theme.textSecondary}]}>
           {nameLabel}
         </Text>
@@ -115,29 +147,79 @@ export function SettingsPersonalInformation({
 
         <View style={[styles.divider, {backgroundColor: theme.border}]} />
 
-        <View style={styles.labelRow}>
-          <Text style={[styles.label, styles.labelFlush, {color: theme.textSecondary}]}>
-            {phoneLabel}
-          </Text>
-          <Icon
-            name="lock-closed"
-            size={14}
-            color={theme.textSecondary}
-            accessibilityLabel={phoneLockedHint}
-          />
-        </View>
+        <Text style={[styles.label, {color: theme.textSecondary}]}>
+          {phoneLabel}
+        </Text>
         <View style={styles.phoneRow}>
-          <Text style={[styles.value, {color: theme.text, flex: 1}]}>
+          <Text style={[styles.value, {color: theme.text, flexShrink: 1}]}>
             {phone}
           </Text>
-          <View style={[styles.badge, {backgroundColor: theme.success}]}>
-            <Icon name="checkmark-circle" size={12} color="#fff" />
-            <Text style={styles.badgeText}>{verifiedLabel}</Text>
+          <View style={styles.verifiedInline}>
+            <Icon name="check-circle" size={14} color={theme.success} />
+            <Text style={[styles.verifiedText, {color: theme.success}]}>
+              {verifiedLabel}
+            </Text>
           </View>
         </View>
-        <Text style={[styles.lockedHint, {color: theme.success}]}>
+        <Text style={[styles.lockedHint, {color: theme.textSecondary}]}>
           {phoneLockedHint}
         </Text>
+
+        {secondaryPhoneLabel ? (
+          <>
+            <View style={[styles.divider, {backgroundColor: theme.border}]} />
+            <Text style={[styles.label, {color: theme.textSecondary}]}>
+              {secondaryPhoneLabel}
+            </Text>
+            {isEditing ? (
+              <>
+                <View
+                  style={[
+                    styles.phoneInputRow,
+                    {borderColor: theme.border},
+                  ]}>
+                  <Text
+                    style={[styles.phonePrefix, {color: theme.textSecondary}]}>
+                    +91
+                  </Text>
+                  <TextInput
+                    style={[styles.phoneInput, {color: theme.text}]}
+                    value={secondaryPhone}
+                    onChangeText={text =>
+                      onSecondaryPhoneChange?.(
+                        text.replace(/\D/g, '').slice(0, 10),
+                      )
+                    }
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    placeholder={secondaryPhonePlaceholder || '10-digit mobile'}
+                    placeholderTextColor={theme.textSecondary}
+                    accessibilityLabel={secondaryPhoneLabel}
+                  />
+                </View>
+                {secondaryPhoneHint ? (
+                  <Text
+                    style={[styles.lockedHint, {color: theme.textSecondary}]}>
+                    {secondaryPhoneHint}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={[styles.value, {color: theme.text}]}>
+                  {secondaryPhoneDisplay ||
+                    (secondaryPhone ? `+91 ${secondaryPhone}` : '—')}
+                </Text>
+                {secondaryPhoneHint ? (
+                  <Text
+                    style={[styles.lockedHint, {color: theme.textSecondary}]}>
+                    {secondaryPhoneHint}
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </>
+        ) : null}
 
         <View style={[styles.divider, {backgroundColor: theme.border}]} />
 
@@ -146,35 +228,43 @@ export function SettingsPersonalInformation({
         </Text>
         {isEditing ? (
           <Select
-            options={genderOptions.map((o) => ({value: o, label: o}))}
+            variant="crystal"
+            options={genderOptions}
             value={gender}
             placeholder={genderPlaceholder}
+            allowClear
+            clearAriaLabel="Clear"
             onChange={onGenderChange}
+            colors={{
+              card: isDark
+                ? 'rgba(255,255,255,0.1)'
+                : 'rgba(255,255,255,0.55)',
+            }}
           />
         ) : (
           <Text style={[styles.value, {color: theme.text}]}>
-            {gender || '—'}
+            {genderDisplay || gender || '—'}
           </Text>
         )}
 
         <View style={[styles.divider, {backgroundColor: theme.border}]} />
 
-        <View style={styles.labelRow}>
-          <Icon name="location-outline" size={16} color={theme.textSecondary} />
-          <Text style={[styles.label, styles.labelFlush, {color: theme.textSecondary}]}>
-            {addressLabel}
-          </Text>
-        </View>
+        <Text style={[styles.label, {color: theme.textSecondary}]}>
+          {addressLabel}
+        </Text>
         {isEditing ? addressEditor : addressView}
 
         {successMessage && !isEditing ? (
           <View
             style={[
               styles.success,
-              {backgroundColor: `${theme.success}1A`, borderColor: `${theme.success}55`},
+              {
+                backgroundColor: `${theme.success}1A`,
+                borderColor: `${theme.success}55`,
+              },
             ]}
             accessibilityRole="text">
-            <Icon name="checkmark-circle" size={18} color={theme.success} />
+            <Icon name="check-circle" size={18} color={theme.success} />
             <Text style={[styles.successText, {color: theme.text}]}>
               {successMessage}
             </Text>
@@ -188,6 +278,7 @@ export function SettingsPersonalInformation({
               variant="secondary"
               onPress={onCancel}
               disabled={saving}
+              block
               style={styles.actionBtn}
               colors={{
                 primary: theme.primary,
@@ -201,6 +292,7 @@ export function SettingsPersonalInformation({
               variant="primary"
               loading={saving}
               onPress={onSave}
+              block
               style={styles.actionBtn}
               colors={{
                 primary: theme.primary,
@@ -218,36 +310,34 @@ export function SettingsPersonalInformation({
 
 const styles = StyleSheet.create({
   section: {marginBottom: 8},
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    minHeight: 40,
-  },
-  kicker: {fontSize: 12, fontWeight: '700', letterSpacing: 1},
-  editBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   card: {
     marginHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
-    ...commonStyles.shadowSmall,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 0,
+    shadowOpacity: 0,
   },
-  label: {fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 4},
-  labelFlush: {marginTop: 0, marginBottom: 0},
-  labelRow: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  heading: {flex: 1, paddingRight: 4},
+  title: {fontSize: 15, fontWeight: '700', letterSpacing: -0.2},
+  subtitle: {fontSize: 13, marginTop: 2, lineHeight: 18},
+  editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-    marginBottom: 4,
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    minHeight: 32,
   },
+  editText: {fontSize: 13, fontWeight: '600'},
+  label: {fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 4},
   value: {fontSize: 15, lineHeight: 22, fontWeight: '600'},
   input: {
     borderWidth: 1,
@@ -256,6 +346,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
   },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
+  },
+  phonePrefix: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 10,
+  },
   divider: {height: StyleSheet.hairlineWidth, marginVertical: 12},
   phoneRow: {
     flexDirection: 'row',
@@ -263,15 +371,12 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
   },
-  badge: {
+  verifiedInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
+    gap: 3,
   },
-  badgeText: {color: '#fff', fontSize: 11, fontWeight: '700'},
+  verifiedText: {fontSize: 12, fontWeight: '600'},
   lockedHint: {fontSize: 12, marginTop: 4},
   success: {
     marginTop: 16,
@@ -284,10 +389,9 @@ const styles = StyleSheet.create({
   },
   successText: {flex: 1, fontSize: 13, fontWeight: '600'},
   actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: 'column-reverse',
     gap: 10,
     marginTop: 16,
   },
-  actionBtn: {minWidth: 96},
+  actionBtn: {width: '100%', alignSelf: 'stretch'},
 });

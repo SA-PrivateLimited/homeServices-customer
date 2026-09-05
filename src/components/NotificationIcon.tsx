@@ -16,7 +16,7 @@ const NotificationIcon: React.FC<NotificationIconProps> = ({onPress}) => {
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={[styles.container, {marginRight: 15}]}
+      style={[styles.container, {marginRight: 0}]}
       activeOpacity={0.7}>
       <Icon name="notifications-outline" size={24} color={theme.text} />
       {unreadCount > 0 && (
@@ -39,12 +39,15 @@ const NotificationIcon: React.FC<NotificationIconProps> = ({onPress}) => {
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    padding: 4,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: 2,
+    right: 2,
     minWidth: 18,
     height: 18,
     borderRadius: 9,

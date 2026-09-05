@@ -1,0 +1,85 @@
+.phone-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.phone-action--empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--textSecondary);
+}
+
+.phone-action-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--textSecondary);
+}
+
+.phone-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.phone-action-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.phone-action-number:hover {
+  color: var(--primary);
+}
+
+.phone-action-number--under {
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, var(--textSecondary));
+}
+
+.phone-action-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone-action-btn .hs-btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone-action-btn--block {
+  width: 100%;
+}
+
+.phone-action--call-only {
+  align-items: stretch;
+  gap: 8px;
+}
+
+.phone-action--compact .phone-action-row {
+  gap: 8px;
+}
+
+.phone-action--block .phone-action-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.phone-action--block .phone-action-btn {
+  width: 100%;
+}

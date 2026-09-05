@@ -56,14 +56,14 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
               />
             </View>
             <Text style={[styles.headerTitle, {color: theme.text}]}>
-              {t('common.logoutTitle')}
+              {t('settings.logoutConfirmTitle') || t('common.logoutTitle')}
             </Text>
           </View>
 
           {/* Message */}
           <View style={styles.contentContainer}>
             <Text style={[styles.messageText, {color: theme.textSecondary}]}>
-              {t('common.logoutMessage')}
+              {t('settings.logoutConfirmMessage') || t('common.logoutMessage')}
             </Text>
             <Text
               style={[
@@ -91,7 +91,7 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
                   styles.cancelButtonText,
                   {color: theme.text},
                 ]}>
-                {t('common.cancel')}
+                {t('actions.cancel') || t('common.cancel')}
               </Text>
             </TouchableOpacity>
 
@@ -102,7 +102,9 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
               ]}
               onPress={onConfirm}
               activeOpacity={0.8}>
-              <Text style={styles.confirmButtonText}>{t('common.logout')}</Text>
+              <Text style={styles.confirmButtonText}>
+                {t('settings.logout') || t('common.logout')}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,0 +1,91 @@
+.user-error {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1rem;
+  border: 1px solid transparent;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.user-error--inline {
+  display: block;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #b42318;
+}
+
+.user-error--banner.user-error--error {
+  background: #fef3f2;
+  border-color: #fecdca;
+  color: #7a271a;
+}
+
+.user-error--banner.user-error--warning {
+  background: #fffaeb;
+  border-color: #fedf89;
+  color: #7a2e0e;
+}
+
+.user-error--banner.user-error--info {
+  background: #eff8ff;
+  border-color: #b2ddff;
+  color: #194185;
+}
+
+.user-error-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.user-error-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-error-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 650;
+  margin: 0 0 0.2rem;
+}
+
+.user-error-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.user-error-actions {
+  margin-top: 0.65rem;
+}
+
+.user-error-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0.15rem;
+  cursor: pointer;
+  opacity: 0.7;
+  color: inherit;
+}
+
+.user-error-dismiss:hover {
+  opacity: 1;
+}
+
+.user-error--inline.user-error--warning {
+  color: #b54708;
+}
+
+.user-error--inline.user-error--info {
+  color: #175cd3;
+}

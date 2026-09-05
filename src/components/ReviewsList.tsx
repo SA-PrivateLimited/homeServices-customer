@@ -1,91 +1,64 @@
 /**
- * Reviews List Component
- * Displays reviews for a provider
- * Reviews are read-only for providers
+ * Customer reviews list — web ProviderDetailsPage review section parity.
+ * Rating-only reviews (no comment) still render author / stars / date / service.
  */
 
-import React, {useState, useEffect} from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, {useEffect, useState} from 'react';
+import {View, Text, StyleSheet, ActivityIndicator} from 'react-native';
+import {useTranslation} from 'react-i18next';
 import {getProviderReviews, Review} from '../services/reviewService';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {useStore} from '../store';
+import {formatJobCalendarDate} from '../utils/dateDisplay';
+import {localizedServiceName} from '../utils/serviceDisplay';
 
 interface ReviewsListProps {
   providerId: string;
   showHeader?: boolean;
 }
 
+function tidyAuthor(raw?: string | null): string {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default function ReviewsList({
   providerId,
   showHeader = true,
 }: ReviewsListProps) {
-  const {isDarkMode} = useStore();
+  const {isDarkMode, language} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadReviews();
-  }, [providerId]);
-
-  const loadReviews = async () => {
-    try {
-      setLoading(true);
-      const providerReviews = await getProviderReviews(providerId);
-      // Ensure we have a valid array
-      setReviews(Array.isArray(providerReviews) ? providerReviews : []);
-    } catch (error: any) {
-      console.error('Error loading reviews:', error);
-      // Set empty array on error to prevent crashes
-      setReviews([]);
-      // Show error message but don't throw - component will show empty state
-      if (error.message?.includes('index')) {
-        console.warn('Missing Firestore index. Please create index for reviews: providerId + createdAt');
+    let cancelled = false;
+    const load = async () => {
+      if (!providerId) {
+        setReviews([]);
+        setLoading(false);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const renderStars = (rating: number) => {
-    return (
-      <View style={styles.starsContainer}>
-        {[1, 2, 3, 4, 5].map(star => (
-          <Icon
-            key={star}
-            name={star <= rating ? 'star' : 'star-border'}
-            size={16}
-            color={star <= rating ? '#FFD700' : '#CCCCCC'}
-          />
-        ))}
-      </View>
-    );
-  };
-
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return 'Today';
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
+      try {
+        setLoading(true);
+        const providerReviews = await getProviderReviews(providerId);
+        if (!cancelled) {
+          setReviews(Array.isArray(providerReviews) ? providerReviews : []);
+        }
+      } catch {
+        if (!cancelled) setReviews([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
 
   if (loading) {
     return (
@@ -98,214 +71,144 @@ export default function ReviewsList({
   if (reviews.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Icon name="rate-review" size={48} color={theme.textSecondary} />
         <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
-          No reviews yet
+          {t('review.noReviewsYet') ||
+            t('providers.noReviewsYet') ||
+            'No reviews yet'}
         </Text>
       </View>
     );
   }
 
+  const avg =
+    reviews.reduce((sum, r) => sum + r.rating, 0) / Math.max(reviews.length, 1);
+
   return (
-    <View style={styles.container}>
-      {showHeader && (
+    <View>
+      {showHeader ? (
         <View style={styles.header}>
           <Text style={[styles.headerTitle, {color: theme.text}]}>
-            Reviews ({reviews.length})
+            {t('review.customerReviews') || 'Customer reviews'} ({reviews.length})
           </Text>
-          <View style={styles.averageRating}>
-            <Icon name="star" size={20} color="#FFD700" />
-            <Text style={[styles.averageRatingText, {color: theme.text}]}>
-              {(
-                reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-              ).toFixed(1)}
-            </Text>
-          </View>
+          <Text style={[styles.averageRatingText, {color: theme.text}]}>
+            ★ {avg.toFixed(1)}
+          </Text>
         </View>
-      )}
+      ) : null}
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {reviews.map(review => (
+      {reviews.map(review => {
+        const comment = String(review.comment || '').trim();
+        const service = String(review.serviceType || '').trim();
+        const commentIsServiceTag =
+          Boolean(comment) &&
+          Boolean(service) &&
+          comment.toLowerCase() === service.toLowerCase();
+        const body = commentIsServiceTag ? '' : comment;
+        const author = tidyAuthor(review.customerName);
+        const when = review.createdAt
+          ? formatJobCalendarDate(review.createdAt, language, '')
+          : '';
+        const stars =
+          '★'.repeat(Math.max(0, Math.min(5, review.rating))) +
+          '☆'.repeat(Math.max(0, 5 - review.rating));
+
+        return (
           <View
-            key={review.id}
-            style={[styles.reviewCard, {backgroundColor: theme.card}]}>
-            {/* Review Header */}
-            <View style={styles.reviewHeader}>
-              <View style={styles.reviewHeaderLeft}>
-                <View style={styles.customerAvatar}>
-                  <Text style={styles.customerInitial}>
-                    {review.customerName.charAt(0).toUpperCase()}
+            key={review.id || `${review.providerId}-${review.createdAt}`}
+            style={[styles.reviewItem, {borderBottomColor: theme.border}]}>
+            <View style={styles.reviewHead}>
+              <View style={styles.reviewHeadMain}>
+                {author ? (
+                  <Text style={[styles.author, {color: theme.text}]}>
+                    {author}
                   </Text>
-                </View>
-                <View>
-                  <Text style={[styles.customerName, {color: theme.text}]}>
-                    {review.customerName}
-                  </Text>
-                  <Text style={[styles.serviceType, {color: theme.textSecondary}]}>
-                    {review.serviceType}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.reviewHeaderRight}>
-                {renderStars(review.rating)}
-                <Text style={[styles.reviewDate, {color: theme.textSecondary}]}>
-                  {formatDate(review.createdAt)}
+                ) : null}
+                <Text style={styles.stars} accessibilityLabel={`${review.rating} stars`}>
+                  {stars}
                 </Text>
               </View>
+              {when ? (
+                <Text style={[styles.when, {color: theme.textSecondary}]}>
+                  {when}
+                </Text>
+              ) : null}
             </View>
-
-            {/* Review Comment */}
-            {review.comment && (
-              <Text style={[styles.reviewComment, {color: theme.text}]}>
-                {review.comment}
+            {body ? (
+              <Text style={[styles.comment, {color: theme.text}]}>{body}</Text>
+            ) : null}
+            {service ? (
+              <Text style={[styles.service, {color: theme.textSecondary}]}>
+                {localizedServiceName(service)}
               </Text>
-            )}
-
-            {/* Review Photos */}
-            {review.photos && review.photos.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photosContainer}>
-                {review.photos.map((photo, index) => (
-                  <Image
-                    key={index}
-                    source={{uri: photo}}
-                    style={styles.reviewPhoto}
-                  />
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Provider Cannot Edit Notice */}
-            <View style={styles.readOnlyNotice}>
-              <Icon name="lock" size={12} color={theme.textSecondary} />
-              <Text style={[styles.readOnlyText, {color: theme.textSecondary}]}>
-                Review cannot be edited
-              </Text>
-            </View>
+            ) : null}
           </View>
-        ))}
-      </ScrollView>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
-    padding: 20,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
   },
   emptyText: {
-    marginTop: 12,
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingBottom: 8,
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  averageRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    fontSize: 16,
+    fontWeight: '700',
   },
   averageRatingText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
   },
-  reviewCard: {
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+  reviewItem: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 4,
   },
-  reviewHeader: {
+  reviewHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  reviewHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  reviewHeadMain: {
     flex: 1,
-    gap: 12,
+    minWidth: 0,
+    gap: 2,
   },
-  customerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+  author: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  customerInitial: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  stars: {
+    fontSize: 13,
+    letterSpacing: 1,
+    color: '#D69E2E',
   },
-  customerName: {
-    fontSize: 16,
-    fontWeight: '600',
+  when: {
+    fontSize: 12,
   },
-  serviceType: {
+  comment: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  service: {
     fontSize: 12,
     marginTop: 2,
   },
-  reviewHeaderRight: {
-    alignItems: 'flex-end',
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    gap: 2,
-    marginBottom: 4,
-  },
-  reviewDate: {
-    fontSize: 12,
-  },
-  reviewComment: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  photosContainer: {
-    marginBottom: 12,
-  },
-  reviewPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  readOnlyNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-  },
-  readOnlyText: {
-    fontSize: 11,
-  },
 });
-

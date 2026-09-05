@@ -20,6 +20,8 @@ import HelpSupportScreen from '../screens/HelpSupportScreen';
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 import ActiveServiceScreen from '../screens/ActiveServiceScreen';
+import AuthHandoffScreen from '../screens/AuthHandoffScreen';
+import LegalDocumentScreen from '../screens/LegalDocumentScreen';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -102,6 +104,7 @@ export default function AppNavigator() {
         initialRouteName="Main"
         screenOptions={{headerShown: false}}>
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="AuthHandoff" component={AuthHandoffScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen
           name="PhoneVerification"
@@ -143,6 +146,11 @@ export default function AppNavigator() {
           name="HelpSupport"
           component={HelpSupportScreen}
           options={{headerShown: false}}
+        />
+        <Stack.Screen
+          name="LegalDocument"
+          component={LegalDocumentScreen}
+          options={{headerShown: true, title: ''}}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -2,7 +2,6 @@ import React from 'react';
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import type {Theme} from '../../utils/theme';
-import {commonStyles} from '../../utils/theme';
 
 export interface SettingsAccountSectionProps {
   theme: Theme;
@@ -13,6 +12,10 @@ export interface SettingsAccountSectionProps {
   variant?: 'logout' | 'login';
 }
 
+/**
+ * Web `AccountSection` — logout is a bordered card row (not solid pink fill).
+ * `.account-action-row--logout`: card bg + error-tinted border + red label/icon.
+ */
 export function SettingsAccountSection({
   theme,
   title,
@@ -26,14 +29,16 @@ export function SettingsAccountSection({
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.kicker, {color: theme.textSecondary}]}>{title}</Text>
+      {title ? (
+        <Text style={[styles.kicker, {color: theme.textSecondary}]}>{title}</Text>
+      ) : null}
       <TouchableOpacity
         style={[
           styles.row,
           {
-            backgroundColor: isLogout
-              ? `${danger}14`
-              : theme.card,
+            backgroundColor: theme.card,
+            borderColor: isLogout ? `${danger}38` : theme.border,
+            borderWidth: isLogout ? 1.5 : StyleSheet.hairlineWidth,
           },
         ]}
         onPress={onAction}
@@ -57,7 +62,7 @@ export function SettingsAccountSection({
             <Text
               style={[
                 styles.hint,
-                {color: isLogout ? danger : theme.textSecondary},
+                {color: isLogout ? `${danger}CC` : theme.textSecondary},
               ]}>
               {actionHint}
             </Text>
@@ -74,11 +79,11 @@ export function SettingsAccountSection({
 }
 
 const styles = StyleSheet.create({
-  section: {marginBottom: 8},
+  section: {marginBottom: 8, marginTop: 12},
   kicker: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: -0.2,
     paddingHorizontal: 16,
     marginBottom: 8,
   },
@@ -90,11 +95,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 16,
-    ...commonStyles.shadowSmall,
+    borderRadius: 14,
   },
   left: {flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0},
   text: {marginLeft: 12, flex: 1},
-  title: {fontSize: 15, fontWeight: '600'},
+  title: {fontSize: 15, fontWeight: '700'},
   hint: {fontSize: 12, marginTop: 2},
 });

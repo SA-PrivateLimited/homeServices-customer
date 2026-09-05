@@ -9,6 +9,7 @@ const useTranslation = () => {
 
   return {
     t,
+    i18n,
     language: i18n.language,
     changeLanguage: i18n.changeLanguage,
   };

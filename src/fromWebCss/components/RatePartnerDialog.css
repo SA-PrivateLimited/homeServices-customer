@@ -1,0 +1,47 @@
+.rate-partner-dialog__lead {
+  margin: 0 0 12px;
+  color: var(--hs-text-secondary, #718096);
+  font-size: 0.95rem;
+}
+
+.rate-partner-dialog__stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.rate-partner-dialog__star {
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--hs-border, #cbd5e0);
+}
+
+.rate-partner-dialog__star.is-active {
+  color: #f6ad55;
+}
+
+.rate-partner-dialog__comment-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.rate-partner-dialog__comment {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--hs-border, #e2e8f0);
+  font: inherit;
+  resize: vertical;
+}
+
+.rate-partner-dialog__error {
+  margin: 8px 0 0;
+  color: var(--hs-error, #e53e3e);
+  font-size: 0.9rem;
+}

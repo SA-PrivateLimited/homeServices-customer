@@ -1,0 +1,482 @@
+/**
+ * Akanso Crystal Glass — CustomerWeb global surfaces.
+ * Loaded after package styles.css so these overrides win app-wide.
+ */
+
+/* Shared glass recipe */
+:root {
+  --crystal-surface-bg: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--card) 55%, transparent)),
+    color-mix(in srgb, var(--primary) 10%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+  --crystal-surface-bg-strong: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--card) 72%, transparent),
+    color-mix(in srgb, var(--primary) 8%, color-mix(in srgb, var(--card) 40%, transparent))
+  );
+  --crystal-control-bg: color-mix(in srgb, var(--card) 55%, transparent);
+  --crystal-inset: inset 0 1px 0 var(--crystal-highlight);
+}
+
+.crystal-surface {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--crystal-bg);
+  border: none;
+  border-radius: var(--crystal-radius);
+  box-shadow: var(--crystal-shadow);
+}
+
+.crystal-surface--glass {
+  background: var(--crystal-surface-bg);
+  backdrop-filter: blur(var(--crystal-blur)) saturate(145%);
+  -webkit-backdrop-filter: blur(var(--crystal-blur)) saturate(145%);
+  box-shadow: var(--crystal-inset), var(--crystal-shadow);
+}
+
+.crystal-surface--glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.45),
+    color-mix(in srgb, var(--primary) 6%, transparent) 40%,
+    transparent 72%
+  );
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.crystal-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+.crystal-surface--elevated {
+  background: var(--crystal-bg-strong);
+  box-shadow: var(--crystal-shadow-elevated);
+}
+
+.crystal-surface--compact {
+  border-radius: var(--crystal-radius-sm);
+}
+
+.crystal-input {
+  background: var(--crystal-control-bg);
+  border: none;
+  border-radius: var(--crystal-radius-sm);
+  box-shadow: var(--crystal-inset), var(--crystal-shadow);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+.crystal-input:focus-within {
+  box-shadow:
+    var(--crystal-inset),
+    0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent),
+    var(--crystal-shadow);
+}
+
+/* ── Cards / widgets ── */
+.hs-card,
+.hs-widget {
+  border: none !important;
+  border-radius: 18px !important;
+  background: var(--crystal-surface-bg) !important;
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  box-shadow: var(--crystal-inset), var(--crystal-shadow) !important;
+}
+
+.hs-card--interactive:hover {
+  box-shadow:
+    var(--crystal-inset),
+    0 10px 26px color-mix(in srgb, var(--primary) 12%, rgba(30, 60, 90, 0.07)) !important;
+}
+
+/* ── Modals / drawers / dialogs — opaque crystal (no bleed-through text) ── */
+.hs-modal,
+.hs-drawer {
+  border: none !important;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--card) 97%, var(--primary)),
+    color-mix(in srgb, var(--card) 92%, var(--primary))
+  ) !important;
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    var(--crystal-shadow-modal) !important;
+}
+
+.hs-dialog__footer,
+.hs-drawer__footer {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--card) 94%, var(--primary)) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hs-modal-backdrop,
+.hs-drawer-backdrop {
+  background: rgba(15, 35, 55, 0.52) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Inputs / phone / textarea ── */
+.hs-input__shell,
+.hs-phone__row,
+textarea.hs-input {
+  border: none !important;
+  border-radius: 12px !important;
+  background: var(--crystal-control-bg) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: var(--crystal-inset), 0 2px 10px rgba(30, 60, 90, 0.03);
+}
+
+.hs-input-wrap--error .hs-input__shell,
+.hs-phone--error .hs-phone__row {
+  box-shadow:
+    var(--crystal-inset),
+    0 0 0 1.5px color-mix(in srgb, var(--error, #e53e3e) 55%, transparent) !important;
+}
+
+.hs-input__shell:focus-within,
+.hs-phone__row:focus-within,
+textarea.hs-input:focus {
+  box-shadow:
+    var(--crystal-inset),
+    0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent) !important;
+}
+
+.hs-input__affix,
+.hs-phone__prefix {
+  background: color-mix(in srgb, var(--primary) 8%, transparent) !important;
+  border-color: color-mix(in srgb, var(--border) 50%, transparent) !important;
+}
+
+/* ── Select triggers (all pages) ── */
+.hs-dd__trigger {
+  border: none !important;
+  border-radius: 12px !important;
+  background: var(--crystal-control-bg) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: var(--crystal-inset), 0 2px 10px rgba(30, 60, 90, 0.03) !important;
+}
+
+.hs-dd.is-open .hs-dd__trigger {
+  box-shadow:
+    var(--crystal-inset),
+    0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent) !important;
+}
+
+/* Chevron / clear icons — natural glyph width only (never flex-grow) */
+.hs-dd__actions {
+  flex: 0 0 auto !important;
+  gap: 2px !important;
+}
+
+.hs-dd__chevron,
+.hs-dd__clear,
+.hs-dd__actions .hs-icon,
+.hs-dd__trigger .hs-icon {
+  flex: 0 0 auto !important;
+  width: 1em !important;
+  height: 1em !important;
+  max-width: 1.25em !important;
+  font-size: 18px !important;
+}
+
+.hs-dd__value,
+.hs-dd__placeholder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── Select / SingleSelect sheet + option rows (incl. body-portaled mobile) ── */
+.hs-dd__panel {
+  isolation: isolate;
+  background: var(--crystal-surface-bg-strong) !important;
+  border: none !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--crystal-inset), var(--crystal-shadow-modal) !important;
+}
+
+.hs-dd__panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.45),
+    color-mix(in srgb, var(--primary) 6%, transparent) 40%,
+    transparent 72%
+  );
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.hs-dd__panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hs-dd__sheet-handle {
+  background: color-mix(in srgb, var(--textSecondary) 35%, transparent) !important;
+}
+
+.hs-dd__panel-title {
+  color: var(--text) !important;
+}
+
+.hs-dd__search {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent) !important;
+}
+
+.hs-dd__search-input {
+  border: none !important;
+  border-radius: 12px !important;
+  background: var(--crystal-control-bg) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: var(--crystal-inset);
+  color: var(--text) !important;
+}
+
+.hs-dd__search-input:focus {
+  outline: none;
+  box-shadow:
+    var(--crystal-inset),
+    0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.hs-dd__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 14px !important;
+}
+
+.hs-dd__list > li {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.hs-dd__option {
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--card) 52%, transparent) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 2px 10px color-mix(in srgb, var(--primary) 6%, rgba(30, 60, 90, 0.03));
+  color: var(--text) !important;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.hs-dd__option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.hs-dd__option:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--primary) 12%,
+    color-mix(in srgb, var(--card) 50%, transparent)
+  ) !important;
+}
+
+.hs-dd__option.is-active {
+  background: color-mix(
+    in srgb,
+    var(--primary) 16%,
+    color-mix(in srgb, var(--card) 48%, transparent)
+  ) !important;
+  color: var(--primary) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 1.5px color-mix(in srgb, var(--primary) 32%, transparent),
+    0 4px 14px color-mix(in srgb, var(--primary) 10%, rgba(30, 60, 90, 0.04));
+}
+
+.hs-dd__empty {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* ── Chips: light glass default; keep selected/primary readable ── */
+.hs-chip:not(.hs-chip--primary):not(.hs-chip--selected):not(.is-active) {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  color: var(--text);
+}
+
+.hs-chip.hs-chip--primary,
+.hs-chip.hs-chip--selected,
+.hs-chip.is-active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.hs-chip.hs-chip--primary .hs-chip__label,
+.hs-chip.hs-chip--selected .hs-chip__label,
+.hs-chip.is-active .hs-chip__label {
+  color: #fff !important;
+}
+
+/* App-local solid panels → crystal (covers Settings, Help, galleries) */
+.work-showcase-gallery,
+.account-action-row,
+.lang-switcher,
+.akanso-support-chip,
+.help-support__topic,
+.help-support__contact-row,
+.profile-header.hs-card,
+.personal-info,
+.provider-request-card,
+.notif-panel,
+.section-card {
+  border: none !important;
+  background: var(--crystal-surface-bg) !important;
+  backdrop-filter: blur(16px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(145%) !important;
+  box-shadow: var(--crystal-inset), var(--crystal-shadow) !important;
+}
+
+/* Account menu: opaque crystal (no see-through content behind) */
+.account-menu-panel {
+  border: none !important;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--card) 94%, var(--primary)),
+    color-mix(in srgb, var(--card) 88%, var(--primary))
+  ) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 16px 40px rgba(30, 60, 90, 0.16) !important;
+}
+
+.lang-switcher,
+.akanso-support-chip {
+  border-radius: 999px !important;
+}
+
+html.night-vision .lang-switcher {
+  background: var(--card) !important;
+  box-shadow: inset 0 1px 0 var(--crystal-highlight), var(--crystal-shadow) !important;
+}
+
+html.night-vision .lang-switcher button:not(.is-active) {
+  color: var(--textSecondary) !important;
+}
+
+html.night-vision .lang-switcher .hs-icon,
+html.night-vision .lang-switcher__sep {
+  color: var(--textSecondary) !important;
+}
+
+button.account-action-row {
+  border-radius: 14px !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .crystal-surface--glass,
+  .hs-card,
+  .hs-widget,
+  .hs-modal,
+  .hs-drawer,
+  .hs-dd__panel,
+  .hs-dd__option,
+  .hs-dd__trigger,
+  .hs-input__shell,
+  .hs-phone__row,
+  textarea.hs-input,
+  .hs-dd__search-input {
+    background: color-mix(in srgb, var(--primary) 6%, var(--card)) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+html.night-vision .crystal-surface--glass::before,
+html.night-vision .hs-dd__panel::before {
+  opacity: 0.22;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.06),
+    color-mix(in srgb, var(--primary) 10%, transparent) 40%,
+    transparent 72%
+  );
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.night-vision .crystal-surface,
+  html.night-vision .crystal-surface--elevated,
+  html.night-vision .crystal-surface--glass,
+  html.night-vision .hs-card,
+  html.night-vision .hs-widget,
+  html.night-vision .hs-modal,
+  html.night-vision .hs-drawer,
+  html.night-vision .hs-dd__panel,
+  html.night-vision .hs-dd__option,
+  html.night-vision .hs-dd__trigger,
+  html.night-vision .hs-input__shell,
+  html.night-vision .hs-phone__row,
+  html.night-vision textarea.hs-input,
+  html.night-vision .hs-dd__search-input,
+  html.night-vision .hs-dialog__footer,
+  html.night-vision .hs-drawer__footer {
+    background: var(--card) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html:not(.night-vision) .crystal-surface,
+  html:not(.night-vision) .crystal-surface--elevated,
+  html:not(.night-vision) .crystal-surface--glass,
+  html:not(.night-vision) .hs-card,
+  html:not(.night-vision) .hs-widget,
+  html:not(.night-vision) .hs-modal,
+  html:not(.night-vision) .hs-drawer,
+  html:not(.night-vision) .hs-dd__panel,
+  html:not(.night-vision) .hs-dd__option,
+  html:not(.night-vision) .hs-dd__trigger,
+  html:not(.night-vision) .hs-input__shell,
+  html:not(.night-vision) .hs-phone__row,
+  html:not(.night-vision) textarea.hs-input,
+  html:not(.night-vision) .hs-dd__search-input,
+  html:not(.night-vision) .hs-dialog__footer,
+  html:not(.night-vision) .hs-drawer__footer {
+    background: rgba(255, 255, 255, 0.96) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

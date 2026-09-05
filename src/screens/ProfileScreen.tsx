@@ -647,12 +647,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           </View>
           {isEditing ? (
             <Select
+              variant="crystal"
               options={genderOptions.map(o => ({value: o, label: o}))}
               value={gender}
               onChange={setGender}
               placeholder={t('profile.selectGender')}
               title={t('profile.selectGender')}
               style={{flex: 1, marginBottom: 0}}
+              colors={{
+                card: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.55)',
+              }}
             />
           ) : (
             <Text style={[styles.infoValue, {color: theme.text}]}>

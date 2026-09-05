@@ -1,0 +1,83 @@
+.account-section {
+  min-width: 0;
+  width: 100%;
+}
+
+.account-section-title {
+  margin: 0 0 8px;
+  padding: 0 2px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+button.account-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--card) 55%, transparent)),
+    color-mix(in srgb, var(--primary) 10%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+  backdrop-filter: blur(14px) saturate(145%);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 4px 14px color-mix(in srgb, var(--primary) 8%, rgba(30, 60, 90, 0.04));
+  color: var(--text);
+}
+
+.account-action-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.account-action-left > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.account-action-left strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.account-action-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--textSecondary);
+}
+
+.account-action-row--logout {
+  border-color: color-mix(in srgb, var(--error, #e53e3e) 22%, var(--border));
+}
+
+.account-action-row--logout .account-action-left > svg,
+.account-action-row--logout strong {
+  color: var(--error, #e53e3e);
+}
+
+.account-action-row--logout:hover {
+  background: color-mix(in srgb, var(--error, #e53e3e) 5%, white);
+}
+
+.account-action-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

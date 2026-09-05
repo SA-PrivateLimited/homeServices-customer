@@ -20,6 +20,7 @@ import enProviders from './locales/en/providers.json';
 import enRecommendations from './locales/en/recommendations.json';
 import enReview from './locales/en/review.json';
 import enHelpSupport from './locales/en/helpSupport.json';
+import enWeb from './locales/web/en.json';
 
 // Hindi translations
 import hiCommon from './locales/hi/common.json';
@@ -39,46 +40,55 @@ import hiProviders from './locales/hi/providers.json';
 import hiRecommendations from './locales/hi/recommendations.json';
 import hiReview from './locales/hi/review.json';
 import hiHelpSupport from './locales/hi/helpSupport.json';
-// Merge all translations
-const en = {
-  common: enCommon,
-  auth: enAuth,
-  settings: enSettings,
-  services: enServices,
-  serviceHistory: enServiceHistory,
-  activeService: enActiveService,
-  serviceRequest: enServiceRequest,
-  profile: enProfile,
-  home: enHome,
-  jobCard: enJobCard,
-  errors: enErrors,
-  messages: enMessages,
-  notifications: enNotifications,
-  providers: enProviders,
-  recommendations: enRecommendations,
-  review: enReview,
-  helpSupport: enHelpSupport,
-};
+import hiWeb from './locales/web/hi.json';
+import {mergeWebLocale} from '../utils/mergeWebI18n';
 
-const hi = {
-  common: hiCommon,
-  auth: hiAuth,
-  settings: hiSettings,
-  services: hiServices,
-  serviceHistory: hiServiceHistory,
-  activeService: hiActiveService,
-  serviceRequest: hiServiceRequest,
-  profile: hiProfile,
-  home: hiHome,
-  jobCard: hiJobCard,
-  errors: hiErrors,
-  messages: hiMessages,
-  notifications: hiNotifications,
-  providers: hiProviders,
-  recommendations: hiRecommendations,
-  review: hiReview,
-  helpSupport: hiHelpSupport,
-};
+// Merge all translations — existing RN namespaces win; web strings fill gaps
+const en = mergeWebLocale(
+  {
+    common: enCommon,
+    auth: enAuth,
+    settings: enSettings,
+    services: enServices,
+    serviceHistory: enServiceHistory,
+    activeService: enActiveService,
+    serviceRequest: enServiceRequest,
+    profile: enProfile,
+    home: enHome,
+    jobCard: enJobCard,
+    errors: enErrors,
+    messages: enMessages,
+    notifications: enNotifications,
+    providers: enProviders,
+    recommendations: enRecommendations,
+    review: enReview,
+    helpSupport: enHelpSupport,
+  },
+  enWeb as Record<string, unknown>,
+) as Record<string, unknown>;
+
+const hi = mergeWebLocale(
+  {
+    common: hiCommon,
+    auth: hiAuth,
+    settings: hiSettings,
+    services: hiServices,
+    serviceHistory: hiServiceHistory,
+    activeService: hiActiveService,
+    serviceRequest: hiServiceRequest,
+    profile: hiProfile,
+    home: hiHome,
+    jobCard: hiJobCard,
+    errors: hiErrors,
+    messages: hiMessages,
+    notifications: hiNotifications,
+    providers: hiProviders,
+    recommendations: hiRecommendations,
+    review: hiReview,
+    helpSupport: hiHelpSupport,
+  },
+  hiWeb as Record<string, unknown>,
+);
 
 const LANGUAGE_KEY = '@app_language';
 
@@ -125,11 +135,6 @@ export const changeLanguage = async (language: 'en' | 'hi') => {
   } catch (error) {
     console.error('Error changing language:', error);
   }
-};
-
-// Get current language
-export const getCurrentLanguage = (): string => {
-  return i18n.language || 'hi';
 };
 
 export default i18n;

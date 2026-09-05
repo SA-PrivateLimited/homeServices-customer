@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -14,6 +15,9 @@
     <!-- Gallery / photo attachments for service requests (runtime request) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- Profile photo — Take photo (runtime request) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
       android:name=".MainApplication"
@@ -25,10 +29,10 @@
       android:usesCleartextTraffic="false"
       android:networkSecurityConfig="@xml/network_security_config">
 
-      <!-- Google Maps API Key -->
       <meta-data
-        android:name="com.google.android.geo.API_KEY"
-        android:value="${GOOGLE_MAPS_API_KEY}"/>
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="service_requests"
+        tools:replace="android:value" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
@@ -56,12 +60,7 @@
         </intent-filter>
       </receiver>
 
-      <service
-        android:name="com.dieam.reactnativepushnotification.modules.RNPushNotificationListenerService"
-        android:exported="false">
-        <intent-filter>
-          <action android:name="com.google.firebase.MESSAGING_EVENT" />
-        </intent-filter>
-      </service>
+      <!-- FCM is handled by @react-native-firebase/messaging. Do not also
+           register RNPushNotificationListenerService for MESSAGING_EVENT. -->
     </application>
 </manifest>

@@ -187,6 +187,7 @@ export default function ShareContactRecommendationScreen({
           {/* Service Type */}
           <View style={styles.formGroup}>
             <Select
+              variant="crystal"
               label={`${t('recommendations.serviceType')} *`}
               options={serviceTypeOptions}
               value={selectedServiceType}
@@ -194,6 +195,11 @@ export default function ShareContactRecommendationScreen({
               placeholder={String(t('recommendations.selectServiceType'))}
               title={String(t('services.selectServiceType'))}
               disabled={loadingCategories}
+              colors={{
+                card: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.55)',
+              }}
             />
           </View>
 

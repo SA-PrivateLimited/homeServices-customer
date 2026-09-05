@@ -1,0 +1,123 @@
+.lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--textSecondary);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: none;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: inset 0 1px 0 var(--crystal-highlight, rgba(255, 255, 255, 0.75));
+  flex-shrink: 0;
+}
+
+.lang-switcher button {
+  border: none;
+  background: transparent;
+  color: var(--textSecondary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.lang-switcher button.is-active {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+
+.lang-switcher__globe,
+.lang-switcher__sep {
+  color: var(--textSecondary);
+  flex-shrink: 0;
+}
+
+.lang-switcher__sep {
+  opacity: 0.55;
+  user-select: none;
+}
+
+.lang-switcher button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.lang-switcher--compact {
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.lang-switcher--compact button {
+  padding: 3px 6px;
+}
+
+.login-lang {
+  align-self: flex-end;
+}
+
+.lang-switcher--dark {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.lang-switcher--dark button.is-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+
+.lang-switcher__short {
+  display: none;
+}
+
+.lang-switcher__full {
+  display: inline;
+}
+
+@media (max-width: 430px) {
+  .lang-switcher--compact .lang-switcher__globe,
+  .lang-switcher--compact .lang-switcher__sep {
+    display: none;
+  }
+
+  .lang-switcher--compact {
+    gap: 2px;
+    padding: 2px 4px;
+  }
+
+  .lang-switcher--compact button {
+    padding: 2px 6px;
+    min-width: 0;
+  }
+
+  .lang-switcher--compact .lang-switcher__full {
+    display: none;
+  }
+
+  .lang-switcher--compact .lang-switcher__short {
+    display: inline;
+  }
+}
+
+/* Night vision — inactive label must stay readable on crystal pill */
+html.night-vision .lang-switcher {
+  background: var(--card) !important;
+  box-shadow: inset 0 1px 0 var(--crystal-highlight);
+  color: var(--textSecondary);
+}
+
+html.night-vision .lang-switcher button:not(.is-active),
+html.night-vision .lang-switcher__globe,
+html.night-vision .lang-switcher__sep {
+  color: var(--textSecondary);
+}
+
+html.night-vision .lang-switcher button.is-active {
+  background: color-mix(in srgb, var(--primary) 24%, var(--card));
+  color: color-mix(in srgb, var(--primary) 70%, white);
+}

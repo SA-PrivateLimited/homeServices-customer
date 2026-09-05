@@ -68,7 +68,32 @@ export async function getServiceCategoryById(categoryId: string): Promise<Servic
   }
 }
 
+export interface ServiceCategorySection {
+  key: string;
+  labelEn: string;
+  labelHi: string;
+  order?: number;
+}
+
+export async function getServiceCategorySections(): Promise<
+  ServiceCategorySection[]
+> {
+  try {
+    const response = await apiGet<
+      ServiceCategorySection[] | {data: ServiceCategorySection[]}
+    >('/serviceCategories/sections', {skipAuth: true});
+    const rows = Array.isArray(response) ? response : (response as any)?.data || [];
+    return [...rows].sort(
+      (a, b) =>
+        (a.order ?? 999) - (b.order ?? 999) || a.key.localeCompare(b.key),
+    );
+  } catch {
+    return [];
+  }
+}
+
 export const serviceCategoriesApi = {
   getAll: getServiceCategories,
   getById: getServiceCategoryById,
+  getSections: getServiceCategorySections,
 };

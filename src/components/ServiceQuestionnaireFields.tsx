@@ -30,6 +30,9 @@ type Props = {
   selectPlaceholder?: string;
   textPlaceholder?: string;
   numberPlaceholder?: string;
+  /** Match web request crystal control dropdown */
+  crystalSelect?: boolean;
+  isDark?: boolean;
 };
 
 function questionText(q: QuestionnaireQuestion, language?: string): string {
@@ -64,6 +67,8 @@ export default function ServiceQuestionnaireFields({
   selectPlaceholder,
   textPlaceholder,
   numberPlaceholder,
+  crystalSelect = false,
+  isDark = false,
 }: Props) {
   const {t} = useTranslation();
   const resolvedYes = yesLabel ?? String(t('common.yes'));
@@ -182,6 +187,16 @@ export default function ServiceQuestionnaireFields({
 
           {question.type === 'select' && optionsOf(question, language).length > 0 ? (
             <Select
+              variant={crystalSelect ? 'crystal' : 'default'}
+              colors={
+                crystalSelect
+                  ? {
+                      card: isDark
+                        ? 'rgba(255,255,255,0.1)'
+                        : 'rgba(255,255,255,0.55)',
+                    }
+                  : undefined
+              }
               options={optionsOf(question, language).map((option, optIdx) => ({
                 value: question.options?.[optIdx] || option,
                 label: option,

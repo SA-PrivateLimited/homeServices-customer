@@ -1,0 +1,266 @@
+/* Compact feedback form — one hierarchy: title → field → submit */
+
+.hs-modal-backdrop:has(.login-feedback-sheet) {
+  align-items: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+.hs-modal.login-feedback-sheet {
+  width: min(400px, calc(100vw - 24px));
+  max-height: min(var(--feedback-vv-h, 88dvh), 560px);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--card, #fff);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  box-shadow: 0 12px 32px rgba(15, 28, 46, 0.16);
+}
+
+.feedback-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  max-height: min(var(--feedback-vv-h, 88dvh), 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.feedback-sheet--inline {
+  padding: 0;
+  max-height: none;
+  overflow: visible;
+  gap: 10px;
+}
+
+.feedback-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feedback-sheet__brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.feedback-sheet__brand img {
+  border-radius: 8px;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.feedback-sheet__brand h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text, #0f1c2e);
+}
+
+.feedback-sheet--inline .feedback-sheet__brand h2 {
+  font-size: 15px;
+}
+
+.feedback-sheet__title-accent {
+  color: var(--primary);
+}
+
+.feedback-sheet__brand p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+}
+
+.feedback-sheet__close {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--textSecondary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.feedback-sheet__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.feedback-sheet__label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.feedback-sheet__field--optional .feedback-sheet__label {
+  font-weight: 550;
+  color: var(--textSecondary);
+}
+
+.feedback-sheet__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  max-height: 140px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card, #fff);
+  color: var(--text);
+  font: inherit;
+  /* 16px — prevents iOS Safari focus zoom + layout re-orientation */
+  font-size: 16px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.feedback-sheet__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.feedback-sheet__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 16px;
+}
+
+.feedback-sheet__counter {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--textSecondary);
+  margin-left: auto;
+}
+
+.feedback-sheet__error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--error, #dc2626);
+}
+
+.feedback-sheet__phone {
+  min-width: 0;
+}
+
+/* Prevent iOS zoom on optional phone field inside Help feedback */
+.feedback-sheet__phone .hs-phone__input,
+.feedback-sheet__phone .hs-phone__prefix,
+.feedback-sheet .hs-input,
+.help-support--feedback .hs-phone__input,
+.help-support--feedback .hs-phone__prefix,
+.help-support--feedback textarea,
+.help-support--feedback .feedback-sheet__textarea {
+  font-size: 16px !important;
+}
+
+.feedback-sheet__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin-top: 2px;
+}
+
+.feedback-sheet__actions .hs-btn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.feedback-sheet__or {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--textSecondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.feedback-sheet__or::before,
+.feedback-sheet__or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Secondary WhatsApp — text link style, not a competing card */
+.feedback-sheet__wa-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.feedback-sheet__wa-link:hover {
+  background: color-mix(in srgb, #25d366 8%, transparent);
+}
+
+.feedback-sheet__wa-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedback-sheet__wa-link .wa-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+@media (max-width: 380px) {
+  .feedback-sheet {
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .feedback-sheet__textarea {
+    min-height: 64px;
+  }
+}
+
+@media (min-width: 768px) {
+  .hs-modal-backdrop:has(.login-feedback-sheet) {
+    align-items: center;
+    padding-top: 16px;
+  }
+
+  .hs-modal.login-feedback-sheet {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}

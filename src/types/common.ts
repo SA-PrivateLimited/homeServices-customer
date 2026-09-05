@@ -14,6 +14,8 @@ export interface UserLocation {
   state?: string;
   stateId?: string;
   districtId?: string;
+  blockId?: string;
+  block?: string;
   pincode?: string;
   country?: string;
 }

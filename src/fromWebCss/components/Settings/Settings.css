@@ -1,0 +1,223 @@
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  min-width: 0;
+  overflow-x: hidden;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+
+.profile-completion-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary, #2e7d32) 6%, transparent);
+}
+
+.profile-completion-hint strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #1a202c);
+}
+
+.profile-completion-hint p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--textSecondary, #4a5568);
+}
+
+.profile-completion-hint__bar {
+  margin-top: 4px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary, #2e7d32) 16%, #edf2f7);
+  overflow: hidden;
+}
+
+.profile-completion-hint__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary, #2e7d32);
+}
+
+.settings-loading {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--textSecondary);
+}
+
+.settings-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.settings-address-summary {
+  min-width: 0;
+}
+
+.settings-address-summary__line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.settings-address-summary__empty {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--textSecondary);
+}
+
+.settings-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.settings-footer {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.settings-update-app {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  background: var(--card, #fff);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.settings-update-app strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-update-app span {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--textSecondary, #4a5568);
+}
+
+.settings-dialog-gap {
+  height: 8px;
+}
+
+.settings-drawer {
+  max-width: 320px;
+  width: min(320px, 82vw);
+  border-radius: 0;
+}
+
+.settings-drawer .hs-drawer__body {
+  padding: 0;
+}
+
+.settings-drawer-item {
+  display: flex !important;
+  width: 100%;
+  justify-content: flex-start !important;
+  text-align: left;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  min-height: 48px;
+  height: auto !important;
+  padding: 14px 20px !important;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: none !important;
+}
+
+.settings-drawer-item:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent) !important;
+}
+
+.settings-drawer-link {
+  box-sizing: border-box;
+}
+
+.settings-help-dialog.hs-modal {
+  width: min(100%, 520px);
+}
+
+@media (min-width: 960px) {
+  .settings-page {
+    max-width: 960px;
+    gap: 18px;
+  }
+
+  .settings-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 340px);
+    align-items: start;
+    gap: 20px 28px;
+  }
+
+  .settings-columns .account-section {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .settings-columns .personal-info {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .settings-columns .settings-more {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 4px;
+  }
+
+  .settings-columns .settings-more > * {
+    border-top: none;
+  }
+
+  .settings-columns .settings-more .become-partner__link,
+  .settings-columns .settings-more .install-akanso--compact,
+  .settings-columns .settings-more .share-akanso {
+    border-top: none;
+    padding-top: 8px;
+  }
+}

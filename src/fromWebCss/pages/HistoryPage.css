@@ -1,0 +1,507 @@
+.history-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 56px;
+}
+
+.history-io-sentinel {
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Filters + intro — normal flow (sticky removed; was fighting app-main header padding) */
+.history-toolbar {
+  position: relative;
+  z-index: 15;
+  margin: 0 -14px;
+  padding: 0 14px 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--background, #f5f7fa) 98%, var(--card, #fff)),
+    color-mix(in srgb, var(--background, #f5f7fa) 96%, var(--card, #fff))
+  );
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow: 0 8px 18px rgba(30, 60, 90, 0.05);
+}
+
+.history-toolbar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.history-intro {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+}
+
+.history-refresh-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  color: var(--primary);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--card) 80%, transparent);
+}
+
+.history-refresh-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.history-refresh-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.history-refresh-btn.is-busy .hs-icon {
+  animation: history-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes history-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.history-status-filters {
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.history-extra-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 0;
+  min-width: 0;
+  position: relative;
+  z-index: 12;
+}
+
+.history-status-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 12px 4px 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 85%, transparent 100%);
+}
+
+.history-status-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.history-status-chip.hs-chip {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 11px;
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.history-status-chip.hs-chip .hs-chip__label {
+  color: inherit;
+}
+
+.history-status-chip.is-active.hs-chip,
+.history-status-chip.hs-chip--primary,
+.history-status-chip.hs-chip--selected {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 22%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.history-status-chip.is-active.hs-chip .hs-chip__label,
+.history-status-chip.hs-chip--primary .hs-chip__label,
+.history-status-chip.hs-chip--selected .hs-chip__label {
+  color: #fff !important;
+}
+
+.crystal-filter-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.crystal-filter-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--card) 50%, transparent)),
+    color-mix(in srgb, var(--primary) 10%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+  backdrop-filter: blur(var(--crystal-blur, 14px)) saturate(145%);
+  -webkit-backdrop-filter: blur(var(--crystal-blur, 14px)) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 var(--crystal-highlight, rgba(255, 255, 255, 0.85)),
+    var(--crystal-shadow, 0 6px 20px rgba(30, 60, 90, 0.05));
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.crystal-filter-trigger__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crystal-filter-trigger__chevron {
+  flex: 0 0 auto;
+  width: 1em !important;
+  height: 1em !important;
+  font-size: 16px !important;
+  color: var(--textSecondary);
+  transition: transform 160ms ease;
+}
+
+.crystal-filter-trigger.is-open .crystal-filter-trigger__chevron,
+.crystal-filter-trigger[aria-expanded='true'] .crystal-filter-trigger__chevron {
+  transform: rotate(180deg);
+}
+
+.crystal-filter-trigger.is-active {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--card) 50%, transparent)),
+    color-mix(in srgb, var(--primary) 18%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 1.5px color-mix(in srgb, var(--primary) 30%, transparent),
+    var(--crystal-shadow, 0 6px 20px rgba(30, 60, 90, 0.05));
+}
+
+.crystal-filter-trigger.is-open {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent),
+    var(--crystal-shadow, 0 6px 20px rgba(30, 60, 90, 0.05));
+}
+
+.crystal-filter-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.crystal-filter-trigger--clear {
+  flex: 0 0 auto;
+  width: auto;
+  padding-inline: 12px;
+  color: var(--textSecondary);
+}
+
+.crystal-filter-trigger--clear .hs-icon {
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+}
+
+.crystal-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  /* Opaque crystal — solid surface so list cards never bleed through */
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--primary) 6%, var(--card, #fff)),
+    color-mix(in srgb, var(--primary) 10%, var(--card, #fff))
+  );
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 var(--crystal-highlight, rgba(255, 255, 255, 0.9)),
+    0 12px 32px rgba(30, 60, 90, 0.14);
+  animation: crystal-menu-in 160ms ease-out;
+  overflow: hidden;
+}
+
+@keyframes crystal-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.crystal-menu__title {
+  margin: 0 0 4px;
+  padding: 4px 8px 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--textSecondary);
+  flex: 0 0 auto;
+}
+
+.crystal-menu__options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(280px, 42dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.crystal-menu__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.crystal-menu__option:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.crystal-menu__option.is-selected {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.crystal-menu__check {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-stale-banner {
+  margin: 12px 0 0;
+}
+
+.history-load-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 16px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: auto;
+  gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 0;
+}
+
+.history-list > li {
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+}
+
+.history-list > li > .srcard {
+  height: auto;
+}
+
+/* Completed = calm green. Didn't happen = muted rose. Stronger than live-job tints. */
+.history-list .srcard-glass--accepted {
+  --srcard-status: var(--success);
+  box-shadow:
+    inset 4px 0 0 var(--success),
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 6px 18px color-mix(in srgb, var(--success) 16%, rgba(30, 60, 90, 0.05));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--success) 18%, color-mix(in srgb, var(--card) 55%, transparent)),
+    color-mix(in srgb, var(--success) 28%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+}
+
+.history-list .srcard-glass--in-progress {
+  --srcard-status: var(--primary);
+  box-shadow:
+    inset 4px 0 0 var(--primary),
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 6px 18px color-mix(in srgb, var(--primary) 16%, rgba(30, 60, 90, 0.05));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 20%, color-mix(in srgb, var(--card) 50%, transparent)),
+    color-mix(in srgb, var(--primary) 30%, color-mix(in srgb, var(--card) 26%, transparent))
+  );
+}
+
+.history-list .srcard-glass--completed {
+  --srcard-status: var(--success);
+  box-shadow:
+    inset 4px 0 0 var(--success),
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 6px 18px color-mix(in srgb, var(--success) 16%, rgba(30, 60, 90, 0.05));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--success) 18%, color-mix(in srgb, var(--card) 55%, transparent)),
+    color-mix(in srgb, var(--success) 28%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+}
+
+.history-list .srcard-glass--cancelled,
+.history-list .srcard-glass--rejected {
+  --srcard-status: color-mix(in srgb, var(--error) 70%, #64748b);
+  box-shadow:
+    inset 4px 0 0 var(--error),
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 6px 18px color-mix(in srgb, var(--error) 12%, rgba(30, 60, 90, 0.05));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--error) 14%, color-mix(in srgb, var(--card) 62%, transparent)),
+    color-mix(in srgb, var(--error) 22%, color-mix(in srgb, var(--card) 32%, transparent))
+  );
+}
+
+@media (min-width: 560px) {
+  .history-list {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+@media (min-width: 861px) {
+  .history-page {
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: 24px;
+  }
+
+  .history-toolbar {
+    margin-inline: calc(-1 * clamp(24px, 3vw, 48px));
+    padding-inline: clamp(24px, 3vw, 48px);
+  }
+
+  .history-status-scroll {
+    mask-image: none;
+    padding-right: 0;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .history-extra-filters {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .history-list {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 14px;
+  }
+}
+
+@media (max-width: 430px) {
+  .history-extra-filters {
+    flex-wrap: wrap;
+  }
+
+  .crystal-filter-wrap {
+    flex: 1 1 calc(50% - 4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crystal-menu {
+    animation: none;
+  }
+}
+
+/* Portaled filter menus — escape crystal card stacking on iOS. */
+.crystal-filter-desktop-overlay {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  box-sizing: border-box;
+}
+
+.crystal-filter-desktop-overlay .crystal-menu {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  animation: none;
+}
+
+.crystal-filter-desktop-overlay .crystal-menu__options {
+  max-height: none;
+}

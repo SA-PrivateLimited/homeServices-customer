@@ -1,0 +1,45 @@
+.pwa-install-help__lead {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--textSecondary);
+}
+
+.pwa-install-help__env {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.pwa-install-help__video-wrap {
+  margin: 0 0 14px;
+}
+
+.pwa-install-help__video {
+  display: block;
+  width: 100%;
+  max-height: min(42vh, 280px);
+  border-radius: 12px;
+  background: #0f1c2e;
+  object-fit: contain;
+}
+
+.pwa-install-help__video-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+}
+
+.pwa-install-help__steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pwa-install-help__steps li + li {
+  margin-top: 8px;
+}

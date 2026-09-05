@@ -13,6 +13,8 @@ export interface Provider {
   email?: string;
   phoneNumber?: string;
   specialization?: string;
+  matchedService?: string;
+  serviceType?: string;
   serviceCategories?: string[];
   experience?: number;
   serviceFee?: number;
@@ -21,6 +23,9 @@ export interface Provider {
   rating?: number;
   totalReviews?: number;
   isOnline?: boolean;
+  showRequestService?: boolean;
+  showContactToUser?: boolean;
+  contactAvailable?: boolean;
   location?: {
     latitude?: number;
     longitude?: number;
@@ -54,6 +59,7 @@ export interface ProviderFilters {
   district?: string;
   stateId?: string;
   districtId?: string;
+  blockId?: string;
   pincode?: string;
   isOnline?: boolean;
   minRating?: number;
@@ -96,9 +102,17 @@ export async function getProviders(filters?: ProviderFilters): Promise<Provider[
 /**
  * Get provider by ID
  */
-export async function getProviderById(providerId: string): Promise<Provider | null> {
+export async function getProviderById(
+  providerId: string,
+  options?: {serviceType?: string},
+): Promise<Provider | null> {
   try {
-    return await apiGet<Provider>(`/providers/${providerId}`, {skipAuth: true});
+    const qs = options?.serviceType
+      ? `?serviceType=${encodeURIComponent(options.serviceType)}`
+      : '';
+    return await apiGet<Provider>(`/providers/${providerId}${qs}`, {
+      skipAuth: true,
+    });
   } catch (error: any) {
     if (error.message?.includes('not found') || error.message?.includes('404')) {
       return null;

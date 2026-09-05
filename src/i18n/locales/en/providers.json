@@ -31,6 +31,7 @@
   "qualifications": "Qualifications",
   "serviceType": "Service Type",
   "customerReviews": "Customer Reviews",
+  "noReviewsYet": "No reviews yet",
   "requestService": "Request Service",
   "pleaseLoginToRequest": "Please login to request a service",
   "browseProviders": "Browse Providers",

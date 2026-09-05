@@ -1,0 +1,117 @@
+.service-landing {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.service-landing--loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.service-landing__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground, #71717a);
+}
+
+.service-landing__crumbs a {
+  color: var(--primary, #0f766e);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.service-landing__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.service-landing__icon {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: var(--svc-accent, var(--primary, #0f766e));
+  background: color-mix(
+    in srgb,
+    var(--svc-accent, var(--primary, #0f766e)) 14%,
+    transparent
+  );
+}
+
+.service-landing__hero h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 4.5vw, 1.7rem);
+  line-height: 1.25;
+}
+
+.service-landing__hero p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--muted-foreground, #52525b);
+}
+
+.service-landing h2 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.service-landing__steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted-foreground, #52525b);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.service-landing__related {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-landing__related a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e4e4e7);
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--card, #fff);
+}
+
+.service-landing__back {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground, #71717a);
+}
+
+.service-landing__back a {
+  color: var(--primary, #0f766e);
+  font-weight: 600;
+  text-decoration: none;
+}

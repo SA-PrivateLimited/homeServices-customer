@@ -23,6 +23,8 @@ import React, {useEffect, useState, useMemo} from 'react';
 import {StatusBar, Platform, PermissionsAndroid} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {AppThemeProvider} from 'sapvt-ltd-app-packages';
+import {HelpRequestProvider} from './src/components/help/helpRequestContext';
+import {GreetingOverlay} from './src/components/GreetingOverlay';
 import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
@@ -30,7 +32,6 @@ import GeolocationService from './src/services/geolocationService';
 import {loadAndApplyBranding} from './src/services/brandingService';
 import {lightTheme, darkTheme} from './src/utils/theme';
 import './src/i18n'; // Initialize i18n
-// Push: local notifications / WebSocket (Firebase FCM removed)
 
 const App = () => {
   const {isDarkMode, hydrate, currentUser} = useStore();
@@ -44,6 +45,15 @@ const App = () => {
       text: theme.text,
       textSecondary: theme.textSecondary,
       border: theme.border,
+      danger: theme.error,
+      success: theme.success,
+      warning: theme.warning,
+      controlH: 40,
+      controlHLg: 48,
+      controlPx: 14,
+      radiusSm: 12,
+      radius: 16,
+      radiusCard: 22,
     }),
     [
       theme.primary,
@@ -52,6 +62,9 @@ const App = () => {
       theme.text,
       theme.textSecondary,
       theme.border,
+      theme.error,
+      theme.success,
+      theme.warning,
     ],
   );
 
@@ -114,7 +127,6 @@ const App = () => {
       }
     })();
     
-    // Local notification channel setup (no FCM)
     NotificationService.initializeAndSaveToken().catch(error => {
       console.error('Error initializing notifications:', error);
     });
@@ -125,7 +137,12 @@ const App = () => {
         global.removeEventListener('unhandledrejection', rejectionHandler);
       }
     };
-  }, [hydrate]); // Removed currentUser from dependencies
+  }, [hydrate]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    void NotificationService.saveTokenToBackend();
+  }, [currentUser]);
 
 
   if (!bootReady) {
@@ -139,7 +156,10 @@ const App = () => {
           barStyle={isDarkMode ? 'light-content' : 'dark-content'}
           backgroundColor={theme.background}
         />
-        <AppNavigator />
+        <HelpRequestProvider>
+          <AppNavigator />
+          <GreetingOverlay />
+        </HelpRequestProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
   );

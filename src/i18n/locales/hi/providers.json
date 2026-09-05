@@ -31,6 +31,7 @@
   "qualifications": "योग्यताएं",
   "serviceType": "सेवा प्रकार",
   "customerReviews": "ग्राहक समीक्षाएं",
+  "noReviewsYet": "अभी कोई समीक्षा नहीं",
   "requestService": "सेवा के लिए अनुरोध करें",
   "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें",
   "browseProviders": "प्रदाता ब्राउज़ करें",

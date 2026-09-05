@@ -1,10 +1,9 @@
 /**
- * Active Service Screen
- * Customer app - Real-time service tracking (Ola/Uber style)
- * Shows provider location, status updates, ETA
+ * Active Service Screen — parity with customer-web ActivePage.
+ * Crystal status hero → provider card (callOnly, no digits) → service details → actions.
  */
 
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -14,49 +13,17 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
-  Image,
   PermissionsAndroid,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Button} from 'sapvt-ltd-app-packages';
+import {Button, Avatar} from 'sapvt-ltd-app-packages';
 import GeolocationService from '../services/geolocationService';
-// MapView is optional - will show simplified view if maps not available
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-
-try {
-  // Try direct import first (for older versions)
-  const maps = require('react-native-maps');
-
-  // Handle both default export and named exports
-  if (maps.default) {
-    MapView = maps.default;
-    Marker = maps.default.Marker || maps.Marker;
-    Polyline = maps.default.Polyline || maps.Polyline;
-  } else {
-    MapView = maps.MapView;
-    Marker = maps.Marker;
-    Polyline = maps.Polyline;
-  }
-
-  // Verify components are functions/components
-  if (!MapView || typeof MapView !== 'function') {
-    throw new Error('MapView is not a valid component');
-  }
-
-  console.log('✅ react-native-maps loaded successfully');
-} catch (e: any) {
-  console.log('Using simplified distance view - maps not available');
-  MapView = null;
-  Marker = null;
-  Polyline = null;
-}
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import {CrystalSurface} from '../components/CrystalSurface';
 import {subscribeToJobCardStatus, verifyTaskCompletion, cancelTaskWithReason, getJobCardById} from '../services/jobCardService';
 import {jobCardsApi} from '../services/api/jobCardsApi';
 import JobCardComments from '../components/JobCardComments';
@@ -70,9 +37,21 @@ import Toast from '../components/Toast';
 import {canCustomerReview, getJobCardReview} from '../services/reviewService';
 import {providersApi, Provider} from '../services/api/providersApi';
 import {AvailableProviders} from '../components/AvailableProviders';
+import RequestPhotoGallery from '../components/RequestPhotoGallery';
 import WebSocketService from '../services/websocketService';
 import useTranslation from '../hooks/useTranslation';
 import {getUserId} from '../services/session';
+import {
+  resolveActivePhase,
+  activePhaseIcon,
+  activePhaseTitle,
+  activePhaseSubtitle,
+} from '../utils/activeServiceStatus';
+import {localizedServiceName} from '../utils/serviceDisplay';
+import {formatFullAddressLine} from '../utils/addressDisplay';
+import {formatRequestTimeLabel} from '../utils/serviceRequestCard';
+import {contactHintMessage} from '../utils/providerContact';
+import {toSafeMaterialIcon} from '../utils/serviceIcons';
 
 interface ActiveServiceScreenProps {
   navigation: any;
@@ -105,7 +84,6 @@ export default function ActiveServiceScreen({
   const [status, setStatus] = useState<string>('pending');
   const [loading, setLoading] = useState(true);
   const [isImmediateService, setIsImmediateService] = useState<boolean>(false);
-  const mapRef = useRef<any>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewDismissed, setReviewDismissed] = useState(false);
   const [distance, setDistance] = useState<string>('');
@@ -145,66 +123,6 @@ export default function ActiveServiceScreen({
               longitude: location.longitude,
             };
             setCustomerLocation(loc);
-            console.log('✅ Customer live location obtained:', loc);
-            
-            // Update map region to show live location
-            if (mapRef.current) {
-              try {
-                const coordinates = [
-                  {latitude: loc.latitude, longitude: loc.longitude},
-                ];
-                
-                // Add service address if different
-                if (customerAddress?.latitude && customerAddress?.longitude) {
-                  const isDifferent = 
-                    Math.abs(loc.latitude - customerAddress.latitude) > 0.0001 ||
-                    Math.abs(loc.longitude - customerAddress.longitude) > 0.0001;
-                  if (isDifferent) {
-                    coordinates.push({
-                      latitude: customerAddress.latitude,
-                      longitude: customerAddress.longitude,
-                    });
-                  }
-                }
-                
-                // Add provider location if available
-                if (providerLocation?.latitude && providerLocation?.longitude) {
-                  coordinates.push({
-                    latitude: providerLocation.latitude,
-                    longitude: providerLocation.longitude,
-                  });
-                }
-                
-                if (coordinates.length > 1) {
-                  mapRef.current.fitToCoordinates(coordinates, {
-                    edgePadding: {top: 100, right: 50, bottom: 100, left: 50},
-                    animated: true,
-                  });
-                } else {
-                  // Fallback to animateToRegion
-                  mapRef.current.animateToRegion({
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                  }, 1000);
-                }
-              } catch (e) {
-                console.error('Error updating map region:', e);
-                // Fallback to animateToRegion
-                try {
-                  mapRef.current.animateToRegion({
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                  }, 1000);
-                } catch (e2) {
-                  console.error('Error animating map:', e2);
-                }
-              }
-            }
-            
             return location;
           }
         } catch (error) {
@@ -970,6 +888,12 @@ export default function ActiveServiceScreen({
   };
 
   const handleCallProvider = () => {
+    const liveStatus = String(
+      serviceRequest?.status || jobCard?.status || '',
+    ).toLowerCase();
+    if (liveStatus !== 'accepted' && liveStatus !== 'in-progress') {
+      return;
+    }
     const phoneNumber = 
       providerProfile?.phoneNumber || 
       providerProfile?.phone || 
@@ -1273,55 +1197,30 @@ export default function ActiveServiceScreen({
   };
 
   const getStatusColor = (statusValue: string) => {
-    switch (statusValue) {
+    // Web ActivePage.css: finding/pending→warning, accepted/completed→success,
+    // in-progress→primary, cancelled/rejected→error
+    switch (String(statusValue || '').toLowerCase()) {
       case 'pending':
-        return '#FF9500';
+      case 'finding':
+      case 'waiting-accept':
+        return theme.warning;
       case 'accepted':
+      case 'completed':
         return theme.success;
       case 'in-progress':
-        return '#34C759';
-      case 'completed':
-        return '#34C759';
+      case 'in_progress':
+        return theme.primary;
       case 'cancelled':
-        return '#FF3B30';
+      case 'canceled':
       case 'rejected':
-        return '#FF3B30';
+        return theme.error;
       default:
-        return '#8E8E93';
+        return theme.textSecondary;
     }
   };
 
-  const getStatusText = (statusValue: string) => {
-    switch (statusValue) {
-      case 'pending':
-        return t('activeService.waitingForProvider');
-      case 'accepted':
-        return t('activeService.providerAssigned');
-      case 'in-progress':
-        return t('activeService.serviceInProgress');
-      case 'completed':
-        return t('activeService.serviceCompleted');
-      case 'cancelled':
-        return t('activeService.cancelled');
-      case 'rejected':
-        return t('activeService.providerDeclined');
-      default:
-        return statusValue;
-    }
-  };
-
-  const providerDisplayName =
-    providerProfile?.name ||
-    serviceRequest?.providerName ||
-    t('activeService.providerDetails') ||
-    'Provider';
-
-  const waitingForProviderMessage = serviceRequest?.providerId
-    ? String(t('activeService.waitingForSpecificProvider') || 'Waiting for {{name}} to accept your request').replace(
-        '{{name}}',
-        providerDisplayName,
-      )
-    : t('activeService.waitingForProviderToAccept');
+  const heroTint = getStatusColor(status);
+  const isDark = theme.background === '#0B1220';
 
   const declinedProvidersList: Array<{
     providerId: string;
@@ -1390,11 +1289,6 @@ export default function ActiveServiceScreen({
   })();
   const availableCount = displayProviders.filter(p => !p.declined).length;
 
-  const providerNotReadyMessage = String(
-    t('activeService.providerNotReadyMessage') ||
-      '{{name}} declined this request. You can choose another provider or request the service again.',
-  ).replace('{{name}}', providerDisplayName);
-
   if (loading) {
     return (
       <View style={[styles.container, {backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center'}]}>
@@ -1429,547 +1323,239 @@ export default function ActiveServiceScreen({
     providerProfile?.phone ||
     serviceRequest?.providerPhone ||
     jobCard?.providerPhone;
+  const canCall =
+    (status === 'accepted' || status === 'in-progress') && Boolean(providerPhone);
   const providerRating = Number(
     providerProfile?.rating || serviceRequest?.providerRating || (provider as any)?.rating || 0,
   );
   const requestedAt = serviceRequest?.createdAt || jobCard?.createdAt;
-
-  // Debug logging
-  console.log('🗺️ Map rendering check:', {
-    hasMapView: !!MapView,
-    hasMarker: !!Marker,
-    hasPolyline: !!Polyline,
-    customerAddress: customerAddress ? {
-      lat: customerAddress.latitude,
-      lng: customerAddress.longitude,
-    } : null,
-    providerLocation: providerLocation ? {
-      lat: providerLocation.latitude,
-      lng: providerLocation.longitude,
-    } : null,
-    status,
-    isImmediateService,
+  const serviceLabel =
+    localizedServiceName(
+      serviceRequest?.serviceType || jobCard?.serviceType || '',
+    ) || String(t('common.service') || 'Service');
+  const nearbyReady = displayProviders.some(p => !p.declined);
+  const hasNamedProvider = Boolean(
+    assignedProviderName || serviceRequest?.providerId || jobCard?.providerId,
+  );
+  const phase = resolveActivePhase(status, {
+    hasNearbyProviders: nearbyReady,
+    hasNamedProvider,
   });
+  const phaseIcon = toSafeMaterialIcon(activePhaseIcon(phase));
+  const heroTitle = activePhaseTitle(phase, {
+    serviceType: serviceLabel,
+    providerName: assignedProviderName || undefined,
+  });
+  const heroSub = activePhaseSubtitle(phase, {
+    providerName: assignedProviderName || undefined,
+    serviceType: serviceLabel,
+    brandName: 'Akanso',
+  });
+  const waiting = phase === 'finding' || phase === 'waiting-accept';
+  const canEdit = status === 'pending';
+  const taskPin = jobCard?.taskPIN || (serviceRequest as any)?.taskPIN || null;
+  const serviceAddressLine = formatFullAddressLine(
+    customerAddress as any,
+  );
+  const requestedLabel = formatRequestTimeLabel(status, requestedAt);
+  const contactHint = canCall
+    ? null
+    : contactHintMessage(
+        k => String(t(k) || ''),
+        serviceRequest?.contact?.providerContactHint,
+        serviceRequest?.contact?.providerContactPolicy,
+      );
+  const providerLocLabel = (() => {
+    const loc = providerProfile?.location || {};
+    return [loc.district, loc.city].filter(Boolean).join(', ');
+  })();
+  const showRefresh = !['completed', 'cancelled', 'canceled', 'rejected'].includes(
+    String(status || '').toLowerCase(),
+  );
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, {backgroundColor: theme.background}]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* Map View - Hidden since mapKey is removed - showing simplified view instead */}
-      {false ? (
-        <View style={styles.mapContainer}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            provider="google"
-            initialRegion={
-              customerLocation?.latitude && customerLocation?.longitude
-                ? {
-                    latitude: customerLocation.latitude,
-                    longitude: customerLocation.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                  }
-                : customerAddress?.latitude && customerAddress?.longitude
-                ? {
-                    latitude: customerAddress.latitude,
-                    longitude: customerAddress.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                  }
-                : providerLocation?.latitude && providerLocation?.longitude
-                ? {
-                    latitude: providerLocation.latitude,
-                    longitude: providerLocation.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                  }
-                : {
-                    latitude: 28.6139,
-                    longitude: 77.209,
-                    latitudeDelta: 0.1,
-                    longitudeDelta: 0.1,
-                  }
-            }
-            showsUserLocation={locationPermissionGranted && isImmediateService}
-            showsMyLocationButton={locationPermissionGranted && isImmediateService}
-            mapType="standard"
-            loadingEnabled={false}
-            loadingIndicatorColor={theme.primary}
-            loadingBackgroundColor={theme.background}
-            onMapReady={() => {
-              console.log('✅ Map is ready');
-              console.log('📍 Map data:', {
-                customerAddress: customerAddress ? {lat: customerAddress.latitude, lng: customerAddress.longitude} : null,
-                customerLocation: customerLocation ? {lat: customerLocation.latitude, lng: customerLocation.longitude} : null,
-                providerLocation: providerLocation ? {lat: providerLocation.latitude, lng: providerLocation.longitude} : null,
-              });
-              
-              // Fit map to show both customer and provider locations if available
-              if (mapRef.current) {
-                const locations: Array<{latitude: number; longitude: number}> = [];
-                
-                // Add customer address (service location)
-                if (customerAddress?.latitude && customerAddress?.longitude) {
-                  locations.push({
-                    latitude: customerAddress.latitude,
-                    longitude: customerAddress.longitude,
-                  });
-                  console.log('📍 Added customer address to map:', customerAddress.latitude, customerAddress.longitude);
-                }
-                
-                // Add live customer location if available
-                if (customerLocation?.latitude && customerLocation?.longitude) {
-                  locations.push({
-                    latitude: customerLocation.latitude,
-                    longitude: customerLocation.longitude,
-                  });
-                  console.log('📍 Added customer live location to map:', customerLocation.latitude, customerLocation.longitude);
-                }
-                
-                // Add provider location if available
-                if (providerLocation?.latitude && providerLocation?.longitude) {
-                  locations.push({
-                    latitude: providerLocation.latitude,
-                    longitude: providerLocation.longitude,
-                  });
-                  console.log('📍 Added provider location to map:', providerLocation.latitude, providerLocation.longitude);
-                }
-                
-                if (locations.length > 0) {
-                  console.log('🗺️ Fitting map to', locations.length, 'locations');
-                  try {
-                    mapRef.current.fitToCoordinates(locations, {
-                      edgePadding: {top: 100, right: 50, bottom: 100, left: 50},
-                      animated: true,
-                    });
-                    console.log('✅ Map fitted to coordinates');
-                  } catch (e) {
-                    console.error('❌ Error fitting map to coordinates:', e);
-                    // Fallback to customer address or first location
-                    const fallbackLoc = locations[0];
-                    if (fallbackLoc) {
-                      console.log('📍 Falling back to animateToRegion:', fallbackLoc);
-                      mapRef.current.animateToRegion({
-                        latitude: fallbackLoc.latitude,
-                        longitude: fallbackLoc.longitude,
-                        latitudeDelta: 0.05,
-                        longitudeDelta: 0.05,
-                      }, 1000);
-                    }
-                  }
-                } else {
-                  console.warn('⚠️ No locations available to show on map');
-                }
-              }
-            }}
-            onError={(error: any) => {
-              console.error('❌ Map error:', error);
-            }}>
-            {/* Service Address Marker - Show service location */}
-            {customerAddress?.latitude && customerAddress?.longitude && (
-              <Marker
-                coordinate={{
-                  latitude: customerAddress.latitude,
-                  longitude: customerAddress.longitude,
-                }}
-                title={t('jobCard.serviceAddress')}
-                description={t('services.address')}
-                pinColor="#007AFF">
-                <View style={styles.customerMarker}>
-                  <Icon name="home" size={24} color="#007AFF" />
-                </View>
-              </Marker>
-            )}
-
-            {/* Live Customer Location Marker - Show if available for immediate services */}
-            {isImmediateService && customerLocation?.latitude && customerLocation?.longitude && (
-              <Marker
-                coordinate={{
-                  latitude: customerLocation.latitude,
-                  longitude: customerLocation.longitude,
-                }}
-                title={t('activeService.yourCurrentLocation')}
-                description={t('activeService.liveLocation')}
-                pinColor="#FF9500">
-                <View style={styles.liveLocationMarker}>
-                  <Icon name="my-location" size={20} color="#FF9500" />
-                </View>
-              </Marker>
-            )}
-
-            {/* Provider Location Marker - Show when provider is assigned (especially for immediate services) */}
-            {providerLocation?.latitude &&
-              providerLocation?.longitude &&
-              status !== 'completed' &&
-              status !== 'cancelled' &&
-              (status === 'accepted' || status === 'in-progress' || isImmediateService) && (
-                <Marker
-                  coordinate={{
-                    latitude: providerLocation.latitude,
-                    longitude: providerLocation.longitude,
-                  }}
-                  title={t('activeService.providerLocation')}
-                  description={`Provider is ${distance || 'on the way'}`}
-                  pinColor="#34C759">
-                  <View style={styles.providerMarker}>
-                    <Icon name="person" size={24} color="#34C759" />
-                  </View>
-                </Marker>
-              )}
-
-            {/* Route Line - Show route when provider location is available (especially for immediate services) */}
-            {providerLocation &&
-              customerAddress?.latitude &&
-              customerAddress?.longitude &&
-              status !== 'completed' &&
-              status !== 'cancelled' &&
-              (status === 'accepted' || status === 'in-progress' || isImmediateService) && (
-                <Polyline
-                  coordinates={[
-                    {
-                      latitude: providerLocation.latitude,
-                      longitude: providerLocation.longitude,
-                    },
-                    {
-                      latitude: customerAddress.latitude,
-                      longitude: customerAddress.longitude,
-                    },
-                  ]}
-                  strokeColor="#007AFF"
-                  strokeWidth={3}
-                />
-              )}
-          </MapView>
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.mapContainer,
-            styles.simplifiedMap,
-            styles.statusHero,
-            {
-              backgroundColor: `${theme.success}14`,
-              borderColor: `${theme.success}40`,
-            },
-          ]}>
-          <View style={styles.mapPlaceholder}>
-            {status === 'completed' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: '#34C759' + '20'}]}>
-                  <Icon name="check-circle" size={48} color="#34C759" />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.serviceCompleted')}
-                </Text>
-              </>
-            ) : status === 'cancelled' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF3B30' + '20'}]}>
-                  <Icon name="cancel" size={48} color="#FF3B30" />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.cancelled')}
-                </Text>
-              </>
-            ) : status === 'rejected' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF3B30' + '20'}]}>
-                  <Icon name="person-off" size={48} color="#FF3B30" />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.providerNotReady')}
-                </Text>
-                <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
-                  {providerNotReadyMessage}
-                </Text>
-              </>
-            ) : providerLocation && distance ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
-                  <Icon name="directions-walk" size={48} color={theme.primary} />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text, fontWeight: '600'}]}>
-                  {t('activeService.providerIsOnTheWay')}
-                </Text>
-                <View style={styles.distanceInfoContainer}>
-                  <View style={styles.distanceItem}>
-                    <Icon name="straighten" size={24} color={theme.primary} />
-                    <Text style={[styles.distanceValue, {color: theme.primary}]}>{distance}</Text>
-                    <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.away')}</Text>
-                  </View>
-                  {eta > 0 && isImmediateService && (
-                    <View style={styles.distanceItem}>
-                      <Icon name="schedule" size={24} color="#FF9500" />
-                      <Text style={[styles.distanceValue, {color: '#FF9500'}]}>{eta} {t('activeService.min')}</Text>
-                      <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.eta')}</Text>
-                    </View>
-                  )}
-                </View>
-                {providerLocation.address && (
-                  <View style={styles.locationDetailsContainer}>
-                    <Icon name="location-on" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.locationDetailsText, {color: theme.textSecondary}]} numberOfLines={2}>
-                      {providerLocation.address}
-                      {providerLocation.city ? `, ${providerLocation.city}` : ''}
-                      {providerLocation.state ? `, ${providerLocation.state}` : ''}
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : providerLocation ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
-                  <Icon name="location-on" size={48} color={theme.primary} />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text, fontWeight: '600'}]}>
-                  {t('activeService.providerLocation')}
-                </Text>
-                {providerLocation.address && (
-                  <View style={styles.locationDetailsContainer}>
-                    <Text style={[styles.locationDetailsText, {color: theme.textSecondary}]} numberOfLines={2}>
-                      {providerLocation.address}
-                      {providerLocation.city ? `, ${providerLocation.city}` : ''}
-                      {providerLocation.state ? `, ${providerLocation.state}` : ''}
-                    </Text>
-                  </View>
-                )}
-                {isImmediateService && eta > 0 && (
-                  <View style={styles.distanceInfoContainer}>
-                    <View style={styles.distanceItem}>
-                      <Icon name="schedule" size={24} color="#FF9500" />
-                      <Text style={[styles.distanceValue, {color: '#FF9500'}]}>{eta} {t('activeService.min')}</Text>
-                      <Text style={[styles.distanceLabel, {color: theme.textSecondary}]}>{t('activeService.eta')}</Text>
-                    </View>
-                  </View>
-                )}
-                {!isImmediateService && serviceRequest?.scheduledTime && (
-                  <View style={styles.scheduledTimeContainer}>
-                    <Icon name="event" size={20} color={theme.primary} />
-                    <Text style={[styles.scheduledTimeText, {color: theme.text}]}>
-                      {new Date(serviceRequest.scheduledTime).toLocaleString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : status === 'pending' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: '#FF9500' + '20'}]}>
-                  <Icon name="hourglass-empty" size={48} color="#FF9500" />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.waitingForProvider')}
-                </Text>
-                <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
-                  {waitingForProviderMessage}
-                </Text>
-              </>
-            ) : status === 'accepted' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: theme.success + '20'}]}>
-                  <Icon name="check-circle" size={28} color={theme.success} />
-                </View>
-                <View style={styles.statusHeroCopy}>
-                  <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                    {t('activeService.providerAssigned')}
-                  </Text>
-                  <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
-                    {String(t('activeService.providerHasAccepted') || '{{name}} has accepted your request').replace(
-                      '{{name}}',
-                      providerDisplayName,
-                    )}
-                  </Text>
-                  {providerProfile?.isOnline === true ? (
-                    <Text style={[styles.presenceText, {color: theme.success}]}>
-                      ●  {t('activeService.online')}
-                    </Text>
-                  ) : providerProfile?.isOnline === false ? (
-                    <Text style={[styles.presenceText, {color: theme.textSecondary}]}>
-                      ●  {t('activeService.offline')}
-                    </Text>
-                  ) : null}
-                </View>
-              </>
-            ) : status === 'in-progress' ? (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: '#34C759' + '20'}]}>
-                  <Icon name="engineering" size={48} color="#34C759" />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.serviceInProgress')}
-                </Text>
-                {providerProfile?.name && (
-                  <Text style={[styles.mapPlaceholderSubtext, {color: theme.textSecondary}]}>
-                    {String(t('activeService.providerWorking'))}: {providerProfile.name}
-                  </Text>
-                )}
-              </>
-            ) : (
-              <>
-                <View style={[styles.distanceIconContainer, {backgroundColor: theme.primary + '20'}]}>
-                  <Icon name="location-on" size={48} color={theme.primary} />
-                </View>
-                <Text style={[styles.mapPlaceholderText, {color: theme.text}]}>
-                  {t('activeService.trackingService')}
-                </Text>
-              </>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* Status Card */}
-      <View style={[styles.statusCard, {backgroundColor: theme.card}]}>
-        <View style={styles.statusHeader}>
-          <View
-            style={[
-              styles.statusIndicator,
-              {backgroundColor: getStatusColor(status)},
-            ]}
-          />
-          <View style={styles.statusTextContainer}>
-            <View style={styles.statusRow}>
-            <Text style={[styles.statusText, {color: theme.text}]}>
-              {getStatusText(status)}
-            </Text>
-              {/* Service Type Chip */}
-              <View
-                style={[
-                  styles.serviceTypeChip,
-                  {
-                    backgroundColor: isImmediateService
-                      ? '#FF9500' + '20'
-                      : '#007AFF' + '20',
-                  },
-                ]}>
-                <Text
-                  style={[
-                    styles.serviceTypeChipText,
-                    {
-                      color: isImmediateService ? '#FF9500' : '#007AFF',
-                    },
-                  ]}>
-                  {isImmediateService ? t('services.immediate') : t('services.scheduled')}
-                </Text>
-              </View>
-            </View>
-            {status === 'accepted' && providerLocation && distance ? (
-              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                {t('activeService.providerIsAway').replace('{0}', distance).replace('{1}', String(eta))}
-              </Text>
-            ) : null}
-            {status === 'accepted' && !providerLocation && (
-              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                {t('activeService.providerLocationWillAppear')}
-              </Text>
-            )}
-            {status === 'in-progress' && (
-              <View style={styles.pinContainer}>
-                <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                  {t('activeService.serviceInProgress')}
-                </Text>
-                {jobCard?.taskPIN ? (
-                  <View style={[styles.pinDisplay, {backgroundColor: theme.primary + '15', borderColor: theme.primary}]}>
-                    <Icon name="lock" size={16} color={theme.primary} />
-                    <Text style={[styles.pinLabel, {color: theme.textSecondary}]}>
-                      {t('jobCard.yourVerificationPIN')}
-                    </Text>
-                    <Text style={[styles.pinValue, {color: theme.primary}]}>
-                      {jobCard.taskPIN}
-                    </Text>
-                    <Text style={[styles.pinInstruction, {color: theme.textSecondary}]}>
-                      {t('jobCard.sharePIN')}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            )}
-            {status === 'pending' && (
-              <Text style={[styles.distanceText, {color: theme.textSecondary}]}>
-                {waitingForProviderMessage}
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Provider + service details */}
       <ScrollView
         style={styles.detailsContainer}
-        contentContainerStyle={styles.detailsContent}
+        contentContainerStyle={styles.pageContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
-          {status === 'pending' && !serviceRequest?.providerId ? (
-            <AvailableProviders
-              theme={theme}
-              providers={displayProviders}
-              loading={loadingProviders}
-              title={String(t('activeService.availableProviders'))}
-              countLabel={
-                availableCount === 1
-                  ? String(t('activeService.providerAvailable') || '1 provider available')
-                  : availableCount > 1
-                    ? String(
-                        t('activeService.providersAvailable') ||
-                          '{{count}} providers available',
-                      ).replace('{{count}}', String(availableCount))
-                    : undefined
-              }
-              emptyTitle={String(t('activeService.noProvidersTitle'))}
-              emptyMessage={String(t('activeService.noProvidersMessage'))}
-              onlineLabel={String(t('activeService.online'))}
-              offlineLabel={String(t('activeService.offline'))}
-              declinedLabel={String(t('activeService.declined'))}
-              callLabel={String(t('activeService.callProvider'))}
-              onCall={phone => {
-                void Linking.openURL(`tel:${phone}`);
-              }}
-            />
+        {/* Single status hero — web `.active-hero` (no left stripe, no map banner) */}
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDark}
+          statusColor={heroTint}
+          radius={18}
+          style={styles.heroCard}
+          contentStyle={styles.heroInner}>
+          <View style={styles.heroTitleRow}>
+            <View
+              style={[
+                styles.heroIcon,
+                {backgroundColor: `${heroTint}24`},
+              ]}>
+              <Icon name={phaseIcon} size={20} color={heroTint} />
+            </View>
+            <Text
+              style={[styles.heroTitle, {color: theme.text}]}
+              numberOfLines={2}>
+              {heroTitle}
+            </Text>
+            {showRefresh ? (
+              <TouchableOpacity
+                style={[styles.heroBell, {backgroundColor: `${theme.primary}14`}]}
+                onPress={() => void loadServiceData()}
+                accessibilityRole="button"
+                accessibilityLabel={String(t('active.refreshStatus') || 'Refresh')}>
+                <Icon name="refresh" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {heroSub ? (
+            <Text style={[styles.heroSub, {color: theme.textSecondary}]}>
+              {heroSub}
+            </Text>
           ) : null}
-          {showProviderCard ? (
-          <View style={[styles.card, {backgroundColor: theme.card}]}>
+          {distance &&
+          (status === 'accepted' || status === 'in-progress') &&
+          isImmediateService ? (
+            <Text style={[styles.heroSub, {color: theme.textSecondary}]}>
+              {String(
+                t('activeService.providerIsAway') ||
+                  'Provider is {0} away • ETA: ~{1} min',
+              )
+                .replace('{0}', distance)
+                .replace('{1}', String(eta || '—'))}
+            </Text>
+          ) : null}
+          {canEdit ? (
+            <Text style={[styles.heroReassure, {color: theme.textSecondary}]}>
+              {String(
+                t('active.editUntilAccepted', {type: serviceLabel}) ||
+                  `You can edit this request until someone accepts it.`,
+              )}
+            </Text>
+          ) : waiting ? (
+            <Text style={[styles.heroReassure, {color: theme.textSecondary}]}>
+              {String(t('active.youCanWait') || "You don't need to do anything right now.")}
+            </Text>
+          ) : null}
+          {status === 'in-progress' && taskPin ? (
+            <View
+              style={[
+                styles.pinBox,
+                {
+                  backgroundColor: `${theme.primary}15`,
+                  borderColor: `${theme.primary}55`,
+                },
+              ]}>
+              <Text style={[styles.pinBoxLabel, {color: theme.textSecondary}]}>
+                {String(t('active.verificationPin') || 'Task completion PIN')}
+              </Text>
+              <Text style={[styles.pinBoxValue, {color: theme.primary}]}>
+                {String(taskPin)}
+              </Text>
+              <Text style={[styles.pinBoxHint, {color: theme.textSecondary}]}>
+                {String(
+                  t('active.verificationPinHint') ||
+                    'Share this 4-digit PIN when they finish the work.',
+                )}
+              </Text>
+            </View>
+          ) : null}
+        </CrystalSurface>
+
+        {status === 'pending' && !serviceRequest?.providerId ? (
+          <AvailableProviders
+            theme={theme}
+            providers={displayProviders}
+            loading={loadingProviders}
+            title={serviceLabel}
+            countLabel={
+              availableCount === 1
+                ? String(
+                    t('active.providerAvailable', {type: serviceLabel}) ||
+                      t('activeService.providerAvailable') ||
+                      '1 provider available',
+                  )
+                : availableCount > 1
+                  ? String(
+                      t('active.providersAvailable', {
+                        count: availableCount,
+                        type: serviceLabel,
+                      }) ||
+                        t('activeService.providersAvailable') ||
+                        '{{count}} providers available',
+                    ).replace('{{count}}', String(availableCount))
+                  : undefined
+            }
+            emptyTitle={String(
+              t('active.noProvidersTitle') || t('activeService.noProvidersTitle'),
+            )}
+            emptyMessage={String(
+              t('active.noProvidersMessage') ||
+                t('activeService.noProvidersMessage'),
+            )}
+            onlineLabel={String(t('common.online') || t('activeService.online'))}
+            offlineLabel={String(
+              t('common.offline') || t('activeService.offline'),
+            )}
+            declinedLabel={String(
+              t('status.declined') || t('activeService.declined'),
+            )}
+            callLabel={String(t('contact.callProvider') || t('activeService.callProvider'))}
+          />
+        ) : null}
+
+        {showProviderCard ? (
+          <CrystalSurface
+            primary={theme.primary}
+            card={theme.card}
+            isDark={isDark}
+            radius={18}
+            style={styles.detailCard}
+            contentStyle={styles.detailCardInner}>
             <Text style={[styles.cardTitle, {color: theme.text}]}>
-              {t('activeService.providerDetails')}
+              {serviceLabel}
             </Text>
             <View style={styles.providerInfo}>
-              {(providerProfile?.profileImage || serviceRequest?.providerImage) ? (
-                <Image 
-                  source={{uri: providerProfile?.profileImage || serviceRequest?.providerImage}} 
-                  style={styles.providerImage}
-                />
-              ) : (
-                <View style={[styles.providerAvatar, {backgroundColor: theme.success}]}>
-                  <Text style={styles.providerInitial}>
-                    {(assignedProviderName || 'P').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <Avatar
+                src={
+                  providerProfile?.profileImage ||
+                  serviceRequest?.providerImage ||
+                  null
+                }
+                name={
+                  assignedProviderName ||
+                  String(t('active.partnerFallback') || 'Someone')
+                }
+                size={48}
+                colors={{primary: theme.primary}}
+              />
               <View style={styles.providerDetails}>
-                <Text 
+                <Text
                   style={[styles.providerName, {color: theme.text}]}
                   numberOfLines={1}
                   ellipsizeMode="tail">
-                  {assignedProviderName || t('activeService.providerDetails')}
+                  {assignedProviderName ||
+                    String(t('active.partnerFallback') || 'Someone')}
                 </Text>
-                <Text 
+                <Text
                   style={[styles.serviceType, {color: theme.textSecondary}]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                   ellipsizeMode="tail">
-                  {providerProfile?.specialization || providerProfile?.specialty || serviceRequest?.providerSpecialization || jobCard?.serviceType || serviceRequest?.serviceType || t('common.services')}
+                  {[serviceLabel, providerLocLabel].filter(Boolean).join(' · ')}
                 </Text>
                 {providerProfile?.isOnline === true ? (
                   <Text style={[styles.presenceText, {color: theme.success}]}>
-                    ●  {t('activeService.online')}
+                    ●  {t('common.online') || t('activeService.online')}
                   </Text>
                 ) : providerProfile?.isOnline === false ? (
                   <Text style={[styles.presenceText, {color: theme.textSecondary}]}>
-                    ●  {t('activeService.offline')}
+                    ●  {t('common.offline') || t('activeService.offline')}
                   </Text>
                 ) : null}
                 {providerRating > 0 ? (
@@ -1978,145 +1564,105 @@ export default function ActiveServiceScreen({
                     <Text style={[styles.rating, {color: theme.text}]}>
                       {providerRating.toFixed(1)}
                     </Text>
-                    {providerProfile?.totalConsultations ? (
-                      <Text style={[styles.reviewsCount, {color: theme.textSecondary}]}>
-                        ({providerProfile.totalConsultations} {t('activeService.reviews')})
-                      </Text>
-                    ) : null}
                   </View>
                 ) : null}
               </View>
             </View>
 
-            {typeof providerProfile?.experience === 'number' || providerProfile?.experience ? (
-              <View style={styles.infoRow}>
-                <Icon name="work" size={18} color={theme.success} />
-                <Text style={[styles.infoText, {color: theme.text}]}>
-                  {providerProfile.experience} {t('activeService.yearsOfExperience')}
-                </Text>
-              </View>
+            {canCall ? (
+              <Button
+                title={String(
+                  t('contact.callProvider') || t('activeService.callProvider'),
+                )}
+                variant="secondary"
+                block
+                onPress={handleCallProvider}
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: theme.primary,
+                  border: theme.primary,
+                }}
+                textStyle={{color: theme.primary}}
+              />
+            ) : contactHint ? (
+              <Text style={[styles.contactHint, {color: theme.textSecondary}]}>
+                {contactHint}
+              </Text>
             ) : null}
+          </CrystalSurface>
+        ) : null}
 
-            {(() => {
-              const loc =
-                providerProfile?.location?.district ||
-                providerProfile?.location?.state
-                  ? [providerProfile?.location?.district, providerProfile?.location?.state]
-                      .filter(Boolean)
-                      .join(', ')
-                  : providerProfile?.address
-                    ? typeof providerProfile.address === 'string'
-                      ? providerProfile.address
-                      : `${providerProfile.address.address || ''}${providerProfile.address.city ? `, ${providerProfile.address.city}` : ''}`
-                    : '';
-              return loc ? (
-                <View style={styles.infoRow}>
-                  <Icon name="location-on" size={18} color={theme.success} />
-                  <Text style={[styles.infoText, {color: theme.text}]}>{loc}</Text>
-                </View>
-              ) : null;
-            })()}
-
-            {providerPhone ? (
-              <View style={styles.contactSection}>
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('serviceHistory.phone')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text, marginBottom: 10}]}>
-                  {providerPhone}
-                </Text>
-                <Button
-                  title={String(t('activeService.callProvider'))}
-                  variant="secondary"
-                  block
-                  onPress={handleCallProvider}
-                  colors={{
-                    primary: theme.primary,
-                    card: theme.card,
-                    text: theme.primary,
-                    border: theme.primary,
-                  }}
-                  textStyle={{color: theme.primary}}
-                />
-              </View>
-            ) : null}
-          </View>
-          ) : null}
-
-          {/* Service Details */}
-          <View style={[styles.card, {backgroundColor: theme.card}]}>
-            <Text style={[styles.cardTitle, {color: theme.text}]}>
-              {t('jobCard.serviceDetails')}
+        {/* Service Details — web `.active-detail-card` */}
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDark}
+          radius={18}
+          style={styles.detailCard}
+          contentStyle={styles.detailCardInner}>
+          <Text style={[styles.cardTitle, {color: theme.text}]}>
+            {String(t('active.serviceDetails') || t('jobCard.serviceDetails'))}
+          </Text>
+          <View style={styles.detailGridRow}>
+            <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+              {String(t('active.serviceType') || t('services.serviceType'))}
             </Text>
-            <View style={styles.detailRow}>
-              <Icon name="build" size={20} color={theme.primary} />
+            <Text style={[styles.detailValue, {color: theme.text}]}>
+              {serviceLabel}
+            </Text>
+          </View>
+          {(serviceRequest?.problem || jobCard?.problem) ? (
+            <View style={styles.detailGridRow}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                {t('services.serviceType')}:
+                {String(t('active.problem') || t('services.problem'))}
               </Text>
               <Text style={[styles.detailValue, {color: theme.text}]}>
-                {provider?.serviceType || serviceRequest?.serviceType || jobCard?.serviceType || 'N/A'}
+                {serviceRequest?.problem || jobCard?.problem || ''}
               </Text>
             </View>
-            {(serviceRequest?.problem || jobCard?.problem) && (
-              <View style={styles.detailRow}>
-                <Icon name="description" size={20} color={theme.primary} />
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('services.problem')}:
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {serviceRequest?.problem || jobCard?.problem || ''}
-                </Text>
-              </View>
-            )}
-            {customerAddress?.address ? (
-              <View style={styles.detailRow}>
-                <Icon name="location-on" size={20} color={theme.success} />
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('services.address')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {customerAddress.address}
-                  {customerAddress.pincode ? `, ${customerAddress.pincode}` : ''}
-                </Text>
-              </View>
-            ) : null}
-            {requestedAt ? (
-              <View style={styles.detailRow}>
-                <Icon name="calendar-today" size={20} color={theme.success} />
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('activeService.requestedOn')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {new Date(requestedAt).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-            ) : null}
-            <View style={styles.detailRow}>
-              <Icon name="bolt" size={20} color={theme.success} />
+          ) : null}
+          {serviceAddressLine ? (
+            <View style={styles.detailBlock}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                {t('activeService.priority')}
+                {String(t('active.address') || t('services.address'))}
               </Text>
-              <View
-                style={[
-                  styles.serviceTypeChip,
-                  {
-                    backgroundColor: isImmediateService ? '#FF950020' : '#007AFF20',
-                  },
-                ]}>
-                <Text
-                  style={[
-                    styles.serviceTypeChipText,
-                    {color: isImmediateService ? '#FF9500' : '#007AFF'},
-                  ]}>
-                  {isImmediateService ? t('services.immediate') : t('services.scheduled')}
-                </Text>
-              </View>
+              <Text style={[styles.detailAddress, {color: theme.text}]}>
+                {serviceAddressLine}
+              </Text>
             </View>
-          </View>
+          ) : null}
+          {status === 'cancelled' &&
+          String(serviceRequest?.cancellationReason || '').trim() ? (
+            <View style={styles.detailGridRow}>
+              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                {String(t('active.cancelReason') || 'Reason')}
+              </Text>
+              <Text style={[styles.detailValue, {color: theme.error}]}>
+                {String(serviceRequest.cancellationReason).trim()}
+              </Text>
+            </View>
+          ) : null}
+          {requestedLabel ? (
+            <Text style={[styles.detailTime, {color: theme.textSecondary}]}>
+              {requestedLabel}
+            </Text>
+          ) : null}
+        </CrystalSurface>
+
+          <RequestPhotoGallery
+            photos={serviceRequest?.photos}
+            theme={theme}
+            title={String(t('jobDetails.customerPhotos') || t('activeService.photos') || 'Photos')}
+          />
+          <RequestPhotoGallery
+            photos={
+              (serviceRequest as any)?.completionPhotos ||
+              (jobCard as any)?.completionPhotos
+            }
+            theme={theme}
+            title={String(t('active.completionPhotos'))}
+          />
 
           {/* Comments — shared with provider & admin once a job card exists */}
           {jobCardId && !String(jobCardId).startsWith('sr_') ? (
@@ -2169,9 +1715,9 @@ export default function ActiveServiceScreen({
               onPress={handleVerifyCompletion}
               colors={{primary: theme.success, card: theme.card, text: '#fff', border: theme.success}}
             />
-            {providerPhone ? (
+            {canCall ? (
               <Button
-                title={String(t('activeService.callProvider'))}
+                title={String(t('contact.callProvider') || t('activeService.callProvider'))}
                 variant="primary"
                 block
                 onPress={handleCallProvider}
@@ -2194,7 +1740,19 @@ export default function ActiveServiceScreen({
               />
             ) : null}
             <Button
-              title={String(t('activeService.cancelService'))}
+              title={String(t('active.editRequest') || t('activeRequest.edit') || 'Edit request')}
+              variant="secondary"
+              block
+              onPress={() =>
+                navigation.navigate('ServiceRequest', {
+                  editServiceRequestId: serviceRequestId,
+                  serviceType: serviceRequest?.serviceType,
+                })
+              }
+              disabled={loading}
+            />
+            <Button
+              title={String(t('active.cancelService') || t('activeService.cancelService'))}
               variant="secondary"
               block
               onPress={handleCancelService}
@@ -2231,9 +1789,9 @@ export default function ActiveServiceScreen({
 
         {status === 'accepted' ? (
           <>
-            {providerPhone ? (
+            {canCall ? (
               <Button
-                title={String(t('activeService.callProvider'))}
+                title={String(t('contact.callProvider') || t('activeService.callProvider'))}
                 variant="primary"
                 block
                 onPress={handleCallProvider}
@@ -2505,15 +2063,11 @@ const styles = StyleSheet.create({
     borderColor: '#34C759',
   },
   statusCard: {
-    padding: 16,
     marginHorizontal: 16,
     marginTop: -20,
-    borderRadius: 12,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+  },
+  statusCardInner: {
+    padding: 16,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -2584,7 +2138,108 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     flex: 1,
-    marginTop: 12,
+  },
+  pageContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  heroCard: {
+    marginHorizontal: 0,
+  },
+  heroInner: {
+    padding: 14,
+    gap: 8,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    lineHeight: 20,
+  },
+  heroBell: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroSub: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginLeft: 44,
+  },
+  heroReassure: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginLeft: 44,
+    fontWeight: '500',
+  },
+  pinBox: {
+    marginTop: 4,
+    marginLeft: 44,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  pinBoxLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  pinBoxValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 6,
+  },
+  pinBoxHint: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  detailCard: {
+    marginHorizontal: 0,
+  },
+  detailCardInner: {
+    padding: 14,
+    gap: 10,
+  },
+  contactHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  detailGridRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  detailBlock: {
+    gap: 4,
+  },
+  detailAddress: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  detailTime: {
+    fontSize: 12,
+    marginTop: 2,
   },
   detailsContent: {
     paddingBottom: 24,
@@ -2601,14 +2256,16 @@ const styles = StyleSheet.create({
     shadowRadius: 2.22,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+    letterSpacing: -0.2,
   },
   providerInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
+    marginBottom: 4,
   },
   providerAvatar: {
     width: 60,

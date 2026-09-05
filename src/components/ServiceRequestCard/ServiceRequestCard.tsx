@@ -1,11 +1,15 @@
+/**
+ * Presentational service-request card — parity with customer-web ServiceRequestCard.
+ */
+
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {Avatar, Button} from 'sapvt-ltd-app-packages';
+import {Avatar} from 'sapvt-ltd-app-packages';
 import type {Theme} from '../../utils/theme';
-import {commonStyles} from '../../utils/theme';
-import {serviceCategoryIcon} from '../../utils/serviceIcons';
+import {toSafeMaterialIcon} from '../../utils/serviceIcons';
 import useTranslation from '../../hooks/useTranslation';
+import {CrystalSurface} from '../CrystalSurface';
 
 export type ServiceRequestCardChip = {
   label: string;
@@ -14,19 +18,34 @@ export type ServiceRequestCardChip = {
 
 export type ServiceRequestCardFact = {
   icon: string;
-  label: string;
+  /** Web meta rows use value only; label is optional / unused when empty */
+  label?: string;
   value: string;
 };
+
+/** Web `.srcard-glass--*` status keys */
+export type ServiceRequestCardStatus =
+  | 'pending'
+  | 'accepted'
+  | 'in-progress'
+  | 'completed'
+  | 'cancelled'
+  | 'rejected';
 
 type Props = {
   theme: Theme;
   title: string;
   subtitle?: string;
   serviceType?: string;
+  /** Drives crystal wash (customer-web srcard-glass) */
+  statusKey?: ServiceRequestCardStatus | string;
+  /** chips[0] = corner status badge (web). Extra chips ignored for parity. */
   chips?: ServiceRequestCardChip[];
   facts?: ServiceRequestCardFact[];
+  description?: string;
+  cancelReason?: string;
+  /** Digits used for tel: only — never shown next to Call (web callOnly). */
   phone?: string | null;
-  phoneLabel?: string;
   callLabel?: string;
   online?: boolean | null;
   onlineLabel?: string;
@@ -40,15 +59,37 @@ type Props = {
   children?: React.ReactNode;
 };
 
+export type ServiceRequestCardProps = Props;
+
+function statusTint(statusKey: string | undefined, theme: Theme): string {
+  switch (String(statusKey || '').toLowerCase()) {
+    case 'accepted':
+    case 'completed':
+      return theme.success;
+    case 'in-progress':
+    case 'in_progress':
+      return theme.primary;
+    case 'cancelled':
+    case 'canceled':
+    case 'rejected':
+      return theme.error;
+    case 'pending':
+    default:
+      return theme.warning;
+  }
+}
+
 export function ServiceRequestCard({
   theme,
   title,
   subtitle,
   serviceType,
+  statusKey = 'pending',
   chips = [],
   facts = [],
+  description,
+  cancelReason,
   phone,
-  phoneLabel,
   callLabel,
   online,
   onlineLabel,
@@ -62,177 +103,272 @@ export function ServiceRequestCard({
   children,
 }: Props) {
   const {t} = useTranslation();
-  const resolvedPhoneLabel = phoneLabel ?? String(t('profile.phone'));
-  const resolvedCallLabel = callLabel ?? String(t('providers.callProvider'));
+  const resolvedCallLabel =
+    callLabel ?? String(t('contact.callProvider') || t('providers.callProvider') || 'Call');
   const resolvedOnlineLabel = onlineLabel ?? String(t('providers.online'));
   const resolvedOfflineLabel = offlineLabel ?? String(t('providers.offline'));
-  const iconName = serviceCategoryIcon(serviceType || title);
+  const iconName = toSafeMaterialIcon(undefined, serviceType || title);
+  const tint = statusTint(statusKey, theme);
+  const isDark = theme.background === '#0B1220';
+  const statusChip = chips[0];
+  const showCall = Boolean(phone && onCall);
+  // Web `.srcard-call`: status tint ~8% mixed into translucent white.
+  const callBg = isDark ? `${tint}28` : `${tint}14`;
 
   return (
-    <View style={[styles.card, {backgroundColor: theme.card, borderColor: theme.border}]}>
+    <CrystalSurface
+      primary={theme.primary}
+      card={theme.card}
+      isDark={isDark}
+      statusColor={tint}
+      radius={18}
+      style={styles.card}
+      contentStyle={[
+        styles.cardInner,
+        statusChip ? styles.cardInnerWithBadge : null,
+      ]}>
       <Pressable onPress={onPress} accessibilityRole="button">
-        <View style={styles.top}>
-          <View style={styles.identity}>
-            {avatarName ? (
-              <Avatar
-                src={avatarSrc}
-                name={avatarName}
-                size={44}
-                colors={{primary: theme.primary}}
-              />
-            ) : (
-              <View style={[styles.iconWrap, {backgroundColor: `${theme.success}22`}]}>
-                <Icon name={iconName} size={22} color={theme.success} />
-              </View>
-            )}
-            <View style={styles.copy}>
-              <Text style={[styles.title, {color: theme.text}]} numberOfLines={2}>
-                {title}
-              </Text>
-              {subtitle ? (
-                <View style={styles.subtitleRow}>
-                  <Text
-                    style={[styles.subtitle, {color: theme.textSecondary}]}
-                    numberOfLines={1}>
-                    {subtitle}
-                  </Text>
-                  {online === true ? (
-                    <Text style={[styles.presence, {color: theme.success}]}>
-                      {'  •  '}
-                      {resolvedOnlineLabel}
-                    </Text>
-                  ) : online === false ? (
-                    <Text style={[styles.presence, {color: theme.textSecondary}]}>
-                      {'  •  '}
-                      {resolvedOfflineLabel}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
+        <View style={styles.head}>
+          {avatarName ? (
+            <Avatar
+              src={avatarSrc}
+              name={avatarName}
+              size={36}
+              colors={{primary: theme.primary}}
+            />
+          ) : (
+            <View style={[styles.iconWrap, {backgroundColor: `${tint}24`}]}>
+              <Icon name={iconName} size={22} color={tint} />
             </View>
-          </View>
-          <View style={styles.chips}>
-            {chips.map(chip => (
-              <View
-                key={chip.label}
-                style={[styles.chip, {backgroundColor: `${chip.color}22`}]}>
-                <Text style={[styles.chipText, {color: chip.color}]}>{chip.label}</Text>
+          )}
+          <View style={styles.copy}>
+            <Text style={[styles.title, {color: theme.text}]} numberOfLines={2}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <View style={styles.subtitleRow}>
+                <Text
+                  style={[styles.subtitle, {color: theme.textSecondary}]}
+                  numberOfLines={2}>
+                  {subtitle}
+                </Text>
+                {online === true ? (
+                  <Text style={[styles.presence, {color: theme.success}]}>
+                    {' · '}
+                    {resolvedOnlineLabel}
+                  </Text>
+                ) : online === false ? (
+                  <Text style={[styles.presence, {color: theme.textSecondary}]}>
+                    {' · '}
+                    {resolvedOfflineLabel}
+                  </Text>
+                ) : null}
               </View>
-            ))}
+            ) : null}
           </View>
         </View>
 
+        {description ? (
+          <Text style={[styles.problem, {color: theme.text}]} numberOfLines={3}>
+            {description}
+          </Text>
+        ) : null}
+
+        {cancelReason ? (
+          <Text style={[styles.cancelReason, {color: theme.error}]} numberOfLines={3}>
+            {cancelReason}
+          </Text>
+        ) : null}
+
         {facts.map(fact => (
-          <View key={`${fact.label}-${fact.value}`} style={styles.fact}>
-            <Icon name={fact.icon} size={16} color={theme.success} />
-            <View style={styles.factText}>
-              {fact.label ? (
-                <Text style={[styles.factLabel, {color: theme.textSecondary}]}>
-                  {fact.label}
-                </Text>
-              ) : null}
-              <Text style={[styles.factValue, {color: theme.text}]} numberOfLines={2}>
-                {fact.value}
-              </Text>
-            </View>
+          <View key={`${fact.icon}-${fact.value}`} style={styles.metaRow}>
+            <Icon
+              name={toSafeMaterialIcon(fact.icon, undefined)}
+              size={14}
+              color={theme.textSecondary}
+              style={styles.metaIcon}
+            />
+            <Text
+              style={[styles.metaText, {color: theme.text}]}
+              numberOfLines={2}>
+              {fact.value}
+            </Text>
           </View>
         ))}
       </Pressable>
 
-      {phone ? (
-        <View style={styles.phoneBlock}>
-          <View style={styles.fact}>
-            <Icon name="phone" size={16} color={theme.success} />
-            <View style={styles.factText}>
-              <Text style={[styles.factLabel, {color: theme.textSecondary}]}>
-                {resolvedPhoneLabel}
-              </Text>
-              <Text style={[styles.factValue, {color: theme.text}]}>{phone}</Text>
-            </View>
-          </View>
-          {onCall ? (
-            <Button
-              title={resolvedCallLabel}
-              variant="secondary"
-              size="sm"
-              onPress={onCall}
-              colors={{
-                primary: theme.primary,
-                card: theme.card,
-                text: theme.primary,
-                border: theme.primary,
-              }}
-              textStyle={{color: theme.primary}}
-              style={styles.callBtn}
-            />
-          ) : null}
+      {/* Web: Call only — never show raw digits beside Call */}
+      {showCall ? (
+        <View style={styles.callSlot}>
+          <Pressable
+            onPress={onCall}
+            style={[
+              styles.callBtn,
+              {
+                backgroundColor: callBg,
+                // Soft status tint wash (web srcard-call 8% mix)
+                borderColor: `${tint}22`,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={resolvedCallLabel}>
+            <Icon name="call" size={14} color={theme.text} />
+            <Text style={[styles.callBtnText, {color: theme.text}]}>
+              {resolvedCallLabel}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
       {children}
 
-      <View style={[styles.footer, {borderTopColor: theme.border}]}>
+      <View style={styles.footer}>
         {leadingAction}
-        <Pressable onPress={onPress} style={styles.viewRow} accessibilityRole="button">
-          <Text style={[styles.viewText, {color: theme.primary}]}>{viewDetailsLabel}</Text>
-          <Icon name="chevron-right" size={18} color={theme.primary} />
+        <Pressable
+          onPress={onPress}
+          style={styles.viewRow}
+          accessibilityRole="button">
+          <Text style={[styles.viewText, {color: theme.primary}]}>
+            {viewDetailsLabel}
+          </Text>
+          <Icon name="chevron-right" size={16} color={theme.primary} />
         </Pressable>
       </View>
-    </View>
+
+      {/* Corner badge last so it paints above card content (web srcard-status-badge) */}
+      {statusChip ? (
+        <View
+          style={[
+            styles.statusBadge,
+            {backgroundColor: `${statusChip.color}24`},
+          ]}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <Text
+            style={[styles.statusBadgeText, {color: statusChip.color}]}
+            numberOfLines={1}
+            ellipsizeMode="tail">
+            {String(statusChip.label || '')}
+          </Text>
+        </View>
+      ) : null}
+    </CrystalSurface>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     marginTop: 10,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    ...commonStyles.shadowSmall,
+    overflow: 'hidden',
   },
-  top: {
+  cardInner: {
+    padding: 12,
+    position: 'relative',
+  },
+  cardInnerWithBadge: {
+    paddingRight: 12,
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 2,
+    // RN: % maxWidth on absolute children often collapses → "A…" / "…"
+    maxWidth: 168,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+    lineHeight: 15,
+  },
+  head: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 6,
+    paddingRight: 88,
   },
-  identity: {flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0},
   iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   copy: {flex: 1, minWidth: 0},
-  title: {fontSize: 17, fontWeight: '700'},
-  subtitleRow: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4},
-  subtitle: {fontSize: 13, flexShrink: 1},
-  presence: {fontSize: 12, fontWeight: '600'},
-  chips: {
+  title: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    lineHeight: 20,
+  },
+  subtitleRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: 6,
-    maxWidth: '42%',
+    alignItems: 'center',
+    marginTop: 2,
   },
-  chip: {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999},
-  chipText: {fontSize: 11, fontWeight: '700'},
-  fact: {flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10},
-  factText: {flex: 1, minWidth: 0},
-  factLabel: {fontSize: 11, fontWeight: '600', marginBottom: 2},
-  factValue: {fontSize: 14, fontWeight: '600'},
-  phoneBlock: {gap: 8, marginBottom: 4},
-  callBtn: {alignSelf: 'stretch'},
+  subtitle: {fontSize: 12, lineHeight: 16, flexShrink: 1},
+  presence: {fontSize: 11, fontWeight: '600'},
+  problem: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  cancelReason: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 4,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 2,
+  },
+  metaIcon: {
+    marginTop: 1,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  callSlot: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  callBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  callBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 6,
+    paddingTop: 6,
   },
   viewRow: {flexDirection: 'row', alignItems: 'center', marginLeft: 'auto'},
-  viewText: {fontSize: 14, fontWeight: '600'},
+  viewText: {fontSize: 13, fontWeight: '600'},
 });

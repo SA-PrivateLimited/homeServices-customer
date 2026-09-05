@@ -1,0 +1,406 @@
+/* History / request list cards — translucent status-tinted crystal glass. */
+
+.srcard {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  /* Default Waiting — admin client warning */
+  --srcard-status: var(--warning);
+}
+
+.srcard-glass {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 18px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--srcard-status) 11%, color-mix(in srgb, var(--card) 55%, transparent)),
+    color-mix(in srgb, var(--srcard-status) 18%, color-mix(in srgb, var(--card) 28%, transparent))
+  );
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  border: none;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--card) 82%, transparent),
+    0 6px 18px color-mix(in srgb, var(--srcard-status) 10%, rgba(30, 60, 90, 0.05));
+  cursor: pointer;
+  outline: none;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.srcard-glass--pending {
+  --srcard-status: var(--warning);
+}
+
+.srcard-glass--accepted {
+  --srcard-status: var(--success);
+}
+
+.srcard-glass--in-progress {
+  --srcard-status: var(--primary);
+}
+
+.srcard-glass--completed {
+  --srcard-status: var(--success);
+}
+
+.srcard-glass--cancelled {
+  --srcard-status: var(--error);
+}
+
+.srcard-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.5),
+    color-mix(in srgb, var(--srcard-status) 8%, transparent) 42%,
+    transparent 70%
+  );
+  opacity: 0.75;
+  z-index: 0;
+}
+
+.srcard-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.srcard-glass > .srcard-status-badge {
+  position: absolute;
+  z-index: 2;
+}
+
+@media (hover: hover) {
+  .srcard-glass:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 10px 26px color-mix(in srgb, var(--srcard-status) 14%, rgba(30, 60, 90, 0.07));
+  }
+}
+
+.srcard-glass:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.srcard-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.srcard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 0;
+}
+
+.srcard-head__copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.srcard-glass--has-badge .srcard-head {
+  padding-right: 76px;
+}
+
+.srcard-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--srcard-status) 14%, rgba(255, 255, 255, 0.55));
+  border: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  color: color-mix(in srgb, var(--srcard-status) 72%, #1b252b);
+  flex: 0 0 auto;
+}
+
+.srcard-icon-wrap .hs-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+}
+
+.srcard-avatar.hs-avatar {
+  width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 auto;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(30, 60, 90, 0.06);
+}
+
+.srcard-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.srcard-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.srcard-subtitle__empty {
+  display: none;
+}
+
+.srcard-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.srcard-presence i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.srcard-presence.is-online {
+  color: var(--success, #38a169);
+}
+
+.srcard-presence.is-offline {
+  color: var(--textSecondary);
+}
+
+.srcard-problem {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 550;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.srcard-cancel-reason {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+
+.srcard-meta {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.srcard-meta li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.srcard-meta-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: var(--text);
+}
+
+.srcard-meta-icon {
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  margin-top: 1px;
+  color: var(--textSecondary) !important;
+  opacity: 1;
+  font-size: 14px !important;
+}
+
+.srcard-call-slot {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.srcard-call-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.srcard-call {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-height: 32px !important;
+  padding-inline: 12px !important;
+  background: color-mix(in srgb, var(--srcard-status) 8%, rgba(255, 255, 255, 0.7)) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.srcard-call .hs-btn__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.srcard-call-number {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--textSecondary);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.srcard-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  min-height: 0;
+}
+
+/* Corner status tag — flush top-right of the card */
+.srcard-status-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  max-width: 56%;
+  padding: 5px 12px 6px;
+  border-radius: 0 18px 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: none;
+  pointer-events: none;
+}
+
+.srcard-status-badge--pending {
+  background: color-mix(in srgb, var(--warning) 16%, var(--card));
+  color: var(--warning);
+}
+
+.srcard-status-badge--accepted {
+  background: color-mix(in srgb, var(--success) 14%, var(--card));
+  color: var(--success);
+}
+
+.srcard-status-badge--in-progress {
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: var(--primary);
+}
+
+.srcard-status-badge--completed {
+  background: color-mix(in srgb, var(--success) 14%, var(--card));
+  color: var(--success);
+}
+
+.srcard-status-badge--cancelled {
+  background: color-mix(in srgb, var(--error) 14%, var(--card));
+  color: var(--error);
+}
+
+.srcard-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--primary);
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .srcard-glass {
+    background: color-mix(in srgb, var(--srcard-status) 10%, var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .srcard-glass {
+    background: color-mix(in srgb, var(--srcard-status) 8%, var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .srcard-glass {
+    padding: 10px 12px;
+  }
+
+  .srcard-title {
+    font-size: 15px;
+  }
+}

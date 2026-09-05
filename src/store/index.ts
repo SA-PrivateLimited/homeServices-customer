@@ -4,6 +4,7 @@ import type {User} from '../services/api/usersApi';
 import type {ServiceRequest} from '../services/api/serviceRequestsApi';
 import {changeLanguage} from '../i18n';
 import {normalizeUser, readStoredUser} from '../services/session';
+import {applyNightVisionMode, hydrateCustomerColorTheme, setCustomerColorTheme as applyStoredCustomerColorTheme, type CustomerColorThemeId} from '../utils/theme';
 
 export interface AppNotification {
   id: string;
@@ -20,6 +21,8 @@ interface AppState {
   // Theme
   isDarkMode: boolean;
   toggleTheme: () => void;
+  customerColorTheme: CustomerColorThemeId;
+  setCustomerColorTheme: (id: CustomerColorThemeId) => void;
 
   // Language
   language: 'en' | 'hi';
@@ -65,6 +68,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   isDarkMode: false,
+  customerColorTheme: 'brand',
   isLoading: false,
   language: 'hi',
 
@@ -79,7 +83,13 @@ export const useStore = create<AppState>((set, get) => ({
   toggleTheme: async () => {
     const newTheme = !get().isDarkMode;
     set({isDarkMode: newTheme});
+    applyNightVisionMode(newTheme);
     await AsyncStorage.setItem('theme', JSON.stringify(newTheme));
+  },
+
+  setCustomerColorTheme: (id: CustomerColorThemeId) => {
+    applyStoredCustomerColorTheme(id);
+    set({customerColorTheme: id});
   },
 
   setLanguage: async (language: 'en' | 'hi') => {
@@ -220,8 +230,13 @@ export const useStore = create<AppState>((set, get) => ({
         parsedUser = currentUser ? normalizeUser(JSON.parse(currentUser)) : null;
       }
 
+      const isDarkMode = theme ? JSON.parse(theme) : false;
+      applyNightVisionMode(isDarkMode);
+      const customerColorTheme = await hydrateCustomerColorTheme();
+
       set({
-        isDarkMode: theme ? JSON.parse(theme) : false,
+        isDarkMode,
+        customerColorTheme,
         language: storedLanguage,
         currentUser: parsedUser,
         serviceRequests: serviceRequests ? JSON.parse(serviceRequests) : [],

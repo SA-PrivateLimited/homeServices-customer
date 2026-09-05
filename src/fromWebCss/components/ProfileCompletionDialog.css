@@ -1,0 +1,15 @@
+.profile-completion-dialog.hs-modal {
+  width: min(100%, 420px);
+}
+
+.profile-completion-dialog__message {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--textSecondary, #4a5568);
+}
+
+.profile-completion-dialog .hs-dialog__footer {
+  flex-direction: column;
+  align-items: stretch;
+}

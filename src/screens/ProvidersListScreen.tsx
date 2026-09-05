@@ -8,8 +8,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  TextInput,
+          FlatList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -18,15 +17,32 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {Select} from 'sapvt-ltd-app-packages';
+import {Icon as HsIcon, SearchBar, canCallThisProvider, canRequestThisProvider} from 'sapvt-ltd-app-packages';
+import {PopularServices, ServiceCatalogOverlay} from '../components/PopularServices/PopularServices';
+import {ActiveRequestConflictBanner} from '../components/ActiveRequestConflictBanner';
+import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
+import {loadBrowseServices, type BrowseService} from '../services/browseServices';
+import {localizedServiceName} from '../utils/serviceDisplay';
 import {providersApi} from '../services/api/providersApi';
 import {usersApi} from '../services/api/usersApi';
 import {serviceCategoriesApi} from '../services/api/serviceCategoriesApi';
 import {
   getGeographyMeta,
+  clearGeographyMetaCache,
+  resolveGeographyFromCoordinates,
+  type GeographyBlock,
   type GeographyDistrict,
   type GeographyState,
 } from '../services/api/geographyApi';
+import {BrowseLocationSection} from '../components/BrowseLocationSection/BrowseLocationSection';
+import GeolocationService from '../services/geolocationService';
+import {
+  clearSearchLocation,
+  readSearchLocation,
+  saveDeviceAsSearchLocation,
+  saveManualSearchLocation,
+} from '../utils/browseLocationMemory';
+import {formatBrowsePlaceLabel} from '../utils/browsePlaceLabel';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import EmptyState from '../components/EmptyState';
@@ -36,6 +52,10 @@ import {getDistanceToCustomer} from '../services/providerLocationService';
 import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ProviderRequestModal from '../components/ProviderRequestModal';
+import {filterOutOwnProvider} from '../utils/excludeOwnProvider';
+import {contactHintMessage} from '../utils/providerContact';
+import {otherVisibleProviderServices, matchingProviderService, visibleProviderServices} from '../utils/matchingProviderService';
+import {resolveServiceMeta} from '../services/serviceCatalog';
 
 const ALL_PROFESSIONS = '__all__';
 const ALL_STATES = '__all_states__';
@@ -51,6 +71,8 @@ interface ProviderWithStatus {
   specialization?: string;
   specialty?: string;
   serviceType?: string;
+  matchedService?: string;
+  serviceCategories?: string[];
   experience?: number;
   rating?: number;
   totalReviews?: number;
@@ -58,8 +80,12 @@ interface ProviderWithStatus {
   profileImage?: string;
   isOnline?: boolean;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
+  showRequestService?: boolean;
+  showContactToUser?: boolean;
+  contactAvailable?: boolean;
   distance?: string;
   eta?: number;
+  photos?: string[];
   address?: {
     latitude?: number;
     longitude?: number;
@@ -73,8 +99,10 @@ interface ProviderWithStatus {
   };
 }
 
-function professionOf(p: ProviderWithStatus): string {
+function professionOf(p: ProviderWithStatus, selected?: string): string {
   return (
+    matchingProviderService(p as any, selected) ||
+    p.matchedService ||
     p.specialization ||
     p.specialty ||
     p.serviceType ||
@@ -99,19 +127,22 @@ function districtOf(
   return '';
 }
 
+/** Web BrowsePage: match by catalog key (serviceCategories), not specialization alone. */
 function matchesProfession(p: ProviderWithStatus, selected: string): boolean {
   if (!selected || selected === ALL_PROFESSIONS) return true;
-  const needle = selected.toLowerCase().trim();
-  const fields = [
-    p.specialization,
-    p.specialty,
-    p.serviceType,
-    professionOf(p),
-  ];
-  return fields.some(f => (f || '').toLowerCase().includes(needle));
+  const needleKey = resolveServiceMeta(selected).key;
+  if (!needleKey) {
+    const needle = selected.toLowerCase().trim();
+    return visibleProviderServices(p as any).some(name =>
+      name.toLowerCase().includes(needle),
+    );
+  }
+  return visibleProviderServices(p as any).some(
+    name => resolveServiceMeta(name).key === needleKey,
+  );
 }
 
-export default function ProvidersListScreen({navigation}: any) {
+export default function ProvidersListScreen({navigation, route}: any) {
   const {isDarkMode, currentUser, currentPincode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
@@ -138,22 +169,64 @@ export default function ProvidersListScreen({navigation}: any) {
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [geoStates, setGeoStates] = useState<GeographyState[]>([]);
   const [geoDistricts, setGeoDistricts] = useState<GeographyDistrict[]>([]);
+  const [geoBlocks, setGeoBlocks] = useState<GeographyBlock[]>([]);
   const [selectedStateId, setSelectedStateId] = useState(ALL_STATES);
   const [selectedDistrictId, setSelectedDistrictId] = useState(ALL_DISTRICTS);
+  const [selectedBlockId, setSelectedBlockId] = useState('');
+  const [blockName, setBlockName] = useState('');
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [usingDeviceLocation, setUsingDeviceLocation] = useState(false);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogServices, setCatalogServices] = useState<BrowseService[]>([]);
+  const [activeConflict, setActiveConflict] = useState<
+    import('../services/api/serviceRequestsApi').ActiveServiceRequestSummary | null
+  >(null);
+  const [checkingActive, setCheckingActive] = useState(false);
   const [requestProvider, setRequestProvider] = useState<ProviderWithStatus | null>(null);
 
 
   useEffect(() => {
     loadProfessionOptions();
-    void getGeographyMeta().then((meta) => {
+    void (async () => {
+      let meta = await getGeographyMeta();
+      if (!meta.blocks?.length) {
+        await clearGeographyMetaCache();
+        meta = await getGeographyMeta({force: true});
+      }
       setGeoStates(meta.states || []);
       setGeoDistricts(meta.districts || []);
-    });
+      setGeoBlocks(meta.blocks || []);
+
+      const saved = await readSearchLocation();
+      if (saved) {
+        if (saved.stateId) setSelectedStateId(saved.stateId);
+        if (saved.districtId) setSelectedDistrictId(saved.districtId);
+        if (saved.blockId) setSelectedBlockId(saved.blockId);
+        if (saved.blockName) setBlockName(saved.blockName);
+        if (saved.label) setLocationLabel(saved.label);
+        setUsingDeviceLocation(saved.source === 'device');
+      }
+    })();
+    void loadBrowseServices()
+      .then(setCatalogServices)
+      .catch(() => setCatalogServices([]));
+    const incomingService = String(route?.params?.service || '').trim();
+    if (incomingService) setSelectedProfession(incomingService);
+    const incomingState = String(route?.params?.stateId || '').trim();
+    const incomingDistrict = String(route?.params?.districtId || '').trim();
+    const incomingBlock = String(route?.params?.blockId || '').trim();
+    const incomingPlace = String(route?.params?.locationQuery || '').trim();
+    if (incomingState) setSelectedStateId(incomingState);
+    if (incomingDistrict) setSelectedDistrictId(incomingDistrict);
+    if (incomingBlock) setSelectedBlockId(incomingBlock);
+    if (incomingPlace) setSearchQuery(incomingPlace);
   }, []);
 
   useEffect(() => {
     void loadOnlineProviders();
-  }, [selectedStateId, selectedDistrictId]);
+  }, [selectedStateId, selectedDistrictId, selectedBlockId, selectedProfession]);
 
   useEffect(() => {
     filterProviders();
@@ -171,6 +244,106 @@ export default function ProvidersListScreen({navigation}: any) {
       setCategoryNames(FALLBACK_PROFESSIONS);
     }
   };
+
+  const handleUseMyLocation = async () => {
+    try {
+      setLocating(true);
+      const loc = await GeolocationService.getLocationWithPrompt();
+      if (!loc) return;
+      const resolved = await resolveGeographyFromCoordinates(
+        loc.latitude,
+        loc.longitude,
+      );
+      const nextStateId = resolved.stateId || ALL_STATES;
+      const nextDistrictId = resolved.districtId || ALL_DISTRICTS;
+      const nextBlockId = resolved.blockId || '';
+      const nextBlockName = resolved.blockName || '';
+      const label =
+        resolved.label ||
+        [nextBlockName, resolved.districtName, resolved.stateName]
+          .filter(Boolean)
+          .join(', ') ||
+        null;
+      setSelectedStateId(nextStateId);
+      setSelectedDistrictId(nextDistrictId);
+      setSelectedBlockId(nextBlockId);
+      setBlockName(nextBlockName);
+      setLocationLabel(label);
+      setUsingDeviceLocation(true);
+      setLocationPickerOpen(false);
+      void saveDeviceAsSearchLocation({
+        stateId: nextStateId === ALL_STATES ? '' : nextStateId,
+        districtId: nextDistrictId === ALL_DISTRICTS ? '' : nextDistrictId,
+        blockId: nextBlockId || undefined,
+        stateName: resolved.stateName,
+        districtName: resolved.districtName,
+        blockName: nextBlockName || undefined,
+        label: label || '',
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      });
+    } catch (err: unknown) {
+      // Match web BrowsePage locationErrorMessage → ecosystem.location*
+      let code = 'unavailable';
+      if (err && typeof err === 'object' && 'code' in err) {
+        const c = String((err as {code: string}).code);
+        if (
+          [
+            'denied',
+            'timeout',
+            'unsupported',
+            'geocode',
+            'nomatch',
+            'invalid',
+            'unavailable',
+          ].includes(c)
+        ) {
+          code = c;
+        }
+      } else if (err instanceof Error) {
+        const m = err.message.toLowerCase();
+        if (m.includes('permission') || m.includes('denied')) code = 'denied';
+        else if (m.includes('timeout')) code = 'timeout';
+        else if (
+          [
+            'unavailable',
+            'nomatch',
+            'geocode',
+            'invalid',
+            'unsupported',
+          ].includes(err.message)
+        ) {
+          code = err.message;
+        }
+      }
+      const messageKey =
+        code === 'denied'
+          ? 'ecosystem.locationDenied'
+          : code === 'timeout'
+            ? 'ecosystem.locationTimeout'
+            : code === 'unsupported'
+              ? 'ecosystem.locationUnsupported'
+              : code === 'geocode'
+                ? 'ecosystem.locationGeocodeFailed'
+                : code === 'nomatch'
+                  ? 'ecosystem.locationNoMatch'
+                  : 'ecosystem.locationUnavailable';
+      setAlertModal({
+        visible: true,
+        title: String(t('common.error')),
+        message: String(
+          t(messageKey, {
+            defaultValue:
+              'Could not read your location. Choose state and district below, or try again.',
+          }),
+        ),
+        type: 'error',
+      });
+    } finally {
+      setLocating(false);
+    }
+  };
+
   // -----------------------------
   // Load Providers
   // -----------------------------
@@ -181,8 +354,10 @@ export default function ProvidersListScreen({navigation}: any) {
       const filters: {
         stateId?: string;
         districtId?: string;
+        blockId?: string;
         state?: string;
         district?: string;
+        serviceType?: string;
         limit?: number;
       } = {limit: 100};
 
@@ -195,6 +370,13 @@ export default function ProvidersListScreen({navigation}: any) {
         filters.districtId = selectedDistrictId;
         const d = geoDistricts.find((x) => x._id === selectedDistrictId);
         if (d?.name) filters.district = d.name;
+      }
+      if (selectedBlockId) {
+        filters.blockId = selectedBlockId;
+      }
+      // Web BrowsePage: serviceType is sent to API so multi-trade partners match
+      if (selectedProfession !== ALL_PROFESSIONS) {
+        filters.serviceType = selectedProfession;
       }
 
       const apiProviders = await providersApi.getAll(filters);
@@ -212,7 +394,9 @@ export default function ProvidersListScreen({navigation}: any) {
           phoneNumber: data.phoneNumber,
           specialization: data.specialization || (data as any).specialty,
           specialty: (data as any).specialty,
-          serviceType: (data as any).serviceType,
+          serviceType: data.serviceType || (data as any).serviceType,
+          matchedService: data.matchedService,
+          serviceCategories: data.serviceCategories,
           experience: data.experience,
           rating: data.rating,
           totalReviews: (data as any).totalReviews,
@@ -220,18 +404,31 @@ export default function ProvidersListScreen({navigation}: any) {
           profileImage: (data as any).profileImage,
           isOnline: data.isOnline,
           approvalStatus: data.approvalStatus || 'approved',
+          showRequestService: (data as any).showRequestService,
+          showContactToUser: (data as any).showContactToUser,
+          contactAvailable: (data as any).contactAvailable,
+          photos: Array.isArray((data as any).photos)
+            ? ((data as any).photos as unknown[]).filter(
+                (u): u is string =>
+                  typeof u === 'string' && /^https?:\/\//i.test(u),
+              )
+            : undefined,
           address: {
             latitude: data.location?.latitude || (data as any).currentLocation?.latitude,
             longitude: data.location?.longitude || (data as any).currentLocation?.longitude,
-            address: data.location?.address || (data as any).address?.address,
+            address:
+              data.location?.address ||
+              (data as any).address?.address,
             city: data.location?.city || (data as any).address?.city,
             district:
               data.location?.district ||
               (data as any).address?.district ||
               data.location?.city,
             state: data.location?.state || (data as any).address?.state,
-            stateId: data.location?.stateId,
-            districtId: data.location?.districtId,
+            stateId:
+              data.location?.stateId || (data as any).address?.stateId,
+            districtId:
+              data.location?.districtId || (data as any).address?.districtId,
             pincode: data.location?.pincode || (data as any).address?.pincode,
           },
         };
@@ -272,7 +469,7 @@ export default function ProvidersListScreen({navigation}: any) {
         return 0;
       });
 
-      setProviders(list);
+      setProviders(filterOutOwnProvider(list, currentUser));
     } catch (error: any) {
       console.error('Error loading providers:', error);
       setProviders([]);
@@ -366,16 +563,30 @@ export default function ProvidersListScreen({navigation}: any) {
     }
   };
 
+  const selectedServiceForAlso =
+    selectedProfession !== ALL_PROFESSIONS ? selectedProfession : undefined;
+
   // Guest: no photo; same professional card, existing contact fields only
   const renderGuestProvider = ({item}: {item: ProviderWithStatus}) => {
-    const phone = phoneOf(item);
-    const profession = professionOf(item);
+    const canCall = canCallThisProvider(item);
+    const phone = canCall ? phoneOf(item) : '';
+    const profession = localizedServiceName(
+      professionOf(item, selectedServiceForAlso),
+    );
+    const alsoServices = otherVisibleProviderServices(
+      item as any,
+      selectedServiceForAlso,
+    ).map(name => localizedServiceName(name));
     const location = districtOf(item, geoDistricts);
     return (
       <ProviderCard
         theme={theme}
         name={item.name}
         profession={profession}
+        alsoServices={alsoServices}
+        alsoLead={
+          alsoServices.length ? String(t('browse.alsoLead')) : undefined
+        }
         location={location || undefined}
         isOnline={Boolean(item.isOnline)}
         onlineLabel={String(t('providers.online'))}
@@ -383,8 +594,28 @@ export default function ProvidersListScreen({navigation}: any) {
         callLabel={String(t('providers.callProvider'))}
         requestLabel={String(t('providers.requestService'))}
         hidePhoto
+        onPress={isGuest ? undefined : () => openProviderDetails(item)}
         onCall={phone ? () => handleCallProvider(item) : undefined}
-        onRequest={() => openRequestModal(item)}
+        onRequest={
+          canRequestThisProvider(item)
+            ? () => openRequestModal(item)
+            : undefined
+        }
+        onContact={
+          !phone && canCallThisProvider(item)
+            ? () =>
+                setAlertModal({
+                  visible: true,
+                  title: String(t('providers.contactProvider')),
+                  message: contactHintMessage(
+                    t as any,
+                    (item as any).contactHint,
+                    (item as any).contactPolicy,
+                  ),
+                  type: 'info',
+                })
+            : undefined
+        }
       />
     );
   };
@@ -401,12 +632,30 @@ export default function ProvidersListScreen({navigation}: any) {
       });
       return;
     }
-    setRequestProvider(item);
+    if (checkingActive) return;
+    const serviceType = professionOf(item, selectedServiceForAlso);
+    setCheckingActive(true);
+    setActiveConflict(null);
+    void getActiveServiceRequest(serviceType)
+      .then(active => {
+        if (active?.serviceRequestId) {
+          setActiveConflict(active);
+          return;
+        }
+        setRequestProvider(item);
+      })
+      .catch(() => setRequestProvider(item))
+      .finally(() => setCheckingActive(false));
   };
 
   const renderProvider = ({item}: {item: ProviderWithStatus}) => {
-    const phone = phoneOf(item);
+    const canCall = canCallThisProvider(item);
+    const phone = canCall ? phoneOf(item) : '';
     const location = districtOf(item, geoDistricts);
+    const alsoServices = otherVisibleProviderServices(
+      item as any,
+      selectedServiceForAlso,
+    ).map(name => localizedServiceName(name));
     const experienceLabel =
       item.experience !== undefined && item.experience > 0
         ? String(
@@ -429,20 +678,46 @@ export default function ProvidersListScreen({navigation}: any) {
       <ProviderCard
         theme={theme}
         name={item.name}
-        profession={professionOf(item)}
+        profession={localizedServiceName(
+          professionOf(item, selectedServiceForAlso),
+        )}
+        alsoServices={alsoServices}
+        alsoLead={
+          alsoServices.length ? String(t('browse.alsoLead')) : undefined
+        }
         location={location || undefined}
         experienceLabel={experienceLabel}
         rating={item.rating}
         reviewsLabel={reviewsLabel}
         image={item.profileImage}
+        showcasePhotos={item.photos}
         isOnline={Boolean(item.isOnline)}
         onlineLabel={String(t('providers.online'))}
         phone={phone || null}
         callLabel={String(t('providers.callProvider'))}
         requestLabel={String(t('providers.requestService'))}
-        onPress={() => navigation.navigate('ProviderDetails', {provider: item})}
+        onPress={() => openProviderDetails(item)}
         onCall={phone ? () => handleCallProvider(item) : undefined}
-        onRequest={() => openRequestModal(item)}
+        onRequest={
+          canRequestThisProvider(item)
+            ? () => openRequestModal(item)
+            : undefined
+        }
+        onContact={
+          !phone && canCallThisProvider(item)
+            ? () =>
+                setAlertModal({
+                  visible: true,
+                  title: String(t('providers.contactProvider')),
+                  message: contactHintMessage(
+                    t as any,
+                    (item as any).contactHint,
+                    (item as any).contactPolicy,
+                  ),
+                  type: 'info',
+                })
+            : undefined
+        }
       />
     );
   };
@@ -464,174 +739,367 @@ export default function ProvidersListScreen({navigation}: any) {
     return unique;
   }, [categoryNames, providers]);
 
-  const professionSelectOptions = useMemo(
-    () => [
-      {value: ALL_PROFESSIONS, label: t('providers.allProfessions')},
-      ...professionOptions.map(name => ({value: name, label: name})),
-    ],
-    [professionOptions, t],
+  const activeBlockName = useMemo(() => {
+    if (selectedBlockId) {
+      const match = geoBlocks.find(b => b._id === selectedBlockId);
+      if (match?.name) return match.name;
+    }
+    return blockName;
+  }, [selectedBlockId, geoBlocks, blockName]);
+
+  const activePlace = formatBrowsePlaceLabel(
+    locationLabel,
+    selectedStateId === ALL_STATES ? '' : selectedStateId,
+    selectedDistrictId === ALL_DISTRICTS ? '' : selectedDistrictId,
+    geoStates,
+    geoDistricts,
+    selectedBlockId || undefined,
+    geoBlocks,
+    activeBlockName,
   );
 
-  const stateSelectOptions = useMemo(
-    () => [
-      {value: ALL_STATES, label: t('providers.allStates')},
-      ...geoStates.map((s) => ({value: s._id, label: s.name})),
-    ],
-    [geoStates, t],
-  );
+  const applyManualState = (id: string) => {
+    const nextStateId = id || ALL_STATES;
+    setUsingDeviceLocation(false);
+    setLocationLabel(null);
+    setSelectedStateId(nextStateId);
+    setSelectedDistrictId(ALL_DISTRICTS);
+    setSelectedBlockId('');
+    setBlockName('');
+    if (!id) {
+      void clearSearchLocation();
+      return;
+    }
+    const state = geoStates.find(s => s._id === id);
+    void saveManualSearchLocation({
+      stateId: id,
+      districtId: '',
+      stateName: state?.name,
+      label: state?.name || id,
+    });
+  };
 
-  const districtSelectOptions = useMemo(
-    () => [
-      {value: ALL_DISTRICTS, label: t('providers.allDistricts')},
-      ...geoDistricts
-        .filter(
-          (d) =>
-            selectedStateId === ALL_STATES || d.stateId === selectedStateId,
-        )
-        .map((d) => ({value: d._id, label: d.name})),
-    ],
-    [geoDistricts, selectedStateId, t],
-  );
+  const applyManualDistrict = (id: string) => {
+    const nextDistrictId = id || ALL_DISTRICTS;
+    setUsingDeviceLocation(false);
+    setSelectedDistrictId(nextDistrictId);
+    setSelectedBlockId('');
+    setBlockName('');
+    setLocationLabel(null);
+    // Keep picker open after state → district so user can pick block.
+    // Only auto-collapse when this district has no blocks (final step).
+    if (id) {
+      const hasBlocks = geoBlocks.some(b => b.districtId === id);
+      if (!hasBlocks) setLocationPickerOpen(false);
+    }
+    const stateKey = selectedStateId === ALL_STATES ? '' : selectedStateId;
+    if (!stateKey && !id) {
+      void clearSearchLocation();
+      return;
+    }
+    const state = geoStates.find(s => s._id === stateKey);
+    const district = geoDistricts.find(d => d._id === id);
+    const label = [district?.name, state?.name].filter(Boolean).join(', ');
+    void saveManualSearchLocation({
+      stateId: stateKey,
+      districtId: id,
+      stateName: state?.name,
+      districtName: district?.name,
+      label: label || state?.name || '',
+    });
+  };
 
-  const hasActiveFilters =
-    Boolean(searchQuery.trim()) ||
-    selectedProfession !== ALL_PROFESSIONS ||
-    selectedStateId !== ALL_STATES ||
-    selectedDistrictId !== ALL_DISTRICTS;
+  const applyManualBlock = (id: string) => {
+    setUsingDeviceLocation(false);
+    setSelectedBlockId(id);
+    const block = geoBlocks.find(b => b._id === id);
+    setBlockName(block?.name || '');
+    setLocationLabel(null);
+    // Block is the last step — then collapse (same idea as web Done).
+    if (id) setLocationPickerOpen(false);
+    const stateKey = selectedStateId === ALL_STATES ? '' : selectedStateId;
+    const districtKey =
+      selectedDistrictId === ALL_DISTRICTS ? '' : selectedDistrictId;
+    if (!stateKey && !districtKey && !id) {
+      void clearSearchLocation();
+      return;
+    }
+    const state = geoStates.find(s => s._id === stateKey);
+    const district = geoDistricts.find(d => d._id === districtKey);
+    const label = [block?.name, district?.name, state?.name]
+      .filter(Boolean)
+      .join(', ');
+    void saveManualSearchLocation({
+      stateId: stateKey,
+      districtId: districtKey,
+      blockId: id || undefined,
+      stateName: state?.name,
+      districtName: district?.name,
+      blockName: block?.name,
+      label: label || state?.name || '',
+    });
+  };
 
-  if (loading && providers.length === 0) {
-    return (
-      <SafeAreaView
-        style={[styles.container, {backgroundColor: theme.background}]}
-        edges={['top']}>
-        {isGuest ? (
-          <View
-            style={[
-              styles.guestTopBar,
-              {backgroundColor: theme.card, borderBottomColor: theme.border},
-            ]}>
-            <View style={{flex: 1}}>
-              <Text style={[styles.guestBrand, {color: theme.text}]}>
-                HomeServices
-              </Text>
-              <Text style={[styles.guestSub, {color: theme.textSecondary}]}>
-                {t('auth.guestSettingsHint')}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.loginBtn, {backgroundColor: theme.primary}]}
-              onPress={goLogin}
-              accessibilityRole="button">
-              <Icon name="login" size={18} color="#fff" />
-              <Text style={styles.loginBtnText}>{t('auth.login')}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={{marginTop: 10, color: theme.textSecondary}}>
-            {t('providers.loading')}
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const openProviderDetails = (item: ProviderWithStatus) => {
+    navigation.navigate('ProviderDetails', {
+      provider: item,
+      service:
+        selectedProfession !== ALL_PROFESSIONS
+          ? selectedProfession
+          : undefined,
+    });
+  };
+
+  // Web BrowsePage results heading (never show missing browse.resultsTitle)
+  const resultsHeading = useMemo(() => {
+    const count = filteredProviders.length;
+    const place = activePlace || '';
+    const serviceLabel =
+      selectedProfession !== ALL_PROFESSIONS
+        ? localizedServiceName(selectedProfession)
+        : '';
+    if (serviceLabel && place) {
+      return count === 1
+        ? String(
+            t('browse.resultsServiceInPlaceOne', {
+              service: serviceLabel,
+              place,
+            }),
+          )
+        : String(
+            t('browse.resultsServiceInPlace', {
+              service: serviceLabel,
+              place,
+              count,
+            }),
+          );
+    }
+    if (serviceLabel) {
+      return count === 1
+        ? String(t('browse.resultsServiceOne', {service: serviceLabel}))
+        : String(
+            t('browse.resultsService', {service: serviceLabel, count}),
+          );
+    }
+    if (place) {
+      return String(t('browse.resultsInPlace', {place, count}));
+    }
+    return String(t('browse.resultsAllSimple', {count}));
+  }, [
+    filteredProviders.length,
+    activePlace,
+    selectedProfession,
+    t,
+  ]);
+
+  const emptyTitle = useMemo(() => {
+    const place = activePlace || '';
+    const serviceLabel =
+      selectedProfession !== ALL_PROFESSIONS
+        ? localizedServiceName(selectedProfession)
+        : '';
+    if (serviceLabel && place) {
+      return String(
+        t('browse.emptyServiceInPlaceTitle', {
+          service: serviceLabel,
+          place,
+        }),
+      );
+    }
+    if (serviceLabel) {
+      return String(t('browse.emptyServiceTitle', {service: serviceLabel}));
+    }
+    if (place) {
+      return String(t('browse.emptyPlaceTitle', {place}));
+    }
+    return String(t('browse.emptyDefaultTitle'));
+  }, [activePlace, selectedProfession, t]);
+
+  // Keep discovery + location picker mounted while providers reload (web BrowsePage).
+  // A full-screen loader was collapsing State→District→Block mid-selection.
+
+  const crystalServiceBg = isDarkMode
+    ? 'rgba(255,255,255,0.1)'
+    : 'rgba(255,255,255,0.55)';
 
   return (
     <SafeAreaView
       style={[styles.container, {backgroundColor: theme.background}]}
-      edges={['top']}>
+      edges={[]}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor={theme.background}
       />
 
-      {isGuest ? (
-        <View
-          style={[
-            styles.guestTopBar,
-            {backgroundColor: theme.card, borderBottomColor: theme.border},
-          ]}>
-          <View style={{flex: 1}}>
-            <Text style={[styles.guestBrand, {color: theme.text}]}>
-              HomeServices
-            </Text>
-            <Text style={[styles.guestSub, {color: theme.textSecondary}]}>
-              {t('auth.guestSettingsHint')}
-            </Text>
-          </View>
+      <View style={styles.discovery}>
+      <View style={styles.serviceTriggerWrap}>
+        <Text style={[styles.serviceTriggerLabel, {color: theme.text}]}>
+          {t('browse.selectProfession')}
+        </Text>
+        <TouchableOpacity
+          style={[styles.serviceTrigger, {backgroundColor: crystalServiceBg}]}
+          onPress={() => setCatalogOpen(true)}
+          accessibilityRole="button">
+          <Text
+            style={[
+              styles.serviceTriggerValue,
+              {
+                color:
+                  selectedProfession === ALL_PROFESSIONS
+                    ? theme.textSecondary
+                    : theme.text,
+              },
+            ]}
+            numberOfLines={1}>
+            {selectedProfession === ALL_PROFESSIONS
+              ? t('browse.searchPlaceholder')
+              : localizedServiceName(selectedProfession)}
+          </Text>
+          {selectedProfession !== ALL_PROFESSIONS ? (
+            <TouchableOpacity
+              onPress={() => setSelectedProfession(ALL_PROFESSIONS)}
+              hitSlop={8}
+              accessibilityLabel={String(t('common.clear'))}>
+              <Icon name="close" size={16} color={theme.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+          <Icon name="expand-more" size={20} color={theme.textSecondary} />
+        </TouchableOpacity>
+      </View>
+      <ServiceCatalogOverlay
+        theme={theme}
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        services={catalogServices}
+        selectedApiName={
+          selectedProfession === ALL_PROFESSIONS ? '' : selectedProfession
+        }
+        onSelect={name =>
+          setSelectedProfession(name ? name : ALL_PROFESSIONS)
+        }
+      />
+
+      <PopularServices
+        theme={theme}
+        selectedApiName={
+          selectedProfession === ALL_PROFESSIONS ? '' : selectedProfession
+        }
+        onSelect={name =>
+          setSelectedProfession(name ? name : ALL_PROFESSIONS)
+        }
+      />
+
+      <BrowseLocationSection
+        theme={theme}
+        states={geoStates}
+        districts={geoDistricts}
+        blocks={geoBlocks}
+        stateId={selectedStateId === ALL_STATES ? '' : selectedStateId}
+        districtId={
+          selectedDistrictId === ALL_DISTRICTS ? '' : selectedDistrictId
+        }
+        blockId={selectedBlockId}
+        blockName={activeBlockName}
+        locationLabel={locationLabel}
+        locating={locating}
+        usingDeviceLocation={usingDeviceLocation}
+        pickerOpen={locationPickerOpen}
+        onPickerOpenChange={setLocationPickerOpen}
+        onUseMyLocation={() => void handleUseMyLocation()}
+        onStateChange={applyManualState}
+        onDistrictChange={applyManualDistrict}
+        onBlockChange={applyManualBlock}
+      />
+
+      {selectedProfession !== ALL_PROFESSIONS ? (
+        <View style={styles.activeFilters}>
           <TouchableOpacity
-            style={[styles.loginBtn, {backgroundColor: theme.primary}]}
-            onPress={goLogin}
-            accessibilityRole="button">
-            <Icon name="login" size={18} color="#fff" />
-            <Text style={styles.loginBtnText}>{t('auth.login')}</Text>
+            style={[
+              styles.filterChip,
+              {backgroundColor: 'rgba(49, 130, 206, 0.12)'},
+            ]}
+            onPress={() => setSelectedProfession(ALL_PROFESSIONS)}
+            accessibilityLabel={String(t('browse.activeFilters'))}>
+            <Text style={[styles.filterChipText, {color: theme.text}]}>
+              {localizedServiceName(selectedProfession)}
+            </Text>
+            <Icon name="close" size={16} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       ) : null}
 
-      <Select
-        label={t('providers.selectProfession')}
-        options={professionSelectOptions}
-        value={selectedProfession}
-        onChange={setSelectedProfession}
-        placeholder={t('providers.selectProfession')}
-        title={t('providers.selectProfession')}
-        style={{marginHorizontal: 16, marginBottom: 8}}
-      />
+      </View>
 
-      <View style={styles.geoFilterRow}>
-        <Select
-          label={t('providers.selectState')}
-          options={stateSelectOptions}
-          value={selectedStateId}
-          onChange={(id) => {
-            setSelectedStateId(id);
-            setSelectedDistrictId(ALL_DISTRICTS);
-          }}
-          placeholder={t('providers.selectState')}
-          title={t('providers.selectState')}
-          style={{flex: 1, marginBottom: 0}}
-        />
-        <Select
-          label={t('providers.selectDistrict')}
-          options={districtSelectOptions}
-          value={selectedDistrictId}
-          onChange={setSelectedDistrictId}
-          placeholder={t('providers.selectDistrict')}
-          title={t('providers.selectDistrict')}
-          disabled={selectedStateId === ALL_STATES}
-          style={{flex: 1, marginBottom: 0}}
+      {isGuest ? (
+        <Text style={[styles.guestNote, {color: theme.textSecondary}]}>
+          {t('browse.guestNote')}{' '}
+          <Text style={{color: theme.primary, fontWeight: '600'}} onPress={goLogin}>
+            {t('auth.login')}
+          </Text>
+        </Text>
+      ) : null}
+
+      <View style={{marginHorizontal: 14, marginBottom: 12}}>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={String(t('browse.searchProviders') || t('providers.searchProviders'))}
         />
       </View>
 
-      {!isGuest ? (
-        <TextInput
-          placeholder={t('providers.searchProviders')}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={[
-            styles.search,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-              color: theme.text,
-            },
-          ]}
-          placeholderTextColor={theme.textSecondary}
-        />
+      {filteredProviders.length > 0 ? (
+        <View style={styles.resultsHead}>
+          <View style={styles.resultsHeadLead}>
+            <Text style={[styles.listTitle, {color: theme.text}]}>
+              {resultsHeading}
+            </Text>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              disabled={refreshing}
+              style={[
+                styles.refreshBtn,
+                {backgroundColor: 'rgba(49, 130, 206, 0.10)'},
+              ]}
+              accessibilityLabel={String(t('browse.refresh'))}>
+              <HsIcon name="refresh" size={20} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+          {!isGuest ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ShareContactRecommendation')}>
+              <Text
+                style={{
+                  color: theme.primary,
+                  fontWeight: '600',
+                  fontSize: 13,
+                }}>
+                {t('browse.suggestCta')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       ) : null}
 
-      {filteredProviders.length === 0 ? (
-        <EmptyState
-          icon="person-remove-outline"
-          title={String(t('providers.noProvidersFound'))}
-          message={
-            hasActiveFilters
-              ? t('providers.tryAdjustingFilters')
-              : t('providers.noProvidersFoundMessage')
-          }
-        />
+      {loading && filteredProviders.length === 0 ? (
+        <View style={styles.resultsLoading}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={{marginTop: 10, color: theme.textSecondary}}>
+            {t('browse.loading') || t('providers.loading')}
+          </Text>
+        </View>
+      ) : filteredProviders.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <EmptyState icon="search-outline" title={emptyTitle} />
+          {!isGuest ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ShareContactRecommendation')}
+              style={styles.emptyAction}>
+              <Text style={[styles.emptyActionText, {color: theme.primary}]}>
+                {t('browse.suggestCta')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       ) : (
         <FlatList
           data={filteredProviders}
@@ -641,13 +1109,19 @@ export default function ProvidersListScreen({navigation}: any) {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
           ListFooterComponent={isGuest ? null : <AdSlot size="banner" />}
-          contentContainerStyle={{paddingBottom: 24}}
+          contentContainerStyle={{paddingHorizontal: 14, paddingBottom: 24}}
+          ItemSeparatorComponent={() => <View style={{height: 14}} />}
         />
       )}
 
       <ProviderRequestModal
         visible={!!requestProvider}
         provider={requestProvider}
+        requestedServiceType={
+          selectedProfession !== ALL_PROFESSIONS
+            ? selectedProfession
+            : undefined
+        }
         onClose={() => setRequestProvider(null)}
         onSuccess={(serviceRequestId) => {
           setRequestProvider(null);
@@ -657,6 +1131,24 @@ export default function ProvidersListScreen({navigation}: any) {
           });
         }}
       />
+
+      {activeConflict ? (
+        <ActiveRequestConflictBanner
+          active={activeConflict}
+          onDismiss={() => setActiveConflict(null)}
+          onView={action => {
+            setActiveConflict(null);
+            if (action.screen === 'ActiveService') {
+              navigation.navigate('Services', {
+                screen: 'ActiveService',
+                params: action.params,
+              });
+            } else {
+              navigation.navigate('History');
+            }
+          }}
+        />
+      ) : null}
 
       <AlertModal
         visible={alertModal.visible}
@@ -676,13 +1168,95 @@ export default function ProvidersListScreen({navigation}: any) {
 // -----------------------------
 const styles = StyleSheet.create({
   container: {flex: 1},
+  discovery: {
+    gap: 16,
+    marginBottom: 18,
+  },
+  serviceTriggerWrap: {marginHorizontal: 14},
+  serviceTriggerLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 19.5,
+    marginBottom: 8,
+  },
+  serviceTrigger: {
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: 'rgba(30, 60, 90, 0.05)',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 1,
+  },
+  serviceTriggerValue: {flex: 1, fontSize: 15, fontWeight: '600'},
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   geoFilterRow: {
     flexDirection: 'row',
     gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 8,
+    marginHorizontal: 14,
+    marginBottom: 0,
     alignItems: 'flex-start',
+  },
+  guestNote: {
+    marginHorizontal: 14,
+    marginBottom: 12,
+    fontSize: 13,
+    lineHeight: 18.85,
+  },
+  resultsLoading: {
+    paddingHorizontal: 14,
+    paddingTop: 40,
+    paddingBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyWrap: {
+    paddingHorizontal: 14,
+    paddingTop: 24,
+    paddingBottom: 40,
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyAction: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  emptyActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  resultsHead: {
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  resultsHeadLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  listTitle: {flex: 1, fontSize: 16, fontWeight: '700', lineHeight: 21.6},
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  browseFilterChip: {
+    minHeight: 32,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    borderWidth: 0,
+    backgroundColor: 'rgba(49, 130, 206, 0.12)',
   },
   guestTopBar: {
     flexDirection: 'row',
@@ -797,19 +1371,29 @@ const styles = StyleSheet.create({
   filterContainer: {
     marginBottom: 8,
   },
+  activeFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 4,
+  },
   filterList: {
     paddingHorizontal: 16,
   },
   filterChip: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
-    borderWidth: 1,
+    borderWidth: 0,
   },
   filterChipText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   card: {
     flexDirection: 'row',
