@@ -2,7 +2,8 @@ const path = require('path');
 const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
 
 /**
- * Resolve @react-native-firebase/* to local shims (Mongo/JWT only).
+ * Real Firebase Auth (OTP) + Firebase Messaging (FCM). Other Firebase
+ * modules stay stubbed (Mongo/JWT is the product backend).
  * Resolve monorepo sapvt-ltd-app-packages and force a single React instance.
  */
 const projectRoot = __dirname;
@@ -19,10 +20,6 @@ const firebaseShims = {
   '@react-native-firebase/database': path.resolve(
     __dirname,
     'src/shims/database.js',
-  ),
-  '@react-native-firebase/messaging': path.resolve(
-    __dirname,
-    'src/shims/messaging.js',
   ),
   '@react-native-firebase/storage': path.resolve(
     __dirname,

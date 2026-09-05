@@ -190,9 +190,18 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
       {userNotifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Icon name="notifications-off-outline" size={64} color={theme.textSecondary} />
-          <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
+          <Icon
+            name="notifications-off-outline"
+            size={64}
+            color={theme.textSecondary}
+          />
+          <Text style={[styles.emptyTitle, {color: theme.text}]}>
             {t('notifications.noNotifications')}
+          </Text>
+          <Text style={[styles.emptyText, {color: theme.textSecondary}]}>
+            {t('notifications.noNotificationsHint', {
+              defaultValue: String(t('notifications.empty')),
+            })}
           </Text>
         </View>
       ) : (
@@ -289,10 +298,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 16,
   },
   emptyText: {
-    fontSize: 16,
-    marginTop: 16,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

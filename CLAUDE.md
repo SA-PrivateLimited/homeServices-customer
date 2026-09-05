@@ -5,9 +5,22 @@
 
 Stack: React Native 0.73 + TypeScript + Zustand + Firebase + i18next
 
+## Primary mission (web parity)
+Replicate **homeServices-customer-web** UX/UI/behavior into this RN app.
+
+**Standing prompt (tracked — use this every session):**
+
+→ [`docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md`](docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md)
+
+Cursor rule: `.cursor/rules/customer-web-rn-parity.mdc`
+
+Web is source of truth. Backend (`homeservices-backend`) owns contracts.  
+Never change `applicationId` `com.homeservices.customer`.
+
 ## How to use this agent
 1. Intake: `python scripts/agent_orchestrator.py --prompt "..." --name feature-slug --no-figma --stage intake`
 2. Chat: `Read agent-context/<slug>/AGENT_KICKOFF.md and implement by executing the full 7-stage pipeline.`
+3. Parity: read `docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md` and match the named web screen/CSS or screenshot.
 
 ## File locations
 | Purpose | Path |
@@ -15,6 +28,7 @@ Stack: React Native 0.73 + TypeScript + Zustand + Firebase + i18next
 | Personas | `.claude/agents/` |
 | Cursor rules | `.cursor/rules/` |
 | Per-ticket context | `agent-context/[ticket-id]/` |
+| **Customer web parity prompt** | `docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md` |
 | Design / API baseline | `baseline.md` |
 | Patterns | `CODEBASE_CONTEXT.md` |
 | Intake scripts | `scripts/` |
@@ -24,5 +38,6 @@ Stack: React Native 0.73 + TypeScript + Zustand + Firebase + i18next
 - Never skip a stage gate.
 - Write blockers to `BLOCKED.md`, not only chat.
 - Stay surgical — only change what `IMPLEMENTATION_PLAN.md` lists.
-- Do not commit `agent-context/` or `.env` / `.env.local`.
+- Do not commit `.env` / `.env.local`.
 - Stage 4 persona: `.claude/agents/frontend.md`
+- Preserve auth (Mobile→PIN), handoff, phone privacy, multi-role.

@@ -6,7 +6,7 @@
 import {Platform} from 'react-native';
 
 // Production backend (Vercel serverless — sockets need a long-lived host; see SOCKET_URL)
-const PRODUCTION_URL = 'https://homeservices-backend-2vag.vercel.app/api';
+const PRODUCTION_URL = 'https://api.akanso.in/api';
 
 // Local backend: Android emulator must use 10.0.2.2 (emulator's alias for host), not localhost
 const getApiBaseUrl = (): string => {

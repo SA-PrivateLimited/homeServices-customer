@@ -1,0 +1,20 @@
+{
+  "title": "Help & Support",
+  "aiAssistant": "AI Assistant",
+  "thinking": "Thinking…",
+  "contactSupport": "Contact Support",
+  "startConversation": "Ask a question about your past service requests.",
+  "apiKeyNotConfigured": "AI chat is not available in this build. Please use email or phone support below.",
+  "aiUnavailable": "For help, please use the contact options below. In-app AI chat is not available yet.",
+  "greeting": "Hello! I'm your service assistant. I can help answer questions about your past service requests and appointments. What would you like to know?",
+  "indexingServiceRequests": "Indexing service requests…",
+  "serviceRequestsIndexed": "{{count}} service requests indexed",
+  "askAboutServiceRequests": "Ask about your service requests…",
+  "emailNotAvailable": "Email Not Available",
+  "emailNotAvailableMessage": "Could not open email. Please write to {{email}}.",
+  "emailSubject": "HomeServices Support Request",
+  "emailBody": "Dear Support Team,\n\nI need assistance with the following:\n\n[Please describe your issue here]\n\nThank you.\n\n---\nCustomer: {{name}}\nPhone: {{phone}}",
+  "errorContactSupport": "Sorry, something went wrong: {{error}}. Please contact support at support@sa-privatelimited.com.",
+  "userFallback": "User",
+  "na": "N/A"
+}

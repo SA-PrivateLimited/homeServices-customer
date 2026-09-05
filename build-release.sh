@@ -8,8 +8,11 @@ set -e  # Exit on error
 echo "🚀 HomeServices - Building Release AAB for Play Store"
 echo "=================================================="
 
-# Set up environment
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+# Set up environment (JDK 17 required — Android Studio JBR may be too new)
+export JAVA_HOME="${JAVA_HOME:-/Users/sandeepgupta/Library/Java/JavaVirtualMachines/jdk-17.0.2.jdk/Contents/Home}"
+if [ ! -d "$JAVA_HOME" ]; then
+  export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+fi
 export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH=$PATH:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin
 

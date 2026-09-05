@@ -1,6 +1,6 @@
 /**
- * Simplified service address fields:
- * address, landmark (optional), state, district, pincode + Use current location.
+ * Service address fields (web ServiceAddressFields parity):
+ * address, landmark, state, district, block, pincode + Use current location.
  */
 
 import React, {useEffect, useMemo, useState} from 'react';
@@ -20,17 +20,24 @@ import {
   getGeographyMeta,
   hasWarmGeographyMeta,
   peekGeographyMeta,
+  resolveGeographyFromCoordinates,
+  type GeographyBlock,
   type GeographyDistrict,
   type GeographyState,
 } from '../services/api/geographyApi';
 import GeolocationService from '../services/geolocationService';
 import type {UserLocation} from '../types/common';
+import useTranslation from '../hooks/useTranslation';
+import {formatDetectedPlaceLine} from '../utils/addressDisplay';
+import {getUserFacingErrorMessage} from '../utils/userFacingError';
 
 export interface ServiceAddressValue extends UserLocation {
   landmark?: string;
   district?: string;
   stateId?: string;
   districtId?: string;
+  blockId?: string;
+  block?: string;
 }
 
 interface ServiceAddressFieldsProps {
@@ -122,12 +129,16 @@ export function ServiceAddressFields({
   showSaveForFuture = false,
   editable = true,
 }: ServiceAddressFieldsProps) {
+  const {t} = useTranslation();
   const warm = peekGeographyMeta();
   const [states, setStates] = useState<GeographyState[]>(
     () => warm?.states || [],
   );
   const [districts, setDistricts] = useState<GeographyDistrict[]>(
     () => warm?.districts || [],
+  );
+  const [blocks, setBlocks] = useState<GeographyBlock[]>(
+    () => warm?.blocks || [],
   );
   const [loadingMeta, setLoadingMeta] = useState(() => !hasWarmGeographyMeta());
   const [detecting, setDetecting] = useState(false);
@@ -143,6 +154,7 @@ export function ServiceAddressFields({
       if (!cancelled) {
         setStates(meta.states);
         setDistricts(meta.districts);
+        setBlocks(meta.blocks || []);
         setLoadingMeta(false);
       }
     })();
@@ -150,6 +162,61 @@ export function ServiceAddressFields({
       cancelled = true;
     };
   }, []);
+
+  // When editing, address may have names/pincode but no IDs — resolve dropdowns.
+  useEffect(() => {
+    if (loadingMeta || !states.length) return;
+    const needsState = !value.stateId && Boolean(value.state || value.pincode);
+    const needsDistrict =
+      !value.districtId &&
+      Boolean(value.district || value.city || value.pincode);
+    if (!needsState && !needsDistrict) return;
+
+    let matchedState = value.stateId
+      ? states.find(s => s._id === value.stateId)
+      : findState(states, value.state);
+    let matchedDistrict = value.districtId
+      ? districts.find(d => d._id === value.districtId)
+      : findDistrict(districts, {
+          name: value.district || value.city,
+          pincode: value.pincode,
+          stateId: matchedState?._id || value.stateId,
+        });
+
+    if (matchedDistrict && !matchedState) {
+      matchedState = states.find(s => s._id === matchedDistrict!.stateId);
+    }
+    if (!matchedState && !matchedDistrict) return;
+
+    const nextStateId = matchedState?._id || value.stateId || '';
+    const nextDistrictId = matchedDistrict?._id || value.districtId || '';
+    if (
+      nextStateId === (value.stateId || '') &&
+      nextDistrictId === (value.districtId || '')
+    ) {
+      return;
+    }
+
+    onChange({
+      ...value,
+      stateId: nextStateId,
+      state: matchedState?.name || value.state || '',
+      districtId: nextDistrictId,
+      district: matchedDistrict?.name || value.district || value.city || '',
+      city: matchedDistrict?.name || value.city || value.district || '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    loadingMeta,
+    states,
+    districts,
+    value.stateId,
+    value.districtId,
+    value.state,
+    value.district,
+    value.city,
+    value.pincode,
+  ]);
 
   const stateOptions = useMemo(
     () => states.map(s => ({value: s._id, label: s.name})),
@@ -163,11 +230,39 @@ export function ServiceAddressFields({
       .map(d => ({value: d._id, label: d.name}));
   }, [districts, value.stateId]);
 
+  const blockOptions = useMemo(() => {
+    const did = value.districtId || '';
+    if (!did) return [];
+    return blocks
+      .filter(b => b.districtId === did)
+      .map(b => ({value: b._id, label: b.name}));
+  }, [blocks, value.districtId]);
+
+  const crystalColors = {
+    card:
+      theme.background.toLowerCase() === '#0b1220'
+        ? 'rgba(255,255,255,0.1)'
+        : 'rgba(255,255,255,0.55)',
+  };
+
   const patch = (partial: Partial<ServiceAddressValue>) => {
     onChange({...value, ...partial});
   };
 
   const onStateChange = (stateId: string) => {
+    if (!stateId) {
+      patch({
+        stateId: '',
+        state: '',
+        districtId: '',
+        district: '',
+        city: '',
+        blockId: '',
+        block: '',
+        pincode: '',
+      });
+      return;
+    }
     const st = states.find(s => s._id === stateId);
     patch({
       stateId,
@@ -175,22 +270,55 @@ export function ServiceAddressFields({
       districtId: '',
       district: '',
       city: '',
+      blockId: '',
+      block: '',
       pincode: '',
     });
   };
 
   const onDistrictChange = (districtId: string) => {
+    if (!districtId) {
+      patch({
+        districtId: '',
+        district: '',
+        city: '',
+        blockId: '',
+        block: '',
+      });
+      return;
+    }
     const d = districts.find(x => x._id === districtId);
+    const hqPin = String(d?.pincode || '')
+      .replace(/\D/g, '')
+      .slice(0, 6);
+    // Prefill HQ pin only when empty (web parity).
+    const nextPin = /^\d{6}$/.test(value.pincode || '')
+      ? value.pincode
+      : hqPin || value.pincode || '';
     patch({
       districtId,
       district: d?.name || '',
       city: d?.name || value.city || '',
-      pincode: d?.pincode || value.pincode || '',
+      blockId: '',
+      block: '',
+      pincode: nextPin,
       stateId: d?.stateId || value.stateId,
       state:
         d?.stateName ||
         states.find(s => s._id === (d?.stateId || value.stateId))?.name ||
         value.state,
+    });
+  };
+
+  const onBlockChange = (blockId: string) => {
+    if (!blockId) {
+      patch({blockId: '', block: ''});
+      return;
+    }
+    const b = blocks.find(x => x._id === blockId);
+    patch({
+      blockId,
+      block: b?.name || '',
     });
   };
 
@@ -201,8 +329,8 @@ export function ServiceAddressFields({
       const permission = await GeolocationService.requestLocationPermission();
       if (permission !== 'granted') {
         Alert.alert(
-          'Permission Required',
-          'Location permission is required to detect your address.',
+          String(t('common.permissionRequired')),
+          String(t('services.locationPermissionRequired')),
         );
         return;
       }
@@ -213,32 +341,59 @@ export function ServiceAddressFields({
       ]);
       setStates(meta.states);
       setDistricts(meta.districts);
+      setBlocks(meta.blocks || []);
 
-      const nextPincode = (location.pincode || '').replace(/\D/g, '').slice(0, 6);
-      let matchedState = findState(meta.states, location.state);
-      let matchedDistrict = findDistrict(meta.districts, {
-        name: location.city,
-        pincode: nextPincode,
-        stateId: matchedState?._id,
-      });
+      let place: Awaited<
+        ReturnType<typeof resolveGeographyFromCoordinates>
+      > | null = null;
+      try {
+        if (
+          typeof location.latitude === 'number' &&
+          typeof location.longitude === 'number'
+        ) {
+          place = await resolveGeographyFromCoordinates(
+            location.latitude,
+            location.longitude,
+          );
+        }
+      } catch {
+        place = null;
+      }
+
+      const nextPincode = (
+        place?.pincode ||
+        location.pincode ||
+        ''
+      )
+        .replace(/\D/g, '')
+        .slice(0, 6);
+      let matchedState =
+        (place?.stateId
+          ? meta.states.find(s => s._id === place!.stateId)
+          : undefined) || findState(meta.states, place?.stateName || location.state);
+      let matchedDistrict =
+        (place?.districtId
+          ? meta.districts.find(d => d._id === place!.districtId)
+          : undefined) ||
+        findDistrict(meta.districts, {
+          name: place?.districtName || location.city,
+          pincode: nextPincode,
+          stateId: matchedState?._id,
+        });
 
       if (matchedDistrict && !matchedState) {
         matchedState = meta.states.find(s => s._id === matchedDistrict!.stateId);
       }
-      if (
-        matchedDistrict &&
-        matchedState &&
-        matchedDistrict.stateId !== matchedState._id
-      ) {
-        matchedState =
-          meta.states.find(s => s._id === matchedDistrict!.stateId) ||
-          matchedState;
-      }
 
       const districtName =
-        matchedDistrict?.name || location.city || value.district || '';
+        matchedDistrict?.name ||
+        place?.districtName ||
+        location.city ||
+        value.district ||
+        '';
       const stateName =
         matchedState?.name ||
+        place?.stateName ||
         matchedDistrict?.stateName ||
         location.state ||
         value.state ||
@@ -246,20 +401,28 @@ export function ServiceAddressFields({
 
       onChange({
         ...value,
-        address: location.address || value.address || '',
+        address: place?.addressLine || location.address || value.address || '',
+        landmark: place?.landmark || value.landmark || '',
         city: districtName || value.city || '',
         district: districtName,
         state: stateName,
         stateId:
           matchedState?._id || matchedDistrict?.stateId || value.stateId || '',
-        districtId: matchedDistrict?._id || '',
+        districtId: matchedDistrict?._id || place?.districtId || '',
+        blockId: place?.blockId || '',
+        block: place?.blockName || '',
         pincode: nextPincode || matchedDistrict?.pincode || value.pincode || '',
         latitude: location.latitude,
         longitude: location.longitude,
         country: 'IN',
       });
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to detect location');
+      Alert.alert(
+        String(t('common.error')),
+        getUserFacingErrorMessage(error, 'generic') ||
+          error?.message ||
+          String(t('services.detectLocationFailed')),
+      );
     } finally {
       setDetecting(false);
     }
@@ -274,36 +437,64 @@ export function ServiceAddressFields({
   const hasCoords =
     typeof value.latitude === 'number' && typeof value.longitude === 'number';
 
+  const detectedPlaceLabel = formatDetectedPlaceLine({
+    block: value.block,
+    district: value.district,
+    city: value.city,
+    state: value.state,
+  });
+
   return (
     <View style={styles.wrap}>
       {showCurrentBtn ? (
         <TouchableOpacity
-          style={[styles.currentBtn, {backgroundColor: theme.primary}]}
+          style={[
+            styles.currentBtn,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
           onPress={onCurrentPress}
           disabled={currentLoading || !editable}
           activeOpacity={0.85}>
           {currentLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.primary} />
           ) : (
-            <Icon name="my-location" size={18} color="#fff" />
+            <Icon name="my-location" size={18} color={theme.primary} />
           )}
-          <Text style={styles.currentBtnText}>
-            {useCurrentLabel || 'Use current location'}
+          <Text style={[styles.currentBtnText, {color: theme.primary}]}>
+            {useCurrentLabel ||
+              String(
+                t('request.useCurrentLocation') ||
+                  t('services.useCurrentLocation'),
+              )}
           </Text>
         </TouchableOpacity>
       ) : null}
 
       {hasCoords ? (
-        <View style={[styles.coordsRow, {borderColor: theme.border}]}>
-          <Icon name="place" size={16} color={theme.primary} />
+        <View style={styles.coordsRow}>
+          <Icon name="place" size={14} color={theme.textSecondary} />
           <Text style={[styles.coordsText, {color: theme.textSecondary}]}>
-            {currentLocationLabel || 'Current location'}:{' '}
-            {value.latitude!.toFixed(5)}, {value.longitude!.toFixed(5)}
+            {detectedPlaceLabel
+              ? String(
+                  t('request.locationDetectedPlace', {
+                    place: detectedPlaceLabel,
+                  }) || detectedPlaceLabel,
+                )
+              : String(
+                  t('request.locationDetected') ||
+                    t('services.locationDetected') ||
+                    'Location detected',
+                )}
           </Text>
         </View>
       ) : null}
 
-      <Text style={[styles.label, {color: theme.textSecondary}]}>Address</Text>
+      <Text style={[styles.label, {color: theme.text}]}>
+        {t('request.houseStreet') || t('services.address')}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -315,14 +506,16 @@ export function ServiceAddressFields({
         ]}
         value={value.address || ''}
         onChangeText={address => patch({address})}
-        placeholder="House / street / area"
+        placeholder={String(
+          t('request.houseStreetPlaceholder') || t('services.houseStreetArea'),
+        )}
         placeholderTextColor={theme.textSecondary}
         editable={editable}
         multiline
       />
 
-      <Text style={[styles.label, {color: theme.textSecondary}]}>
-        Landmark (optional)
+      <Text style={[styles.label, {color: theme.text}]}>
+        {t('request.landmark') || t('services.landmarkOptional')}
       </Text>
       <TextInput
         style={[
@@ -335,7 +528,9 @@ export function ServiceAddressFields({
         ]}
         value={value.landmark || ''}
         onChangeText={landmark => patch({landmark})}
-        placeholder="Near park, temple, etc."
+        placeholder={String(
+          t('request.landmarkPlaceholder') || t('services.landmarkPlaceholder'),
+        )}
         placeholderTextColor={theme.textSecondary}
         editable={editable}
       />
@@ -344,29 +539,64 @@ export function ServiceAddressFields({
         <ActivityIndicator style={{marginVertical: 8}} color={theme.primary} />
       ) : (
         <>
-          <Text style={[styles.label, {color: theme.textSecondary}]}>State</Text>
-          <Select
-            options={stateOptions}
-            value={value.stateId || ''}
-            placeholder="Select state"
-            disabled={!editable}
-            onChange={onStateChange}
-          />
-
-          <Text style={[styles.label, {color: theme.textSecondary}]}>
-            District
+          <Text style={[styles.label, {color: theme.text}]}>
+            {t('request.state') || t('services.state')}
           </Text>
           <Select
+            variant="crystal"
+            options={stateOptions}
+            value={value.stateId || ''}
+            placeholder={String(
+              t('browse.selectState') || t('services.selectState'),
+            )}
+            disabled={!editable}
+            allowClear
+            clearAriaLabel={String(t('common.clear') || 'Clear')}
+            onChange={onStateChange}
+            colors={crystalColors}
+          />
+
+          <Text style={[styles.label, {color: theme.text}]}>
+            {t('request.district') || t('services.districtLabel')}
+          </Text>
+          <Select
+            variant="crystal"
             options={districtOptions}
             value={value.districtId || ''}
-            placeholder="Select district"
+            placeholder={String(
+              t('browse.selectDistrict') || t('services.selectDistrict'),
+            )}
             disabled={!editable || !value.stateId}
+            allowClear
+            clearAriaLabel={String(t('common.clear') || 'Clear')}
             onChange={onDistrictChange}
+            colors={crystalColors}
           />
+
+          {blockOptions.length > 0 ? (
+            <>
+              <Text style={[styles.label, {color: theme.text}]}>
+                {t('browse.selectBlock') || 'Select block'}
+              </Text>
+              <Select
+                variant="crystal"
+                options={blockOptions}
+                value={value.blockId || ''}
+                placeholder={String(t('browse.selectBlock') || 'Select block')}
+                disabled={!editable || !value.districtId}
+                allowClear
+                clearAriaLabel={String(t('common.clear') || 'Clear')}
+                onChange={onBlockChange}
+                colors={crystalColors}
+              />
+            </>
+          ) : null}
         </>
       )}
 
-      <Text style={[styles.label, {color: theme.textSecondary}]}>Pincode</Text>
+      <Text style={[styles.label, {color: theme.text}]}>
+        {t('request.pincode') || t('services.pincode')}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -380,7 +610,10 @@ export function ServiceAddressFields({
         onChangeText={pincode =>
           patch({pincode: pincode.replace(/\D/g, '').slice(0, 6)})
         }
-        placeholder="Auto from district"
+        placeholder={String(
+          t('request.pincodePlaceholder') ||
+            t('services.cityAutoFromDistrict'),
+        )}
         placeholderTextColor={theme.textSecondary}
         keyboardType="number-pad"
         maxLength={6}
@@ -390,7 +623,7 @@ export function ServiceAddressFields({
       {showSaveForFuture && onSaveForFutureChange ? (
         <View style={styles.saveRow}>
           <Text style={[styles.saveLabel, {color: theme.text}]}>
-            Save for future
+            {t('request.saveForFuture') || t('services.saveAsAddress')}
           </Text>
           <Switch
             value={Boolean(saveForFuture)}
@@ -429,18 +662,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginTop: 6,
     marginBottom: 4,
+    borderWidth: 1,
   },
-  currentBtnText: {fontSize: 14, fontWeight: '700', color: '#fff'},
+  currentBtnText: {fontSize: 14, fontWeight: '700'},
   coordsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 2,
+    paddingVertical: 4,
   },
-  coordsText: {fontSize: 12, flex: 1},
+  coordsText: {fontSize: 12, flex: 1, lineHeight: 16},
   saveRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,0 +1,171 @@
+.share-contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.share-contact-lead,
+.share-contact-success {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--textSecondary);
+}
+
+.share-contact-field-hint,
+.share-contact-next {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+}
+
+.share-contact-success-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 12px 8px 8px;
+}
+
+.share-contact-success-icon {
+  color: var(--success, #38a169);
+}
+
+.share-contact-phone-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-contact-pick-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.share-contact-pick-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.share-contact-char {
+  margin: -6px 0 0;
+  font-size: 11px;
+  color: var(--textSecondary);
+  text-align: right;
+}
+
+.share-contact-privacy {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--textSecondary);
+}
+
+.share-contact-privacy a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.share-contact-optional-field .hs-field-label {
+  font-weight: 500;
+  color: var(--textSecondary);
+}
+
+/* Consistent control typography + height inside this sheet (prevents iOS zoom) */
+.share-contact-sheet .hs-input,
+.share-contact-sheet .hs-phone__input,
+.share-contact-sheet .hs-dd__trigger,
+.share-contact-dialog .hs-input,
+.share-contact-dialog .hs-phone__input,
+.share-contact-dialog .hs-dd__trigger {
+  height: var(--hs-control-h, 36px);
+  min-height: var(--hs-control-h, 36px);
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.share-contact-sheet textarea.hs-input,
+.share-contact-dialog textarea.hs-input {
+  height: auto;
+  min-height: 64px;
+  max-height: 120px;
+  line-height: 1.4;
+  font-size: 16px;
+}
+
+.share-contact-sheet .hs-field-label,
+.share-contact-dialog .hs-field-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.share-contact-sheet .hs-phone__prefix,
+.share-contact-dialog .hs-phone__prefix {
+  font-size: 16px;
+}
+
+.share-contact-sheet.hs-drawer--bottom {
+  /* Keep header + close (X) below the app top bar on phones */
+  max-height: min(
+    calc(100dvh - var(--topbar-h, 56px) - var(--hs-footer-h, 0px) - 16px),
+    640px
+  );
+}
+
+.share-contact-sheet .hs-drawer__title,
+.share-contact-dialog .hs-dialog__title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.share-contact-sheet .hs-drawer__body,
+.share-contact-dialog .hs-dialog__body {
+  padding-bottom: 12px;
+}
+
+.share-contact-sheet .hs-drawer__footer,
+.share-contact-dialog .hs-dialog__footer {
+  display: block;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: color-mix(in srgb, var(--card) 96%, var(--primary));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.share-contact-sheet.hs-drawer,
+.share-contact-dialog.hs-modal {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--card) 97%, var(--primary)),
+    color-mix(in srgb, var(--card) 92%, var(--primary))
+  ) !important;
+}
+
+.share-contact-dialog.hs-modal {
+  max-width: 520px;
+  max-height: min(78dvh, 560px);
+}
+
+@media (max-width: 860px) {
+  .share-contact-form {
+    gap: 9px;
+  }
+}

@@ -35,6 +35,7 @@ export interface ServiceRequest {
   consultationId?: string;
   questionnaireAnswers?: any;
   photos?: string[];
+  completionPhotos?: Array<string | {key?: string; url?: string}>;
   cancellationReason?: string;
   rejectionReason?: string;
   rejectedAt?: string | Date;
@@ -142,6 +143,19 @@ export async function updateServiceRequestStatus(
 }
 
 /**
+ * Update an existing pending service request.
+ */
+export async function updateServiceRequest(
+  serviceRequestId: string,
+  data: Partial<ServiceRequest> & Record<string, unknown>,
+): Promise<ServiceRequest> {
+  return apiPut<ServiceRequest>(
+    `/customer/serviceRequests/${serviceRequestId}`,
+    data,
+  );
+}
+
+/**
  * Cancel service request with reason
  */
 export async function cancelServiceRequest(
@@ -169,6 +183,38 @@ export async function findServiceRequestByConsultationId(
   }
 }
 
+export interface ActiveServiceRequestSummary {
+  serviceRequestId: string;
+  serviceType: string;
+  status: string;
+  providerId?: string | null;
+  providerName?: string | null;
+  createdAt?: string | Date | null;
+}
+
+/**
+ * Active request for a service type (null when none).
+ * Backend: GET /api/customer/serviceRequests/active?serviceType=
+ */
+export async function getActiveServiceRequest(
+  serviceType: string,
+): Promise<ActiveServiceRequestSummary | null> {
+  try {
+    const params = new URLSearchParams({serviceType});
+    return await apiGet<ActiveServiceRequestSummary | null>(
+      `/customer/serviceRequests/active?${params.toString()}`,
+    );
+  } catch (error: any) {
+    if (
+      error?.message?.includes('404') ||
+      error?.message?.includes('not found')
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export const serviceRequestsApi = {
   getById: getServiceRequestById,
   getAll: getServiceRequests,
@@ -177,4 +223,6 @@ export const serviceRequestsApi = {
   updateStatus: updateServiceRequestStatus,
   cancel: cancelServiceRequest,
   findByConsultationId: findServiceRequestByConsultationId,
+  getActive: getActiveServiceRequest,
+  update: updateServiceRequest,
 };

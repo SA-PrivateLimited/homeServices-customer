@@ -9,16 +9,37 @@ import {
   Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useStore} from '../store';
-import {lightTheme, darkTheme, commonStyles} from '../utils/theme';
+import {lightTheme, darkTheme} from '../utils/theme';
 import {providersApi, type Provider} from '../services/api/providersApi';
 import StarRating from '../components/StarRating';
 import {serializeDoctorForNavigation} from '../utils/helpers';
 import ReviewsList from '../components/ReviewsList';
+import {WorkShowcaseGallery} from '../components/WorkShowcaseGallery';
 import AlertModal from '../components/AlertModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import useTranslation from '../hooks/useTranslation';
 import ProviderRequestModal from '../components/ProviderRequestModal';
+import {ActiveRequestConflictBanner} from '../components/ActiveRequestConflictBanner';
+import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
+import {isLiveActiveRequest} from '../utils/activeRequestUx';
+import {
+  contactHintMessage,
+  providerPhoneFromApi,
+} from '../utils/providerContact';
+import {canCallThisProvider, canRequestThisProvider} from 'sapvt-ltd-app-packages';
+import {
+  matchingProviderService,
+  otherVisibleProviderServices,
+} from '../utils/matchingProviderService';
+import {localizedServiceName} from '../utils/serviceDisplay';
+import {CrystalSurface} from '../components/CrystalSurface';
+import {
+  formatProviderProfileAddressLine,
+  hasProviderAddress,
+} from '../utils/addressDisplay';
+import {isOwnProvider as isOwnProviderProfile} from '../utils/excludeOwnProvider';
 
 interface ProviderDetailsScreenProps {
   navigation: any;
@@ -26,6 +47,8 @@ interface ProviderDetailsScreenProps {
     params: {
       provider: Provider;
       doctor?: Provider; // Backward compatibility
+      service?: string;
+      requestedService?: string;
     };
   };
 }
@@ -34,7 +57,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   navigation,
   route,
 }) => {
-  const provider = (route.params?.provider || route.params?.doctor) as Provider & {
+  const routeProvider = (route.params?.provider || route.params?.doctor) as Provider & {
     profileImage?: string;
     photo?: string;
     specialty?: string;
@@ -46,11 +69,15 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+  const insets = useSafeAreaInsets();
   const [imageError, setImageError] = React.useState(false);
-  const [isOnline, setIsOnline] = useState<boolean>((provider as any).isOnline || false);
-  const [isAvailable, setIsAvailable] = useState<boolean>(true);
+  const [provider, setProvider] = useState(routeProvider);
+  const [isOnline, setIsOnline] = useState<boolean>((routeProvider as any).isOnline || false);
+  const [isAvailable, setIsAvailable] = useState<boolean>(
+    (routeProvider as any).isAvailable !== false,
+  );
   const [approvalStatus, setApprovalStatus] = useState<string | undefined>(
-    (provider as any).approvalStatus,
+    (routeProvider as any).approvalStatus,
   );
 
   const [alertModal, setAlertModal] = useState<{
@@ -67,19 +94,64 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [activeConflict, setActiveConflict] = useState<
+    import('../services/api/serviceRequestsApi').ActiveServiceRequestSummary | null
+  >(null);
+  const [checkingActive, setCheckingActive] = useState(false);
 
-  // Poll online status from Mongo/backend API
+  const requestedService = String(
+    route.params?.requestedService || route.params?.service || '',
+  ).trim();
+  const displayService =
+    matchingProviderService(provider as any, requestedService) ||
+    provider.specialization ||
+    (provider as any).specialty ||
+    '';
+  const professionLabel = displayService
+    ? localizedServiceName(displayService)
+    : String(t('browse.serviceProvider'));
+  const alsoServices = otherVisibleProviderServices(
+    provider as any,
+    requestedService || undefined,
+  ).map(name => localizedServiceName(name));
+  const takingRequests =
+    typeof (provider as any).isAvailable === 'boolean'
+      ? isAvailable
+      : isOnline;
+  const isVerified =
+    provider.verified === true || approvalStatus === 'approved';
+  const experienceYears =
+    provider.experience != null && Number(provider.experience) > 0
+      ? Number(provider.experience)
+      : null;
+  const experienceLabel =
+    experienceYears == null
+      ? ''
+      : experienceYears === 1
+        ? String(t('common.yearExperience', {count: experienceYears}))
+        : String(t('common.yearsExperience', {count: experienceYears}));
+  const profileAddressLine = hasProviderAddress(provider as any)
+    ? formatProviderProfileAddressLine(provider as any)
+    : '';
+  const canCall = canCallThisProvider(provider as any);
+  const canRequest = canRequestThisProvider(provider as any);
+  const callPhone = canCall ? providerPhoneFromApi(provider as any) : '';
+
+  // Poll online status + CTA flags from Mongo/backend API
   useEffect(() => {
     const providerId =
-      (provider as any).id ||
-      (provider as any)._id ||
-      (provider as any).uid;
+      (routeProvider as any).id ||
+      (routeProvider as any)._id ||
+      (routeProvider as any).uid;
     if (!providerId) return;
 
     const refresh = async () => {
       try {
-        const latest = await providersApi.getById(providerId);
+        const latest = await providersApi.getById(providerId, {
+          serviceType: requestedService || undefined,
+        });
         if (latest) {
+          setProvider(prev => ({...prev, ...latest} as any));
           setIsOnline(!!(latest as any).isOnline);
           setIsAvailable((latest as any).isAvailable !== false);
           if ((latest as any).approvalStatus) {
@@ -94,25 +166,10 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
     refresh();
     const interval = setInterval(refresh, 15000);
     return () => clearInterval(interval);
-  }, [provider]);
+  }, [routeProvider, requestedService]);
 
-  // Helper function to get initials from name
-  const getInitials = (name: string): string => {
-    if (!name || name.trim() === '') return '';
-    
-    const nameParts = name.trim().split(/\s+/);
-    
-    if (nameParts.length === 1) {
-      return nameParts[0].charAt(0).toUpperCase();
-    } else {
-      const firstName = nameParts[0];
-      const lastName = nameParts[nameParts.length - 1];
-      return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
-    }
-  };
+  const isOwnProvider = isOwnProviderProfile(provider as any, currentUser);
 
-  // Browse list only shows approved providers; missing status should not block requests.
-  // Only block when explicitly pending/rejected.
   const handleRequestService = () => {
     const phoneVerified = currentUser?.phoneVerified === true;
     const customerId = currentUser?.id || currentUser?._id;
@@ -120,53 +177,122 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       setShowLoginModal(true);
       return;
     }
-    setRequestModalVisible(true);
+    if (checkingActive) return;
+    const serviceType =
+      requestedService ||
+      (provider as any).specialization ||
+      (provider as any).specialty ||
+      (provider as any).serviceType ||
+      '';
+    setCheckingActive(true);
+    void getActiveServiceRequest(serviceType)
+      .then(active => {
+        if (isLiveActiveRequest(active)) {
+          setActiveConflict(active);
+          return;
+        }
+        setRequestModalVisible(true);
+      })
+      .catch(() => setRequestModalVisible(true))
+      .finally(() => setCheckingActive(false));
   };
+
+  const handleCall = () => {
+    if (!callPhone) return;
+    Linking.openURL(`tel:${callPhone}`).catch(() => {
+      setAlertModal({
+        visible: true,
+        title: t('common.error'),
+        message: t('providers.unableToCall'),
+        type: 'error',
+      });
+    });
+  };
+
+  const handleContactUnavailable = () => {
+    setAlertModal({
+      visible: true,
+      title: String(t('contact.unavailable') || t('providers.contactProvider')),
+      message: contactHintMessage(
+        t as any,
+        (provider as any).providerContactHint || (provider as any).contactHint,
+        (provider as any).providerContactPolicy ||
+          (provider as any).contactPolicy,
+      ),
+      type: 'info',
+    });
+  };
+
+  const showFooter = !isOwnProvider && (canCall || canRequest);
+  const showUnavailableFooter = !isOwnProvider && !showFooter;
+  const footerPadBottom = 12 + insets.bottom;
+  const unavailableMessage = !canRequest
+    ? String(
+        t('provider.notTakingRequests', {
+          defaultValue: 'Not taking new requests',
+        }),
+      )
+    : contactHintMessage(
+        t as any,
+        (provider as any).providerContactHint || (provider as any).contactHint,
+        (provider as any).providerContactPolicy ||
+          (provider as any).contactPolicy,
+      );
 
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Provider Header */}
-        <View
-          style={[
-            styles.headerCard,
-            {backgroundColor: theme.card},
-            commonStyles.shadowMedium,
-          ]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {paddingBottom:
+            showFooter || showUnavailableFooter ? 120 + insets.bottom : 24},
+        ]}>
+        {/* Hero — web .pd-hero */}
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDarkMode}
+          accent
+          radius={18}
+          style={styles.surfaceCard}
+          contentStyle={styles.heroInner}>
           <View style={styles.imageContainer}>
             {(() => {
-              const imageUrl = ((provider as any).profileImage || (provider as any).photo || provider.photos?.[0] || '').trim();
-              const hasValidImage = imageUrl !== '' && !imageError && 
-                (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || 
-                 imageUrl.startsWith('file://') || imageUrl.startsWith('content://'));
-              
+              const imageUrl = (
+                (provider as any).profileImage ||
+                (provider as any).photo ||
+                provider.photos?.[0] ||
+                ''
+              ).trim();
+              const hasValidImage =
+                imageUrl !== '' &&
+                !imageError &&
+                (imageUrl.startsWith('http://') ||
+                  imageUrl.startsWith('https://') ||
+                  imageUrl.startsWith('file://') ||
+                  imageUrl.startsWith('content://'));
+
               if (hasValidImage) {
                 return (
-              <Image
+                  <Image
                     source={{uri: imageUrl}}
-                style={styles.image}
+                    style={styles.image}
                     onError={() => setImageError(true)}
-                resizeMode="cover"
-              />
+                    resizeMode="cover"
+                  />
                 );
               }
-              
+
               return (
-              <View
-                style={[
-                  styles.imagePlaceholder,
-                  {backgroundColor: theme.primary},
-                ]}>
-                <Icon name="person" size={60} color="#fff" />
-              </View>
+                <View
+                  style={[
+                    styles.imagePlaceholder,
+                    {backgroundColor: theme.primary},
+                  ]}>
+                  <Icon name="person" size={40} color="#fff" />
+                </View>
               );
             })()}
-            {provider.verified && (
-              <View
-                style={[styles.verifiedBadge, {backgroundColor: '#4CAF50'}]}>
-                <Icon name="checkmark-circle" size={20} color="#fff" />
-              </View>
-            )}
           </View>
 
           <View style={styles.headerInfo}>
@@ -174,159 +300,242 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
               {provider.name}
             </Text>
             <Text style={[styles.specialization, {color: theme.textSecondary}]}>
-              {provider.specialization || (provider as any).specialty || 'Service Provider'}
+              {professionLabel}
             </Text>
-            {((provider as any).address?.district ||
-              (provider as any).location?.district ||
-              (provider as any).address?.city) ? (
-              <Text style={[styles.statusText, {color: theme.textSecondary, marginTop: 4}]}>
-                {t('providers.district')}:{' '}
-                {(provider as any).address?.district ||
-                  (provider as any).location?.district ||
-                  (provider as any).address?.city}
-              </Text>
+            {alsoServices.length > 0 ? (
+              <View style={styles.alsoRow}>
+                <Text style={[styles.alsoLead, {color: theme.textSecondary}]}>
+                  {t('browse.alsoLead')}
+                </Text>
+                <View style={styles.alsoList}>
+                  {alsoServices.map(svc => (
+                    <View
+                      key={svc}
+                      style={[
+                        styles.alsoChip,
+                        {backgroundColor: `${theme.primary}14`},
+                      ]}>
+                      <Text style={[styles.alsoChipText, {color: theme.text}]}>
+                        {svc}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             ) : null}
 
-            {/* Online Status Indicator */}
-            <View style={styles.statusRow}>
-              <View style={[
-                styles.statusIndicator,
-                {backgroundColor: isOnline && isAvailable ? '#4CAF50' : '#9E9E9E'}
-              ]}>
-                <View style={[
-                  styles.statusDot,
-                  {backgroundColor: isOnline && isAvailable ? '#fff' : '#fff'}
-                ]} />
-              </View>
-              <Text style={[styles.statusText, {color: theme.textSecondary}]}>
-                {isOnline && isAvailable ? t('providers.onlineAvailable') : t('providers.offlineNotAvailable')}
-              </Text>
-            </View>
-
-            <View style={styles.ratingRow}>
-              <StarRating rating={provider.rating || 0} size={18} />
-              <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
-                {provider.rating?.toFixed(1) || '0.0'} ({(provider as any).totalConsultations || provider.totalReviews || 0}{' '}
-                {((provider as any).totalConsultations || provider.totalReviews || 0) === 1 ? t('providers.service') : t('providers.services')})
-              </Text>
-            </View>
-
-            {(provider.phoneNumber || (provider as any).phone) && (
-              <TouchableOpacity
-                style={styles.contactRow}
-                onPress={() => {
-                  const phoneNumber = (provider.phoneNumber || (provider as any).phone || '').replace(/[^\d+]/g, '');
-                  Linking.openURL(`tel:${phoneNumber}`).catch(() => {
-                    setAlertModal({
-                      visible: true,
-                      title: t('common.error'),
-                      message: t('providers.unableToCall'),
-                      type: 'error',
-                    });
-                  });
-                }}
-                activeOpacity={0.7}>
-                <Icon name="call-outline" size={16} color={theme.primary} />
-                <Text style={[styles.contactText, {color: theme.primary}]}>
-                  {provider.phoneNumber || (provider as any).phone}
+            {/* Trust row — filled 8px online-dot + verified chip */}
+            <View style={styles.trustRow}>
+              <View style={styles.onlineWrap}>
+                <View
+                  style={[
+                    styles.onlineDot,
+                    {
+                      backgroundColor: takingRequests ? '#4CAF50' : '#9E9E9E',
+                    },
+                  ]}
+                />
+                <Text style={[styles.statusText, {color: theme.textSecondary}]}>
+                  {takingRequests
+                    ? t('provider.availableForRequests')
+                    : t('provider.notTakingRequests')}
                 </Text>
-                <Icon name="call" size={14} color={theme.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+              </View>
+              {isVerified ? (
+                <View style={styles.verifiedChip}>
+                  <Icon
+                    name="checkmark-circle"
+                    size={16}
+                    color={theme.primaryDark || theme.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.verifiedChipText,
+                      {color: theme.primaryDark || theme.primary},
+                    ]}>
+                    {t('provider.verified')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
 
-        {/* Details Section */}
-        <View
-          style={[
-            styles.section,
-            {backgroundColor: theme.card},
-            commonStyles.shadowSmall,
-          ]}>
+            <View style={styles.metaRow}>
+              {provider.rating && provider.rating > 0 ? (
+                <View style={styles.ratingRow}>
+                  <StarRating rating={provider.rating || 0} size={16} />
+                  <Text
+                    style={[styles.ratingText, {color: theme.textSecondary}]}>
+                    {provider.rating?.toFixed(1) || '0.0'}
+                    {(provider as any).totalReviews > 0
+                      ? ` (${(provider as any).totalReviews})`
+                      : ''}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.ratingText, {color: theme.textSecondary}]}>
+                  {t('provider.newProvider')}
+                </Text>
+              )}
+              {experienceLabel ? (
+                <Text
+                  style={[styles.expChip, {color: theme.textSecondary}]}>
+                  {experienceLabel}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </CrystalSurface>
+
+        <WorkShowcaseGallery theme={theme} photos={(provider as any).photos} />
+
+        {/* About — web .pd-section */}
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDarkMode}
+          accent
+          radius={18}
+          style={styles.surfaceCard}
+          contentStyle={styles.sectionInner}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            {t('providers.aboutProvider')}
+            {t('provider.about')}
           </Text>
 
-          {/* Address */}
-          {(provider as any).address && (
-            <View style={styles.detailRow}>
-              <Icon name="location-outline" size={20} color={theme.primary} />
-              <View style={styles.detailInfo}>
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('profile.address')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {(provider as any).address.address || ''}
-                  {(provider as any).address.city && `, ${(provider as any).address.city}`}
-                  {(provider as any).address.state && `, ${(provider as any).address.state}`}
-                  {(provider as any).address.pincode && ` - ${(provider as any).address.pincode}`}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Experience */}
-          {provider.experience ? (
+          {experienceYears != null ? (
             <View style={styles.detailRow}>
               <Icon name="time-outline" size={20} color={theme.primary} />
               <View style={styles.detailInfo}>
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('providers.experience')}
+                <Text
+                  style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                  {t('provider.experience')}
                 </Text>
                 <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {t('providers.experienceWithYears', {years: provider.experience, count: provider.experience})}
+                  {experienceLabel}
                 </Text>
               </View>
             </View>
           ) : null}
 
-          {/* Languages */}
-          {(provider as any).languages && (provider as any).languages.length > 0 ? (
-            <View style={styles.detailRow}>
-              <Icon name="language-outline" size={20} color={theme.primary} />
-              <View style={styles.detailInfo}>
-                <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                  {t('providers.languages')}
-                </Text>
-                <Text style={[styles.detailValue, {color: theme.text}]}>
-                  {(provider as any).languages.join(', ')}
-                </Text>
-              </View>
+          <View style={[styles.detailRow, styles.detailRowLast]}>
+            <Icon name="location-outline" size={20} color={theme.primary} />
+            <View style={styles.detailInfo}>
+              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                {t('provider.serviceArea')}
+              </Text>
+              <Text
+                style={[
+                  styles.detailValue,
+                  {
+                    color: profileAddressLine
+                      ? theme.text
+                      : theme.textSecondary,
+                    fontWeight: profileAddressLine ? '500' : '400',
+                  },
+                ]}>
+                {profileAddressLine || t('provider.serviceAreaNotShared')}
+              </Text>
             </View>
-          ) : null}
-        </View>
+          </View>
+        </CrystalSurface>
 
-        {/* Reviews Section */}
-        <View
-          style={[
-            styles.section,
-            {backgroundColor: theme.card},
-            commonStyles.shadowSmall,
-          ]}>
+        {/* Reviews — web .pd-section */}
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDarkMode}
+          accent
+          radius={18}
+          style={styles.surfaceCard}
+          contentStyle={styles.sectionInner}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
-            {t('providers.customerReviews')}
+            {t('review.customerReviews') || t('providers.customerReviews')}
           </Text>
-          <ReviewsList 
-            providerId={(provider as any).id || (provider as any).uid || ''} 
+          <ReviewsList
+            providerId={(provider as any).id || (provider as any).uid || ''}
             showHeader={false}
           />
-        </View>
+        </CrystalSurface>
       </ScrollView>
 
-      {/* Book Button */}
-      <View style={[styles.footer, {backgroundColor: theme.card}]}>
-        <TouchableOpacity
-          style={[styles.bookButton, {backgroundColor: theme.primary}]}
-          onPress={handleRequestService}>
-          <Text style={styles.bookButtonText}>{t('providers.requestService')}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Sticky footer — Call (no digits) + Request stacked */}
+      {showFooter ? (
+        <View
+          style={[
+            styles.footer,
+            {
+              backgroundColor: theme.card,
+              borderTopColor: theme.border,
+              paddingBottom: footerPadBottom,
+            },
+          ]}>
+          {canCall && callPhone ? (
+            <TouchableOpacity
+              style={[
+                styles.footerBtn,
+                styles.footerBtnSecondary,
+                {borderColor: theme.primary},
+              ]}
+              onPress={handleCall}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={String(
+                t('contact.callProvider') || t('providers.callProvider'),
+              )}>
+              <Icon name="call-outline" size={18} color={theme.primary} />
+              <Text style={[styles.footerBtnSecondaryText, {color: theme.primary}]}>
+                {t('contact.callProvider') || t('providers.callProvider')}
+              </Text>
+            </TouchableOpacity>
+          ) : canCall ? (
+            <TouchableOpacity
+              style={[
+                styles.footerBtn,
+                styles.footerBtnSecondary,
+                {borderColor: theme.primary},
+              ]}
+              onPress={handleContactUnavailable}
+              activeOpacity={0.7}>
+              <Text style={[styles.footerBtnSecondaryText, {color: theme.primary}]}>
+                {t('contact.contactProvider') || t('providers.contactProvider')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {canRequest ? (
+            <TouchableOpacity
+              style={[styles.footerBtn, {backgroundColor: theme.primary}]}
+              onPress={handleRequestService}
+              disabled={checkingActive}
+              activeOpacity={0.7}>
+              <Text style={styles.footerBtnPrimaryText}>
+                {t('browse.requestThisProvider') ||
+                  t('providers.requestService')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : showUnavailableFooter ? (
+        <View
+          style={[
+            styles.footer,
+            {
+              backgroundColor: theme.card,
+              borderTopColor: theme.border,
+              paddingBottom: footerPadBottom,
+            },
+          ]}>
+          <Text
+            style={[styles.unavailableFooterText, {color: theme.textSecondary}]}>
+            {unavailableMessage}
+          </Text>
+        </View>
+      ) : null}
 
       <ProviderRequestModal
         visible={requestModalVisible}
         provider={provider as any}
+        requestedServiceType={requestedService || undefined}
         onClose={() => setRequestModalVisible(false)}
-        onSuccess={(serviceRequestId) => {
+        onSuccess={serviceRequestId => {
           setRequestModalVisible(false);
           navigation.navigate('Services', {
             screen: 'ActiveService',
@@ -335,7 +544,6 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         }}
       />
 
-      {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -350,7 +558,6 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         }}
       />
 
-      {/* Login Confirmation Modal */}
       <ConfirmationModal
         visible={showLoginModal}
         title={t('auth.verifyMobileToBook')}
@@ -359,7 +566,9 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setShowLoginModal(false);
-          const serializableProvider = serializeDoctorForNavigation(provider as any);
+          const serializableProvider = serializeDoctorForNavigation(
+            provider as any,
+          );
           setRedirectAfterLogin({
             route: 'ProviderDetails',
             params: {
@@ -370,6 +579,23 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
         }}
         onCancel={() => setShowLoginModal(false)}
       />
+      {activeConflict ? (
+        <ActiveRequestConflictBanner
+          active={activeConflict}
+          onDismiss={() => setActiveConflict(null)}
+          onView={action => {
+            setActiveConflict(null);
+            if (action.screen === 'ActiveService') {
+              navigation.navigate('Services', {
+                screen: 'ActiveService',
+                params: action.params,
+              });
+            } else {
+              navigation.navigate('History');
+            }
+          }}
+        />
+      ) : null}
     </View>
   );
 };
@@ -380,165 +606,191 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 100,
+    gap: 12,
   },
-  headerCard: {
-    borderRadius: 12,
+  surfaceCard: {
+    marginBottom: 0,
+  },
+  heroInner: {
     padding: 16,
-    marginBottom: 16,
+    alignItems: 'center',
+  },
+  sectionInner: {
+    padding: 14,
+    paddingHorizontal: 16,
   },
   imageContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignSelf: 'center',
-    marginBottom: 16,
-    position: 'relative',
+    marginBottom: 10,
   },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 60,
+    borderRadius: 44,
   },
   imagePlaceholder: {
     width: '100%',
     height: '100%',
-    borderRadius: 60,
+    borderRadius: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  initialsText: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    borderRadius: 12,
-    padding: 4,
-  },
   headerInfo: {
     alignItems: 'center',
+    width: '100%',
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 2,
     textAlign: 'center',
+    lineHeight: 25,
   },
   specialization: {
-    fontSize: 16,
-    marginBottom: 12,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  alsoRow: {
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+    maxWidth: '100%',
+  },
+  alsoLead: {fontSize: 12, fontWeight: '700'},
+  alsoList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  alsoChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  alsoChipText: {fontSize: 12, fontWeight: '600'},
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  onlineWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  verifiedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  verifiedChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   ratingText: {
-    fontSize: 14,
-    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 5,
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  expChip: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   statusText: {
     fontSize: 13,
     fontWeight: '500',
   },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  contactText: {
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  section: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  detailRowLast: {
+    marginBottom: 0,
   },
   detailInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   detailLabel: {
-    fontSize: 13,
-    marginBottom: 4,
+    fontSize: 12,
+    marginBottom: 2,
   },
   detailValue: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  feeText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  comingSoonText: {
     fontSize: 14,
-    fontStyle: 'italic',
+    fontWeight: '500',
+    lineHeight: 20,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  feeInfo: {
-    flex: 1,
-  },
-  feeLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  feeAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  bookButton: {
-    paddingHorizontal: 24,
+  footerBtn: {
+    width: '100%',
     paddingVertical: 14,
     borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  bookButtonText: {
+  footerBtnSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  footerBtnSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footerBtnPrimaryText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  unavailableFooterText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingVertical: 4,
   },
 });
 

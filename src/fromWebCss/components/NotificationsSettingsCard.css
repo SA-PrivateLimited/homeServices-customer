@@ -1,0 +1,47 @@
+.notifications-settings {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--card, #fff);
+}
+
+.notifications-settings strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+
+.notifications-settings p {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #718096);
+  line-height: 1.45;
+}
+
+.notifications-settings__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.notifications-settings__status.is-on {
+  color: var(--success, #38a169);
+}
+
+.notifications-settings__status.is-off {
+  color: var(--warning, #dd6b20);
+}
+
+.notifications-settings__status.is-blocked {
+  color: var(--error, #e53e3e);
+}
+
+.notifications-settings__hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #718096);
+  margin: 8px 0 0;
+}

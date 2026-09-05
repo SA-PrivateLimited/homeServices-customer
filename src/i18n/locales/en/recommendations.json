@@ -10,6 +10,8 @@
   "address": "Address",
   "addressPlaceholder": "Enter provider's address (optional)",
   "submit": "Submit Recommendation",
+  "pickContact": "Choose from contacts",
+  "pickerUnavailable": "Could not open contacts. Please enter the mobile number.",
   "successMessage": "Thank you! Your recommendation has been submitted successfully.",
   "submitError": "Failed to submit recommendation. Please try again.",
   "providerNameRequired": "Provider name is required",

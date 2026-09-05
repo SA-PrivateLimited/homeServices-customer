@@ -1,0 +1,71 @@
+.brand-with-greeting-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.greeting-logo-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  color: var(--primary);
+  animation: greeting-doodle-pulse 1.35s ease-in-out 12;
+}
+
+.greeting-logo-accent__img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  transform-origin: 70% 90%;
+  animation: greeting-doodle-wave 1.35s ease-in-out 12;
+}
+
+.greeting-logo-accent__icon {
+  line-height: 1;
+  max-width: 28px;
+  overflow: hidden;
+  transform-origin: 70% 90%;
+  animation: greeting-doodle-wave 1.35s ease-in-out 12;
+}
+
+@keyframes greeting-doodle-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes greeting-doodle-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(16deg);
+  }
+  45% {
+    transform: rotate(-10deg);
+  }
+  70% {
+    transform: rotate(12deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .greeting-logo-accent,
+  .greeting-logo-accent__img,
+  .greeting-logo-accent__icon {
+    animation: none;
+  }
+}

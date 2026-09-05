@@ -1,0 +1,59 @@
+.job-comments-thread {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hs-border, #e2e8f0);
+}
+
+.job-comments-thread__title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.job-comments-thread__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.job-comments-thread__list li {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, var(--card));
+  border: 1px solid var(--border);
+}
+
+.job-comments-thread__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  color: var(--hs-text-secondary, #718096);
+}
+
+.job-comments-thread__list p {
+  margin: 0;
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+}
+
+.job-comments-thread__empty {
+  margin: 0 0 12px;
+  color: var(--hs-text-secondary, #718096);
+  font-size: 0.9rem;
+}
+
+.job-comments-thread__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.job-comments-thread__error {
+  margin: 8px 0 0;
+  color: var(--hs-error, #e53e3e);
+  font-size: 0.9rem;
+}

@@ -18,6 +18,9 @@ import enMessages from './locales/en/messages.json';
 import enNotifications from './locales/en/notifications.json';
 import enProviders from './locales/en/providers.json';
 import enRecommendations from './locales/en/recommendations.json';
+import enReview from './locales/en/review.json';
+import enHelpSupport from './locales/en/helpSupport.json';
+import enWeb from './locales/web/en.json';
 
 // Hindi translations
 import hiCommon from './locales/hi/common.json';
@@ -35,43 +38,57 @@ import hiMessages from './locales/hi/messages.json';
 import hiNotifications from './locales/hi/notifications.json';
 import hiProviders from './locales/hi/providers.json';
 import hiRecommendations from './locales/hi/recommendations.json';
+import hiReview from './locales/hi/review.json';
+import hiHelpSupport from './locales/hi/helpSupport.json';
+import hiWeb from './locales/web/hi.json';
+import {mergeWebLocale} from '../utils/mergeWebI18n';
 
-// Merge all translations
-const en = {
-  common: enCommon,
-  auth: enAuth,
-  settings: enSettings,
-  services: enServices,
-  serviceHistory: enServiceHistory,
-  activeService: enActiveService,
-  serviceRequest: enServiceRequest,
-  profile: enProfile,
-  home: enHome,
-  jobCard: enJobCard,
-  errors: enErrors,
-  messages: enMessages,
-  notifications: enNotifications,
-  providers: enProviders,
-  recommendations: enRecommendations,
-};
+// Merge all translations — existing RN namespaces win; web strings fill gaps
+const en = mergeWebLocale(
+  {
+    common: enCommon,
+    auth: enAuth,
+    settings: enSettings,
+    services: enServices,
+    serviceHistory: enServiceHistory,
+    activeService: enActiveService,
+    serviceRequest: enServiceRequest,
+    profile: enProfile,
+    home: enHome,
+    jobCard: enJobCard,
+    errors: enErrors,
+    messages: enMessages,
+    notifications: enNotifications,
+    providers: enProviders,
+    recommendations: enRecommendations,
+    review: enReview,
+    helpSupport: enHelpSupport,
+  },
+  enWeb as Record<string, unknown>,
+) as Record<string, unknown>;
 
-const hi = {
-  common: hiCommon,
-  auth: hiAuth,
-  settings: hiSettings,
-  services: hiServices,
-  serviceHistory: hiServiceHistory,
-  activeService: hiActiveService,
-  serviceRequest: hiServiceRequest,
-  profile: hiProfile,
-  home: hiHome,
-  jobCard: hiJobCard,
-  errors: hiErrors,
-  messages: hiMessages,
-  notifications: hiNotifications,
-  providers: hiProviders,
-  recommendations: hiRecommendations,
-};
+const hi = mergeWebLocale(
+  {
+    common: hiCommon,
+    auth: hiAuth,
+    settings: hiSettings,
+    services: hiServices,
+    serviceHistory: hiServiceHistory,
+    activeService: hiActiveService,
+    serviceRequest: hiServiceRequest,
+    profile: hiProfile,
+    home: hiHome,
+    jobCard: hiJobCard,
+    errors: hiErrors,
+    messages: hiMessages,
+    notifications: hiNotifications,
+    providers: hiProviders,
+    recommendations: hiRecommendations,
+    review: hiReview,
+    helpSupport: hiHelpSupport,
+  },
+  hiWeb as Record<string, unknown>,
+);
 
 const LANGUAGE_KEY = '@app_language';
 
@@ -79,9 +96,10 @@ const LANGUAGE_KEY = '@app_language';
 const getStoredLanguage = async (): Promise<string> => {
   try {
     const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
-    return stored || 'en';
+    // Hindi-first: first launch / empty storage → hi. Existing user choice is preserved.
+    return stored || 'hi';
   } catch {
-    return 'en';
+    return 'hi';
   }
 };
 
@@ -94,8 +112,8 @@ i18n
       en: {translation: en},
       hi: {translation: hi},
     },
-    lng: 'en', // Default language
-    fallbackLng: 'en',
+    lng: 'hi', // Default language (rural / semi-rural Hindi-first)
+    fallbackLng: 'en', // Missing HI keys still fall back to English
     interpolation: {
       escapeValue: false, // React already escapes values
     },
@@ -117,11 +135,6 @@ export const changeLanguage = async (language: 'en' | 'hi') => {
   } catch (error) {
     console.error('Error changing language:', error);
   }
-};
-
-// Get current language
-export const getCurrentLanguage = (): string => {
-  return i18n.language || 'en';
 };
 
 export default i18n;

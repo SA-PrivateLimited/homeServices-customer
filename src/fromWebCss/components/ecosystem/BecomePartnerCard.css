@@ -1,0 +1,58 @@
+.become-partner {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.become-partner__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.become-partner__link:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.become-partner__link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.become-partner__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.become-partner__copy strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.become-partner__copy span {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--textSecondary);
+}
+
+.become-partner__link > svg {
+  flex-shrink: 0;
+  color: var(--textSecondary);
+}

@@ -19,9 +19,14 @@ import ServiceAddressFields, {
 import {
   getSavedAddresses,
   updateAddress,
+  saveAddress,
+  deleteAddress,
+  setDefaultAddress,
   formatAddressLabel,
+  findPersistedAddress,
   type SavedAddress,
 } from '../services/addressService';
+import ConfirmationModal from './ConfirmationModal';
 
 export type AddressLabel = 'home' | 'office' | 'other';
 
@@ -89,6 +94,12 @@ export function emptyAddressSelection(
   };
 }
 
+function sortSavedAddresses(list: SavedAddress[]): SavedAddress[] {
+  return [...list].sort(
+    (a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)),
+  );
+}
+
 export default function ServiceAddressPicker({
   theme,
   value,
@@ -100,32 +111,68 @@ export default function ServiceAddressPicker({
   const [loading, setLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SavedAddress | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const isDark = String(theme.background || '').toLowerCase() === '#0b1220';
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await getSavedAddresses();
+      const list = sortSavedAddresses(await getSavedAddresses());
       setSavedAddresses(list);
-      // Auto-select preferred if nothing chosen yet
-      if (
-        list.length > 0 &&
-        !value.selectedId &&
-        value.mode !== 'new' &&
-        !value.address?.address
+      const hasFilledAddress = Boolean(value.address?.address?.trim());
+
+      if (list.length > 0 && !value.selectedId && value.mode !== 'new') {
+        if (hasFilledAddress) {
+          // Edit existing request: highlight matching saved chip, keep address.
+          const pin = String(value.address.pincode || '').trim();
+          const street = String(value.address.address || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+          const match =
+            list.find(a => {
+              const aStreet = String(a.address || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+              const aPin = String(a.pincode || '').trim();
+              return (
+                aPin === pin &&
+                (aStreet === street ||
+                  aStreet.includes(street) ||
+                  street.includes(aStreet))
+              );
+            }) || null;
+          if (match?.id) {
+            onChange({
+              ...value,
+              selectedId: match.id,
+              label: (match.label as AddressLabel) || value.label,
+              customLabel: match.customLabel || value.customLabel,
+              mode: 'saved',
+            });
+          }
+        } else {
+          // Web: isDefault → legacy id "home" → first
+          const preferred =
+            list.find(a => a.isDefault) ||
+            list.find(a => a.id === 'home') ||
+            list[0];
+          onChange({
+            address: toFormAddress(preferred),
+            label: (preferred.label as AddressLabel) || 'home',
+            customLabel: preferred.customLabel || '',
+            selectedId: preferred.id || null,
+            mode: 'saved',
+            saveForFuture: value.saveForFuture,
+          });
+        }
+      } else if (
+        list.length === 0 &&
+        value.mode === 'saved' &&
+        !hasFilledAddress
       ) {
-        const preferred =
-          list.find(a => a.isDefault) ||
-          list.find(a => a.label === 'home') ||
-          list[0];
-        onChange({
-          address: toFormAddress(preferred),
-          label: (preferred.label as AddressLabel) || 'home',
-          customLabel: preferred.customLabel || '',
-          selectedId: preferred.id || null,
-          mode: 'saved',
-          saveForFuture: value.saveForFuture,
-        });
-      } else if (list.length === 0 && value.mode === 'saved') {
         onChange({
           ...value,
           mode: 'new',
@@ -168,10 +215,16 @@ export default function ServiceAddressPicker({
     });
   };
 
-  const startEdit = () => {
-    if (!value.selectedId) return;
+  const startEditItem = (item: SavedAddress) => {
     setEditError(null);
-    onChange({...value, mode: 'edit'});
+    onChange({
+      address: toFormAddress(item),
+      label: (item.label as AddressLabel) || 'other',
+      customLabel: item.customLabel || '',
+      selectedId: item.id || null,
+      mode: 'edit',
+      saveForFuture: value.saveForFuture,
+    });
   };
 
   const cancelEdit = () => {
@@ -180,21 +233,62 @@ export default function ServiceAddressPicker({
     else onChange({...value, mode: 'saved'});
   };
 
-  const saveEdit = async () => {
-    if (!value.selectedId) return;
-    if (!value.address.address || !value.address.pincode) {
+  const validateAddressForm = (): boolean => {
+    if (
+      !value.address.address?.trim() ||
+      !/^\d{6}$/.test(value.address.pincode || '')
+    ) {
       setEditError(
         String(
-          t('common.invalidAddressMessage') ||
-            'Please enter a valid address with pincode.',
+          t('request.validAddressRequired') ||
+            t('services.validAddressWithPincode'),
         ),
       );
-      return;
+      return false;
     }
     if (value.label === 'other' && !value.customLabel.trim()) {
-      setEditError(String(t('services.customLabelRequired')));
-      return;
+      setEditError(
+        String(
+          t('request.customLabelRequired') || t('services.customLabelRequired'),
+        ),
+      );
+      return false;
     }
+    return true;
+  };
+
+  const saveNew = async () => {
+    if (!validateAddressForm()) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const saved = await saveAddress({
+        ...value.address,
+        label: value.label,
+        customLabel:
+          value.label === 'other' ? value.customLabel.trim() : undefined,
+      });
+      const list = sortSavedAddresses(await getSavedAddresses());
+      setSavedAddresses(list);
+      const updated =
+        findPersistedAddress(list, {
+          id: saved.id,
+          before: saved,
+          preferDefault: true,
+        }) || saved;
+      selectSaved(updated);
+    } catch {
+      setEditError(
+        String(t('request.saveAddressFailed') || t('services.addressSaveError')),
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!value.selectedId) return;
+    if (!validateAddressForm()) return;
     setSavingEdit(true);
     setEditError(null);
     try {
@@ -205,24 +299,74 @@ export default function ServiceAddressPicker({
       if (value.label === 'other') {
         payload.customLabel = value.customLabel.trim();
       }
-      await updateAddress(value.selectedId, payload);
-      const list = await getSavedAddresses();
+      const before = savedAddresses.find(a => a.id === value.selectedId);
+      const saved = await updateAddress(value.selectedId, payload);
+      const list = sortSavedAddresses(await getSavedAddresses());
       setSavedAddresses(list);
-      const updated =
-        list.find(a => a.id === value.selectedId) ||
-        list.find(
-          a =>
-            a.label === value.label &&
-            (value.label !== 'other' ||
-              a.customLabel === value.customLabel.trim()),
-        );
+      const updated = findPersistedAddress(list, {
+        id: saved.id,
+        before: saved || before,
+        preferDefault: Boolean(saved?.isDefault || before?.isDefault),
+      });
       if (updated) {
         selectSaved(updated);
       } else {
         onChange({...value, mode: 'saved'});
       }
     } catch (e: any) {
-      setEditError(e?.message || String(t('services.addressSaveError')));
+      setEditError(
+        e?.message ||
+          String(t('request.saveAddressFailed') || t('services.addressSaveError')),
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    const id = pendingDelete?.id;
+    if (!id) return;
+    setDeleting(true);
+    setEditError(null);
+    try {
+      await deleteAddress(id);
+      const list = sortSavedAddresses(await getSavedAddresses());
+      setSavedAddresses(list);
+      if (value.selectedId === id) {
+        const next =
+          list.find(a => a.isDefault) ||
+          list.find(a => a.id === 'home') ||
+          list[0];
+        if (next) selectSaved(next);
+        else startAddNew();
+      }
+    } catch {
+      setEditError(String(t('request.deleteAddressFailed') || 'Could not delete'));
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
+  };
+
+  const makeDefault = async () => {
+    if (!value.selectedId) return;
+    const before = savedAddresses.find(a => a.id === value.selectedId);
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const list = sortSavedAddresses(await setDefaultAddress(value.selectedId));
+      setSavedAddresses(list);
+      // Legacy home/office ids are remapped on first persist — rematch by key/default.
+      const updated = findPersistedAddress(list, {
+        id: value.selectedId,
+        before,
+        preferDefault: true,
+      });
+      if (updated) selectSaved(updated);
+    } catch {
+      setEditError(
+        String(t('request.saveAddressFailed') || t('services.addressSaveError')),
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -230,13 +374,12 @@ export default function ServiceAddressPicker({
 
   const labels: AddressLabel[] = ['home', 'office', 'other'];
   const showForm = value.mode === 'new' || value.mode === 'edit';
+  const selectedIsDefault = Boolean(
+    savedAddresses.find(a => a.id === value.selectedId)?.isDefault,
+  );
 
   return (
     <View>
-      <Text style={[styles.label, {color: theme.text}]}>
-        {t('services.selectAddress') || 'Select Address'}
-      </Text>
-
       {loading ? (
         <ActivityIndicator color={theme.primary} style={{marginVertical: 16}} />
       ) : (
@@ -255,30 +398,72 @@ export default function ServiceAddressPicker({
                     style={[
                       styles.addressCard,
                       {
+                        // Web `.addr-chip--card.is-selected`: soft primary ring
+                        // (box-shadow 0 0 0 2px @14%), no hard border / elevation.
                         backgroundColor: selected
-                          ? theme.primary + '18'
-                          : theme.background,
-                        borderColor: selected ? theme.primary : theme.border,
+                          ? `${theme.primary}0F`
+                          : isDark
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(255,255,255,0.82)',
+                        borderWidth: 0,
+                        elevation: 0,
+                        shadowColor: theme.primary,
+                        shadowOffset: {width: 0, height: 0},
+                        shadowOpacity: selected ? 0.28 : 0,
+                        shadowRadius: selected ? 2 : 0,
+                        // Android: soft ring via outline-like double wash
+                        ...(selected
+                          ? {
+                              borderWidth: 2,
+                              borderColor: `${theme.primary}24`,
+                            }
+                          : {}),
                       },
                     ]}
                     onPress={() => selectSaved(item)}
                     activeOpacity={0.85}>
-                    <View
-                      style={[
-                        styles.cardIcon,
-                        {backgroundColor: theme.primary + '20'},
-                      ]}>
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={styles.cardEdit}
+                        onPress={() => startEditItem(item)}
+                        hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                        <Icon
+                          name="edit"
+                          size={14}
+                          color={
+                            selected ? theme.primary : theme.textSecondary
+                          }
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.cardEdit}
+                        onPress={() => setPendingDelete(item)}
+                        hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                        <Icon name="delete" size={14} color="#E53E3E" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.cardTop}>
                       <Icon
                         name={labelIcon(item.label)}
-                        size={22}
+                        size={16}
                         color={theme.primary}
                       />
+                      <Text
+                        style={[styles.cardTitle, {color: theme.text}]}
+                        numberOfLines={1}>
+                        {formatAddressLabel(item, t as any)}
+                      </Text>
+                      {item.isDefault ? (
+                        <Text
+                          style={[
+                            styles.defaultBadge,
+                            {color: theme.textSecondary},
+                          ]}
+                          numberOfLines={1}>
+                          {t('request.defaultAddress') || 'Usually used'}
+                        </Text>
+                      ) : null}
                     </View>
-                    <Text
-                      style={[styles.cardTitle, {color: theme.text}]}
-                      numberOfLines={1}>
-                      {formatAddressLabel(item, t as any)}
-                    </Text>
                     <Text
                       style={[styles.cardAddress, {color: theme.textSecondary}]}
                       numberOfLines={2}>
@@ -291,82 +476,89 @@ export default function ServiceAddressPicker({
                         .filter(Boolean)
                         .join(' · ')}
                     </Text>
-                    {selected ? (
-                      <Icon
-                        name="check-circle"
-                        size={18}
-                        color={theme.primary}
-                        style={styles.cardCheck}
-                      />
-                    ) : null}
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-          ) : null}
 
-          <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.addressCard,
+                  styles.addNewChip,
+                  {
+                    backgroundColor:
+                      value.mode === 'new'
+                        ? `${theme.primary}14`
+                        : isDark
+                          ? 'rgba(255,255,255,0.08)'
+                          : 'rgba(255,255,255,0.82)',
+                    borderWidth: value.mode === 'new' ? 2 : 0,
+                    borderColor:
+                      value.mode === 'new'
+                        ? `${theme.primary}24`
+                        : 'transparent',
+                    elevation: 0,
+                    shadowOpacity: 0,
+                  },
+                ]}
+                onPress={startAddNew}
+                activeOpacity={0.85}>
+                <View style={styles.cardTop}>
+                  <Icon name="add" size={16} color={theme.primary} />
+                  <Text
+                    style={[styles.cardTitle, {color: theme.primary}]}
+                    numberOfLines={1}>
+                    {t('request.addAddressChip') ||
+                      t('services.addAddress') ||
+                      'New'}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.cardAddress, {color: theme.textSecondary}]}
+                  numberOfLines={2}>
+                  {t('request.addAddressHint') || 'Add a place'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          ) : (
             <TouchableOpacity
               style={[
                 styles.addNewBtn,
                 {
-                  borderColor:
-                    value.mode === 'new' ? theme.primary : theme.border,
-                  backgroundColor:
-                    value.mode === 'new' ? theme.primary + '12' : 'transparent',
-                  flex: 1,
+                  backgroundColor: isDark
+                    ? 'rgba(255,255,255,0.08)'
+                    : 'rgba(255,255,255,0.82)',
+                  elevation: 0,
+                  shadowOpacity: 0,
+                  borderWidth: 0,
                 },
               ]}
               onPress={startAddNew}
               activeOpacity={0.85}>
               <Icon name="add-location-alt" size={20} color={theme.primary} />
-              <Text style={{color: theme.primary, fontWeight: '600'}}>
-                {t('services.addAddress') || 'Add new address'}
+              <Text
+                style={{color: theme.primary, fontWeight: '600', fontSize: 14}}>
+                {t('request.addAddressChip') ||
+                  t('services.addAddress') ||
+                  '+ Add Address'}
               </Text>
             </TouchableOpacity>
-
-            {value.mode === 'saved' && value.selectedId ? (
-              <TouchableOpacity
-                style={[
-                  styles.editBtn,
-                  {borderColor: theme.border, backgroundColor: theme.background},
-                ]}
-                onPress={startEdit}
-                accessibilityLabel={String(t('services.editAddress') || 'Edit')}>
-                <Icon name="edit" size={20} color={theme.primary} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          )}
         </>
       )}
 
       {showForm ? (
         <View style={styles.newForm}>
-          {value.mode === 'edit' ? (
-            <View style={styles.editHeader}>
-              <Text style={[styles.label, {color: theme.text, marginBottom: 0}]}>
-                {t('services.editAddress') || 'Edit address'}
-              </Text>
-              <TouchableOpacity onPress={cancelEdit}>
-                <Text style={{color: theme.primary, fontWeight: '600'}}>
-                  {t('common.cancel')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          <Text style={[styles.label, {color: theme.text}]}>
-            {t('services.addressType') || 'Address type'}
-          </Text>
           <View style={styles.labelChips}>
             {labels.map(lab => {
               const active = value.label === lab;
               const title =
                 lab === 'home'
-                  ? t('services.home')
+                  ? t('request.home') || t('services.home')
                   : lab === 'office'
-                    ? t('services.work') || t('services.office')
-                    : t('services.other');
+                    ? t('request.office') ||
+                      t('services.work') ||
+                      t('services.office')
+                    : t('request.other') || t('services.other');
               return (
                 <TouchableOpacity
                   key={lab}
@@ -374,9 +566,9 @@ export default function ServiceAddressPicker({
                     styles.chip,
                     {
                       backgroundColor: active
-                        ? theme.primary
+                        ? `${theme.primary}1A`
                         : theme.background,
-                      borderColor: active ? theme.primary : theme.border,
+                      borderColor: active ? `${theme.primary}40` : theme.border,
                     },
                   ]}
                   onPress={() =>
@@ -389,11 +581,11 @@ export default function ServiceAddressPicker({
                   <Icon
                     name={labelIcon(lab)}
                     size={16}
-                    color={active ? '#fff' : theme.primary}
+                    color={theme.primary}
                   />
                   <Text
                     style={{
-                      color: active ? '#fff' : theme.text,
+                      color: theme.text,
                       fontWeight: '600',
                       fontSize: 13,
                     }}>
@@ -407,7 +599,7 @@ export default function ServiceAddressPicker({
           {value.label === 'other' ? (
             <>
               <Text style={[styles.label, {color: theme.text}]}>
-                {t('services.customLabel') || 'Custom name'} *
+                {t('request.customLabel') || t('services.customLabel') || 'Custom name'}
               </Text>
               <TextInput
                 style={[
@@ -423,7 +615,9 @@ export default function ServiceAddressPicker({
                   onChange({...value, customLabel: text})
                 }
                 placeholder={
-                  t('services.customLabelPlaceholder') || "E.g., Mom's House"
+                  t('request.customLabelPlaceholder') ||
+                  t('services.customLabelPlaceholder') ||
+                  "E.g., Mom's House"
                 }
                 placeholderTextColor={theme.textSecondary}
               />
@@ -442,29 +636,103 @@ export default function ServiceAddressPicker({
             }
           />
 
-          {value.mode === 'edit' ? (
-            <TouchableOpacity
-              style={[
-                styles.saveEditBtn,
-                {backgroundColor: theme.primary, opacity: savingEdit ? 0.7 : 1},
-              ]}
-              onPress={() => void saveEdit()}
-              disabled={savingEdit}>
-              {savingEdit ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.saveEditText}>
-                  {t('services.saveAddress') || 'Save address'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          ) : null}
-
           {editError ? (
             <Text style={styles.errorText}>{editError}</Text>
           ) : null}
+
+          {value.mode === 'edit' ? (
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnSecondary, {borderColor: theme.border}]}
+                onPress={cancelEdit}
+                disabled={savingEdit}>
+                <Text style={[styles.actionBtnText, {color: theme.text}]}>
+                  {t('request.cancel') || t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+              {!selectedIsDefault ? (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnSecondary, {borderColor: theme.border}]}
+                  onPress={() => void makeDefault()}
+                  disabled={savingEdit}>
+                  <Text style={[styles.actionBtnText, {color: theme.text}]}>
+                    {t('request.setDefaultAddress') || 'Set as usual'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  styles.actionBtnPrimary,
+                  {backgroundColor: theme.primary, opacity: savingEdit ? 0.7 : 1},
+                ]}
+                onPress={() => void saveEdit()}
+                disabled={savingEdit}>
+                {savingEdit ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={[styles.actionBtnText, {color: '#fff'}]}>
+                    {t('request.saveChanges') || t('services.saveAddress')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {value.mode === 'new' ? (
+            <View style={styles.editActions}>
+              {savedAddresses.length > 0 ? (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnSecondary, {borderColor: theme.border}]}
+                  onPress={() => {
+                    const preferred =
+                      savedAddresses.find(a => a.isDefault) || savedAddresses[0];
+                    if (preferred) selectSaved(preferred);
+                  }}
+                  disabled={savingEdit}>
+                  <Text style={[styles.actionBtnText, {color: theme.text}]}>
+                    {t('request.cancel') || t('common.cancel')}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  styles.actionBtnPrimary,
+                  {backgroundColor: theme.primary, opacity: savingEdit ? 0.7 : 1},
+                ]}
+                onPress={() => void saveNew()}
+                disabled={savingEdit}>
+                {savingEdit ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={[styles.actionBtnText, {color: '#fff'}]}>
+                    {t('request.saveAddress') || t('services.saveAddress')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
       ) : null}
+
+      <ConfirmationModal
+        visible={Boolean(pendingDelete)}
+        type="danger"
+        title={String(t('request.deleteAddressTitle') || 'Delete address?')}
+        message={String(
+          t('request.deleteAddressMessage') ||
+            'This address will be removed from your saved places.',
+        )}
+        confirmText={String(
+          t('request.deleteAddressConfirm') || t('common.delete') || 'Delete',
+        )}
+        cancelText={String(t('common.cancel') || 'Cancel')}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </View>
   );
 }
@@ -476,74 +744,76 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardsRow: {
-    gap: 10,
+    gap: 8,
     paddingBottom: 4,
     paddingRight: 8,
   },
   addressCard: {
     width: 168,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 12,
-    minHeight: 120,
+    minWidth: 168,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingRight: 52,
+    minHeight: 72,
+    position: 'relative',
   },
-  cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  cardTop: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    gap: 6,
     marginBottom: 4,
   },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  defaultBadge: {
+    fontSize: 9,
+    fontWeight: '500',
+    marginLeft: 2,
+    flexShrink: 0,
+    opacity: 0.85,
+    letterSpacing: 0,
+  },
   cardAddress: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
   },
   cardMeta: {
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: 10,
+    marginTop: 4,
   },
-  cardCheck: {
+  cardEdit: {
+    padding: 4,
+  },
+  cardActions: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-  },
-  actionRow: {
+    top: 4,
+    right: 4,
+    zIndex: 1,
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    alignItems: 'stretch',
+    gap: 2,
+  },
+  addNewChip: {
+    justifyContent: 'center',
   },
   addNewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    marginTop: 4,
+    alignSelf: 'stretch',
+    width: '100%',
+    minHeight: 48,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderRadius: 10,
-    borderStyle: 'dashed',
-  },
-  editBtn: {
-    width: 48,
-    borderWidth: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 16,
   },
   newForm: {
     marginTop: 14,
-  },
-  editHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
   },
   labelChips: {
     flexDirection: 'row',
@@ -568,15 +838,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 12,
   },
-  saveEditBtn: {
-    marginTop: 12,
+  editActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  actionBtn: {
+    flexGrow: 1,
+    minWidth: 100,
     paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  saveEditText: {
-    color: '#fff',
+  actionBtnPrimary: {},
+  actionBtnSecondary: {
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  actionBtnText: {
     fontWeight: '700',
+    fontSize: 14,
   },
   errorText: {
     color: '#E53E3E',

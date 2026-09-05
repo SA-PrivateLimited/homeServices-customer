@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import ServiceAddressPicker, {
@@ -33,8 +34,10 @@ import {
   type ServiceCategory,
 } from '../services/serviceCategoriesService';
 import {useStore} from '../store';
-import useTranslation from '../hooks/useTranslation';
 import {lightTheme, darkTheme} from '../utils/theme';
+import useTranslation from '../hooks/useTranslation';
+import {launchImageLibrary} from 'react-native-image-picker';
+import {uploadRequestPhotos} from '../utils/uploadRequestPhotos';
 
 export type RequestableProvider = {
   id?: string;
@@ -55,6 +58,7 @@ export type RequestableProvider = {
 type Props = {
   visible: boolean;
   provider: RequestableProvider | null;
+  requestedServiceType?: string;
   onClose: () => void;
   onSuccess: (serviceRequestId: string) => void;
 };
@@ -71,7 +75,12 @@ function cleanAddress(addr: ServiceAddressValue | null): ServiceAddressValue | n
   return out.address && out.pincode ? out : null;
 }
 
-function serviceTypeOf(p: RequestableProvider): string {
+function serviceTypeOf(
+  p: RequestableProvider,
+  preferred?: string,
+): string {
+  const pref = String(preferred || '').trim();
+  if (pref) return pref;
   return p.specialization || p.specialty || p.serviceType || 'Service';
 }
 
@@ -100,6 +109,7 @@ function matchCategory(
 export default function ProviderRequestModal({
   visible,
   provider,
+  requestedServiceType,
   onClose,
   onSuccess,
 }: Props) {
@@ -120,6 +130,7 @@ export default function ProviderRequestModal({
     Record<string, any>
   >({});
   const [problem, setProblem] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -127,13 +138,14 @@ export default function ProviderRequestModal({
   useEffect(() => {
     if (!visible || !provider) return;
     setProblem('');
+    setPhotos([]);
     setError(null);
     setSubmitting(false);
     setAddressSel(emptyAddressSelection({mode: 'saved'}));
     setRefreshKey(k => k + 1);
     setQuestionnaireAnswers({});
 
-    const serviceType = serviceTypeOf(provider);
+    const serviceType = serviceTypeOf(provider, requestedServiceType);
     setLoadingQuestions(true);
     void fetchServiceCategories()
       .then(cats => {
@@ -157,23 +169,13 @@ export default function ProviderRequestModal({
     }
 
     if (addressSel.mode === 'edit') {
-      setError(
-        String(
-          t('services.saveAddressFirst') ||
-            'Please save or cancel address edits first.',
-        ),
-      );
+      setError(String(t('services.saveAddressFirst')));
       return;
     }
 
     const cleaned = cleanAddress(addressSel.address);
     if (!cleaned) {
-      setError(
-        String(
-          t('common.invalidAddressMessage') ||
-            'Please enter a valid address with pincode.',
-        ),
-      );
+      setError(String(t('services.validAddressWithPincode')));
       return;
     }
 
@@ -195,15 +197,11 @@ export default function ProviderRequestModal({
         return false;
       });
       if (missing.length > 0) {
-        setError(
-          String(t('common.requiredQuestions') || 'Please answer required questions.'),
-        );
+        setError(String(t('common.pleaseAnswerRequiredQuestions')));
         return;
       }
     } else if (!problem.trim()) {
-      setError(
-        String(t('services.problemRequired') || 'Please describe the problem.'),
-      );
+      setError(String(t('services.problemRequired')));
       return;
     }
 
@@ -239,7 +237,7 @@ export default function ProviderRequestModal({
         }
       }
 
-      const serviceType = serviceTypeOf(provider);
+      const serviceType = serviceTypeOf(provider, requestedServiceType);
       const customerAddress: any = {
         ...cleaned,
         label: addressSel.label,
@@ -266,6 +264,9 @@ export default function ProviderRequestModal({
       };
       if (questionnaire.length > 0 && Object.keys(questionnaireAnswers).length) {
         payload.questionnaireAnswers = questionnaireAnswers;
+      }
+      if (photos.length) {
+        payload.photos = await uploadRequestPhotos(photos);
       }
       const phone = provider.phone || provider.phoneNumber;
       if (phone) payload.providerPhone = phone;
@@ -319,7 +320,7 @@ export default function ProviderRequestModal({
               <Text style={[styles.subtitle, {color: theme.textSecondary}]}>
                 {provider.name || t('services.selectedProvider')}
                 {' · '}
-                {serviceTypeOf(provider)}
+                {serviceTypeOf(provider, requestedServiceType)}
               </Text>
             </View>
             <TouchableOpacity
@@ -358,27 +359,20 @@ export default function ProviderRequestModal({
                   }
                   theme={theme}
                   language={language}
-                  title={String(t('services.serviceDetails') || 'Service details')}
-                  subtitle={String(
-                    t('services.answerQuestionsToHelp') ||
-                      'Please answer these questions to help us serve you better',
-                  )}
+                  title={String(t('services.serviceDetails'))}
+                  subtitle={String(t('services.answerQuestionsToHelp'))}
                   yesLabel={String(t('common.yes'))}
                   noLabel={String(t('common.no'))}
-                  selectPlaceholder={String(t('common.select') || 'Select…')}
-                  textPlaceholder={String(
-                    t('services.enterYourAnswer') || 'Enter your answer',
-                  )}
-                  numberPlaceholder={String(
-                    t('services.enterANumber') || 'Enter a number',
-                  )}
+                  selectPlaceholder={String(t('common.select'))}
+                  textPlaceholder={String(t('services.enterYourAnswer'))}
+                  numberPlaceholder={String(t('services.enterANumber'))}
                 />
               </View>
             )}
 
             <Text style={[styles.label, {color: theme.text, marginTop: 16}]}>
-              {t('services.describeProblem') || 'Describe the problem'}
-              {questionnaire.length === 0 ? ' *' : ` (${t('common.optional') || 'optional'})`}
+              {t('services.describeProblem')}
+              {questionnaire.length === 0 ? ' *' : ` (${t('common.optional')})`}
             </Text>
             <TextInput
               style={[
@@ -392,14 +386,35 @@ export default function ProviderRequestModal({
               multiline
               numberOfLines={4}
               textAlignVertical="top"
-              placeholder={
-                t('services.problemPlaceholder') ||
-                'What do you need help with?'
-              }
+              placeholder={String(t('services.problemPlaceholder'))}
               placeholderTextColor={theme.textSecondary}
               value={problem}
               onChangeText={setProblem}
             />
+            <TouchableOpacity
+              style={{marginTop: 12}}
+              onPress={() => {
+                if (photos.length >= 3) return;
+                void launchImageLibrary({
+                  mediaType: 'photo',
+                  quality: 0.8,
+                  selectionLimit: 3 - photos.length,
+                }).then(result => {
+                  const uris = (result.assets || [])
+                    .map(a => a.uri)
+                    .filter(Boolean) as string[];
+                  setPhotos(prev => [...prev, ...uris].slice(0, 3));
+                });
+              }}>
+              <Text style={{color: theme.primary, fontWeight: '700'}}>
+                {t('services.addPhotos') || 'Add photos'}
+              </Text>
+            </TouchableOpacity>
+            <View style={{flexDirection: 'row', gap: 8, marginTop: 8}}>
+              {photos.map(uri => (
+                <Image key={uri} source={{uri}} style={{width: 56, height: 56, borderRadius: 8}} />
+              ))}
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </ScrollView>

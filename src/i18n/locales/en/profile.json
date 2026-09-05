@@ -1,5 +1,6 @@
 {
   "title": "Profile",
+  "incomplete": "Profile incomplete",
   "editProfile": "Edit Profile",
   "name": "Name",
   "email": "Email",
@@ -7,6 +8,7 @@
   "address": "Address",
   "updateProfile": "Update Profile",
   "profileUpdated": "Profile updated successfully",
+  "failedToUpdateProfile": "Failed to update profile",
   "uploadPhoto": "Upload Photo",
   "changePhoto": "Change Photo",
   "fullName": "Full Name",

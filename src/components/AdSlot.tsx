@@ -1,11 +1,10 @@
 /**
- * Ad Slot component - Banner ad placeholder for monetization.
- * Uses Google AdMob test IDs by default. Replace with your ad unit IDs for production.
+ * Ad Slot — only renders real AdMob when a production unit ID is provided.
+ * Test AdMob IDs must never ship in release (Play policy).
  */
 import React, {useState} from 'react';
-import {View, Text, StyleSheet, Platform} from 'react-native';
+import {View, StyleSheet, Platform} from 'react-native';
 
-// Use real AdMob when react-native-google-mobile-ads is installed and linked
 let BannerAd: any = null;
 let BannerAdSize: any = null;
 try {
@@ -13,35 +12,47 @@ try {
   BannerAd = ads.BannerAd;
   BannerAdSize = ads.BannerAdSize;
 } catch (_) {
-  // AdMob not linked - component will render placeholder
+  // AdMob not linked
 }
 
-const BANNER_TEST_ID = Platform.OS === 'android'
-  ? 'ca-app-pub-3940256099942544/6300978111'
-  : 'ca-app-pub-3940256099942544/2934735716';
+const BANNER_TEST_ID =
+  Platform.OS === 'android'
+    ? 'ca-app-pub-3940256099942544/6300978111'
+    : 'ca-app-pub-3940256099942544/2934735716';
+
+function isGoogleSampleAdId(id?: string): boolean {
+  return Boolean(id && id.includes('ca-app-pub-3940256099942544'));
+}
 
 type AdSlotProps = {
-  /** Your AdMob banner unit ID. Omit to use test ID. */
+  /** Production AdMob banner unit ID. Required for release ads. */
   adUnitId?: string;
-  /** Slot size: 'banner' (320x50) or 'large' (320x100). */
   size?: 'banner' | 'large';
-  /** Optional style for container. */
   style?: any;
 };
 
 export default function AdSlot({adUnitId, size = 'banner', style}: AdSlotProps) {
   const [adError, setAdError] = useState(false);
-  const unitId = adUnitId || BANNER_TEST_ID;
+  const unitId = adUnitId || (__DEV__ ? BANNER_TEST_ID : '');
 
-  if (adError || !BannerAd) {
+  // Never show sample/test ads or empty slots in production builds.
+  if (!unitId || isGoogleSampleAdId(unitId) || adError || !BannerAd) {
+    if (!__DEV__) {
+      return null;
+    }
     return (
-      <View style={[styles.placeholder, size === 'large' && styles.placeholderLarge, style]}>
-        <Text style={styles.placeholderText}>Ad</Text>
-      </View>
+      <View
+        style={[
+          styles.placeholder,
+          size === 'large' && styles.placeholderLarge,
+          style,
+        ]}
+      />
     );
   }
 
-  const adSize = size === 'large' ? BannerAdSize.LARGE_BANNER : BannerAdSize.BANNER;
+  const adSize =
+    size === 'large' ? BannerAdSize.LARGE_BANNER : BannerAdSize.BANNER;
 
   return (
     <View style={[styles.container, style]}>
@@ -49,10 +60,7 @@ export default function AdSlot({adUnitId, size = 'banner', style}: AdSlotProps) 
         unitId={unitId}
         size={adSize}
         requestOptions={{requestNonPersonalizedAdsOnly: false}}
-        onAdFailedToLoad={(error: any) => {
-          console.warn('Ad failed to load:', error?.message);
-          setAdError(true);
-        }}
+        onAdFailedToLoad={() => setAdError(true)}
       />
     </View>
   );
@@ -66,16 +74,10 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     height: 50,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.04)',
     width: '100%',
   },
   placeholderLarge: {
     height: 100,
-  },
-  placeholderText: {
-    fontSize: 12,
-    color: 'rgba(0,0,0,0.3)',
   },
 });

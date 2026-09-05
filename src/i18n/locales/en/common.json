@@ -113,6 +113,7 @@
   "serviceTypeRequired": "Service Type Required",
   "serviceTypeRequiredMessage": "Please select a service type",
   "requiredQuestions": "Required Questions",
+  "pleaseAnswerRequiredQuestions": "Please answer required questions.",
   "problemDescriptionRequired": "Problem Description Required",
   "problemDescriptionRequiredMessage": "Please describe the problem",
   "addressRequired": "Address Required",

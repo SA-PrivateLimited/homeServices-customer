@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {Select} from 'sapvt-ltd-app-packages';
+import {Select, bilingualProfessionLine} from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {fetchServiceCategories, ServiceCategory} from '../services/serviceCategoriesService';
@@ -22,6 +22,7 @@ import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import {contactRecommendationsApi} from '../services/api/contactRecommendationsApi';
 import PhoneNumberInput from '../components/PhoneNumberInput';
+import {ContactPickModal} from '../components/ContactPickModal';
 import {localTenDigits, toE164} from '../utils/phone';
 
 interface ShareContactRecommendationScreenProps {
@@ -42,6 +43,7 @@ export default function ShareContactRecommendationScreen({
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [pickOpen, setPickOpen] = useState(false);
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -82,7 +84,7 @@ export default function ShareContactRecommendationScreen({
 
   const serviceTypeOptions = serviceCategories.map(cat => ({
     value: cat.name,
-    label: language === 'hi' && cat.nameHi ? cat.nameHi : cat.name,
+    label: bilingualProfessionLine(cat.name, {nameHi: cat.nameHi}),
   }));
 
   const validatePhone = (phone: string): boolean => {
@@ -90,33 +92,11 @@ export default function ShareContactRecommendationScreen({
   };
 
   const handleSubmit = async () => {
-    if (!currentUser) {
-      setAlertModal({
-        visible: true,
-        title: String(t('auth.login')),
-        message: String(t('services.loginRequired')),
-        type: 'warning',
-      });
-      navigation.navigate('Login');
-      return;
-    }
-
-    // Validation
     if (!selectedServiceType) {
       setAlertModal({
         visible: true,
         title: String(t('common.serviceTypeRequired')),
         message: String(t('common.serviceTypeRequiredMessage')),
-        type: 'warning',
-      });
-      return;
-    }
-
-    if (!providerName.trim()) {
-      setAlertModal({
-        visible: true,
-        title: String(t('common.error')),
-        message: String(t('recommendations.providerNameRequired')),
         type: 'warning',
       });
       return;
@@ -144,17 +124,21 @@ export default function ShareContactRecommendationScreen({
 
     setLoading(true);
     try {
-      const response = await contactRecommendationsApi.create({
-        recommendedProviderName: providerName.trim(),
-        recommendedProviderPhone: toE164(providerPhone),
-        serviceType: selectedServiceType,
-        address: address.trim() || undefined,
-      });
+      await contactRecommendationsApi.create(
+        {
+          recommendedProviderName:
+            providerName.trim() || String(t('providers.title') || 'Service Provider'),
+          recommendedProviderPhone: toE164(providerPhone),
+          serviceType: selectedServiceType,
+          address: address.trim() || undefined,
+        },
+        {skipAuth: !currentUser},
+      );
 
       setAlertModal({
         visible: true,
         title: String(t('common.success')),
-        message: response.message || String(t('recommendations.successMessage')),
+        message: String(t('recommendations.successMessage')),
         type: 'success',
       });
 
@@ -203,6 +187,7 @@ export default function ShareContactRecommendationScreen({
           {/* Service Type */}
           <View style={styles.formGroup}>
             <Select
+              variant="crystal"
               label={`${t('recommendations.serviceType')} *`}
               options={serviceTypeOptions}
               value={selectedServiceType}
@@ -210,6 +195,11 @@ export default function ShareContactRecommendationScreen({
               placeholder={String(t('recommendations.selectServiceType'))}
               title={String(t('services.selectServiceType'))}
               disabled={loadingCategories}
+              colors={{
+                card: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.55)',
+              }}
             />
           </View>
 
@@ -245,6 +235,13 @@ export default function ShareContactRecommendationScreen({
               textColor={theme.text}
               placeholderTextColor={theme.textSecondary}
             />
+            <TouchableOpacity
+              onPress={() => setPickOpen(true)}
+              style={{marginTop: 8}}>
+              <Text style={{color: theme.primary, fontWeight: '600', fontSize: 13}}>
+                {String(t('recommendations.pickContact') || 'Choose from contacts')}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Address (Optional) */}
@@ -294,6 +291,24 @@ export default function ShareContactRecommendationScreen({
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ContactPickModal
+        visible={pickOpen}
+        onClose={() => setPickOpen(false)}
+        onPick={(name, phone) => {
+          if (name) setProviderName(name);
+          if (phone) setProviderPhone(phone);
+        }}
+        title={String(t('recommendations.pickContact') || 'Choose from contacts')}
+        emptyLabel={String(
+          t('recommendations.pickerUnavailable') ||
+            'Could not open contacts. Enter the mobile number.',
+        )}
+        cancelLabel={String(t('common.cancel') || 'Cancel')}
+        backgroundColor={theme.background}
+        textColor={theme.text}
+        mutedColor={theme.textSecondary}
+      />
 
       {/* Alert Modal */}
       <AlertModal

@@ -1,0 +1,31 @@
+.pwa-update-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--shadow, #000) 16%, transparent);
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+html.app-shell-active .pwa-update-banner {
+  bottom: calc(var(--tabbar-h, 64px) + 12px + env(safe-area-inset-bottom, 0px));
+}
+
+.pwa-update-banner__copy {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text, #1a202c);
+}

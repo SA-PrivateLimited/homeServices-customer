@@ -1,0 +1,163 @@
+.personal-info {
+  min-width: 0;
+  width: 100%;
+}
+
+.personal-info-card {
+  margin: 0;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.personal-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.personal-info-heading {
+  min-width: 0;
+}
+
+.personal-info-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.personal-info-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--textSecondary);
+}
+
+.personal-info-edit {
+  flex-shrink: 0;
+  color: var(--primary) !important;
+}
+
+.personal-info-edit .hs-btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.personal-info-edit-text {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.personal-info-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.personal-info-field {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.personal-info-field:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.personal-info-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--textSecondary);
+  margin-bottom: 4px;
+}
+
+.personal-info-value {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.settings-verified-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--success, #38a169);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.personal-info-phone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.personal-info-locked-hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--textSecondary);
+}
+
+.personal-info-success {
+  margin: 12px 0 0;
+}
+
+/* Prevent iOS Safari zoom + scroll jump when editing profile fields */
+.personal-info-card .hs-input,
+.personal-info-card .hs-dd__trigger,
+.personal-info-card .addr-fields .hs-input,
+.personal-info-card .addr-fields .hs-dd__trigger {
+  font-size: 16px;
+}
+
+.personal-info-card .hs-input,
+.personal-info-card .hs-otp__cell {
+  scroll-margin-top: 12px;
+}
+
+.personal-info-card {
+  overflow-anchor: none;
+}
+
+.personal-info-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.personal-info-card .hs-input-wrap {
+  margin: 0;
+}
+
+.personal-info-card .hs-field-label {
+  display: none;
+}
+
+@media (max-width: 430px) {
+  .personal-info-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .personal-info-actions {
+    flex-direction: column-reverse;
+  }
+
+  .personal-info-actions .hs-btn {
+    width: 100%;
+  }
+}

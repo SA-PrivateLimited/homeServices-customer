@@ -282,14 +282,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       const updatedUser = await authService.updateUserProfile(userId, updates);
       await setCurrentUser(updatedUser);
       setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
+      setSuccessMessage(String(t('profile.profileUpdated')));
       setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error updating profile:', error);
       setAlertModal({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Failed to update profile',
+        title: String(t('common.error')),
+        message: error.message || String(t('profile.failedToUpdateProfile')),
         type: 'error',
       });
     } finally {
@@ -506,7 +506,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           <View style={{flex: 1, alignItems: 'flex-end'}}>
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
               <Text style={[styles.infoValue, {color: phone ? theme.text : theme.textSecondary}]}>
-                {phone || 'Not set'}
+                {phone || t('profile.notSet')}
               </Text>
               {currentUser?.phoneVerified ? (
                 <Icon name="lock-closed" size={16} color={theme.textSecondary} />
@@ -647,12 +647,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
           </View>
           {isEditing ? (
             <Select
+              variant="crystal"
               options={genderOptions.map(o => ({value: o, label: o}))}
               value={gender}
               onChange={setGender}
               placeholder={t('profile.selectGender')}
               title={t('profile.selectGender')}
               style={{flex: 1, marginBottom: 0}}
+              colors={{
+                card: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.55)',
+              }}
             />
           ) : (
             <Text style={[styles.infoValue, {color: theme.text}]}>

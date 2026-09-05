@@ -1,0 +1,104 @@
+.akanso-support-chip {
+  position: fixed;
+  z-index: 45;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: auto;
+  bottom: calc(var(--tabbar-h, 52px) + var(--safe-bottom, 0px) + 16px);
+  transform: translate3d(0, var(--vv-offset-top, 0px), 0);
+  display: inline-flex;
+  align-items: center;
+  max-width: 44px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 12%, var(--card)),
+    color-mix(in srgb, var(--primary) 18%, var(--card))
+  );
+  backdrop-filter: blur(14px) saturate(145%);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 6px 18px color-mix(in srgb, var(--primary) 18%, rgba(0, 0, 0, 0.1));
+  color: var(--primary);
+  pointer-events: auto;
+}
+
+.akanso-support-chip__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  width: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.akanso-support-chip__art {
+  display: block;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.akanso-support-chip__label {
+  display: none;
+}
+
+.akanso-support-chip__open:hover {
+  color: var(--primaryDark, var(--primary));
+}
+
+.akanso-support-chip__open:hover .akanso-support-chip__label {
+  color: var(--primaryDark, var(--primary));
+}
+
+.akanso-support-chip__open:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* Request page: fixed CTA sits above tab bar — lift Help chip above it (mobile). */
+@media (max-width: 860px) {
+  .app-shell--request .akanso-support-chip {
+    bottom: calc(
+      var(--tabbar-h, 52px) + var(--safe-bottom, 0px) +
+        var(--request-cta-stack-h, 72px) + 10px
+    );
+  }
+}
+
+@media (min-width: 900px) {
+  .akanso-support-chip {
+    left: auto;
+    right: max(24px, env(safe-area-inset-right, 0px));
+    bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+html.keyboard-open .akanso-support-chip {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+@media (min-width: 861px) {
+  html.keyboard-open .akanso-support-chip {
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+  }
+}

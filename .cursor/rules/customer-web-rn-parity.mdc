@@ -1,0 +1,25 @@
+---
+description: Customer web → HomeServices RN parity mission (always on)
+alwaysApply: true
+---
+
+# Customer Web → RN Parity
+
+**Mission:** Make `HomeServices` (Customer React Native) match `homeServices-customer-web`. Web is source of truth.
+
+## Standing prompt (full)
+Read and follow: `docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md`
+
+## Before any UI change
+1. Find matching page/CSS in `../homeServices-customer-web/`.
+2. Map web → RN screen (table in the standing prompt).
+3. Port via `src/fromWebCss/` + StyleSheet; approximate `color-mix` / glass.
+4. Sync i18n (`src/i18n/locales/web/`); never show raw keys.
+5. Honor `homeservices-backend` contracts — no invented API behavior.
+
+## Non-negotiable
+- Do not change `applicationId` `com.homeservices.customer`.
+- Preserve multi-role handoff, auth (Mobile→PIN; OTP only signup/forgot), phone privacy.
+- Do not remount tab navigators on theme/night-vision toggles.
+- Prefer `sapvt-ltd-app-packages` before duplicating UI.
+- User-first Hindi/English; no backend jargon.

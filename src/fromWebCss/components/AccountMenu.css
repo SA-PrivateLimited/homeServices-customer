@@ -1,0 +1,297 @@
+.account-menu {
+  position: relative;
+}
+
+.account-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px 6px 4px 4px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.account-menu-trigger:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.account-menu-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.account-menu-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 18%, white);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.account-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 16px;
+  border: none;
+  /* Opaque crystal — soft tint + shine, content behind stays unreadable */
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--card) 96%, var(--primary)),
+    color-mix(in srgb, var(--card) 90%, var(--primary))
+  );
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 16px 40px rgba(30, 60, 90, 0.16);
+}
+
+.account-menu-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.account-menu-identity strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.account-menu-identity span {
+  font-size: 12px;
+  color: var(--textSecondary);
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.account-menu-item:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.account-menu-item--danger {
+  color: var(--error, #ff3b30);
+}
+
+.account-menu-mode {
+  padding: 4px 0 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-menu-mode-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primaryDark);
+}
+
+.account-menu-mode-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.account-menu-mode-copy strong {
+  font-weight: 650;
+}
+
+.account-menu-mode-copy em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--textSecondary);
+  line-height: 1.35;
+}
+
+.account-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.account-menu-toggle:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.account-menu-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.account-menu-toggle-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-menu-toggle-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease;
+}
+
+.account-menu-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.account-menu-toggle-input:checked + .account-menu-toggle-track {
+  background: var(--primary);
+}
+
+.account-menu-toggle-input:checked + .account-menu-toggle-track::after {
+  transform: translateX(18px);
+}
+
+.account-menu-toggle-input:focus-visible + .account-menu-toggle-track {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.account-menu-themes {
+  padding: 8px 8px 10px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-menu-themes-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 0 4px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.account-menu-themes-swatches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.account-menu-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--textSecondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-menu-theme-swatch:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.account-menu-theme-swatch.is-selected {
+  border-color: color-mix(in srgb, var(--theme-swatch, var(--primary)) 45%, transparent);
+  background: color-mix(in srgb, var(--theme-swatch, var(--primary)) 12%, transparent);
+  color: var(--text);
+}
+
+.account-menu-theme-swatch:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.account-menu-theme-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--theme-swatch, var(--primary));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.account-menu-theme-swatch.is-selected .account-menu-theme-dot {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--theme-swatch, var(--primary));
+}
+
+.account-menu-theme-name {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+

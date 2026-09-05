@@ -3,6 +3,9 @@
   "serviceProvider": "सेवा प्रदाता",
   "loading": "प्रदाता लोड हो रहे हैं…",
   "searchProviders": "प्रदाता खोजें",
+  "callProvider": "सेवा प्रदाता को कॉल करें",
+  "contactProvider": "सेवा प्रदाता से संपर्क करें",
+  "offline": "ऑफलाइन",
   "noProvidersFound": "कोई प्रदाता नहीं मिला",
   "noProvidersFoundMessage": "कोई प्रदाता नहीं मिला। बाद में फिर से जांचें!",
   "tryAdjustingFilters": "अपने फ़िल्टर समायोजित करने का प्रयास करें",
@@ -28,7 +31,8 @@
   "qualifications": "योग्यताएं",
   "serviceType": "सेवा प्रकार",
   "customerReviews": "ग्राहक समीक्षाएं",
-  "requestService": "सेवा का अनुरोध करें",
+  "noReviewsYet": "अभी कोई समीक्षा नहीं",
+  "requestService": "सेवा के लिए अनुरोध करें",
   "pleaseLoginToRequest": "सेवा का अनुरोध करने के लिए कृपया लॉगिन करें",
   "browseProviders": "प्रदाता ब्राउज़ करें",
   "providerDetails": "प्रदाता विवरण",
@@ -41,6 +45,10 @@
   "allDistricts": "सभी ज़िले",
   "district": "ज़िला",
   "submitRequest": "अनुरोध भेजें",
-  "requestSentTitle": "अनुरोध भेज दिया गया"
+  "requestSentTitle": "अनुरोध भेज दिया गया",
+  "contactAfterAccept": "सेवा अनुरोध स्वीकार होने के बाद आप सेवा प्रदाता से संपर्क कर सकते हैं।",
+  "contactInactive": "इस अनुरोध के लिए सेवा प्रदाता का फ़ोन नंबर अब उपलब्ध नहीं है।",
+  "contactMasked": "सीधे कॉल उपलब्ध नहीं है। सेवा अनुरोध भेजें।",
+  "contactActiveOnly": "सेवा प्रदाता का फ़ोन नंबर केवल सक्रिय अनुरोध के दौरान दिखता है।",
+  "contactUnavailable": "सेवा प्रदाता से संपर्क अभी उपलब्ध नहीं है।"
 }
-

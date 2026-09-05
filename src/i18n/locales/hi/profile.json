@@ -1,5 +1,6 @@
 {
   "title": "प्रोफ़ाइल",
+  "incomplete": "प्रोफ़ाइल अधूरी है",
   "editProfile": "प्रोफ़ाइल संपादित करें",
   "name": "नाम",
   "email": "ईमेल",
@@ -7,6 +8,7 @@
   "address": "पता",
   "updateProfile": "प्रोफ़ाइल अपडेट करें",
   "profileUpdated": "प्रोफ़ाइल सफलतापूर्वक अपडेट की गई",
+  "failedToUpdateProfile": "प्रोफ़ाइल अपडेट नहीं हो सकी",
   "uploadPhoto": "फ़ोटो अपलोड करें",
   "changePhoto": "फ़ोटो बदलें",
   "fullName": "पूरा नाम",

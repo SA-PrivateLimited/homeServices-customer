@@ -1,0 +1,507 @@
+/**
+ * Customer shell — mobile bottom tabs + marketplace sticky top bar (no desktop sidebar).
+ */
+
+.app-shell {
+  --mobile-header-h: var(--topbar-h, 56px);
+  height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+html.app-shell-active .app-shell {
+  height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+}
+
+/* —— Sticky marketplace top bar —— */
+.app-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  min-height: calc(var(--topbar-h, 56px) + var(--safe-top, 0px));
+  padding-top: var(--safe-top, 0px);
+  /* Opaque crystal — scrolled list content must not bleed through on iOS. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card, #fff) 96%, var(--background, #f8fafc)),
+    color-mix(in srgb, var(--card, #fff) 93%, var(--background, #f8fafc))
+  );
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow:
+    inset 0 -1px 0 var(--crystal-highlight, rgba(255, 255, 255, 0.72)),
+    0 2px 12px color-mix(in srgb, var(--shadow, #000) 6%, transparent);
+}
+
+.app-topbar.is-hidden {
+  display: none;
+}
+
+.app-topbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: var(--topbar-h, 56px);
+  padding: 0 14px;
+}
+
+.app-topbar__leading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.app-topbar__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.app-topbar__logo {
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.app-topbar__brand-name {
+  display: none;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.app-topbar__page-title {
+  min-width: 0;
+}
+
+.app-topbar__page-title h1,
+.app-topbar__page-title .header-page-label {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-topbar__nav {
+  display: none;
+}
+
+.app-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.header-icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.header-icon-btn:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+.header-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.header-text-btn {
+  border: none;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: var(--radius-button);
+  transition: background 160ms ease;
+}
+
+.header-text-btn:hover {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.header-text-btn--signin {
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+  margin-inline-start: 2px;
+  transform-origin: right center;
+}
+
+.header-text-btn--signin-pulse {
+  animation: header-signin-pulse 3.5s ease-in-out 5;
+}
+
+@keyframes header-signin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+  50% {
+    transform: scale(1.03);
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-text-btn--signin-pulse {
+    animation: none;
+  }
+}
+
+html.night-vision .header-text-btn {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 22%, var(--card));
+}
+
+html.night-vision .header-text-btn:hover {
+  background: color-mix(in srgb, var(--primary) 30%, var(--card));
+}
+
+.header-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--error, #e53e3e);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  padding: calc(var(--mobile-header-h) + var(--safe-top, 0px) + 12px) 14px
+    calc(var(--tabbar-h) + var(--safe-bottom) + 14px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  scroll-padding-top: calc(var(--mobile-header-h) + var(--safe-top, 0px) + 12px);
+  scroll-padding-bottom: calc(
+    var(--tabbar-h) + var(--safe-bottom) + var(--keyboard-inset, 0px) +
+      var(--request-cta-bar-h, 56px) + 24px
+  );
+}
+
+.app-main > * {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+html.keyboard-open .app-main {
+  padding-bottom: calc(var(--keyboard-inset, 0px) + 72px);
+}
+
+.app-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: calc(var(--tabbar-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  padding-top: 4px;
+  display: flex;
+  background: color-mix(in srgb, var(--card) 92%, white);
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 -2px 12px rgba(30, 60, 90, 0.04);
+  z-index: 40;
+  transform: none;
+  transition: transform 160ms ease-out;
+}
+
+html.keyboard-open .app-tabbar {
+  transform: translate3d(0, 100%, 0);
+  pointer-events: none;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--textSecondary);
+  font-size: 11px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-height: 48px;
+  min-width: 0;
+  padding: 4px 2px;
+}
+
+.tab-item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.tab-item.is-active {
+  color: var(--primary);
+}
+
+.tab-item .material-symbols-outlined,
+.tab-item .hs-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Material Symbols Outlined', sans-serif !important;
+  font-size: 24px !important;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  color: inherit;
+}
+
+.tab-item.is-active .material-symbols-outlined,
+.tab-item.is-active .hs-icon {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  color: var(--primary);
+}
+
+/* —— Desktop marketplace layout —— */
+@media (min-width: 861px) {
+  .app-shell {
+    min-height: 100vh;
+    height: 100vh;
+    max-height: 100vh;
+    --mobile-header-h: 64px;
+    --topbar-h: 64px;
+  }
+
+  .app-topbar {
+    box-shadow:
+      inset 0 -1px 0 var(--crystal-highlight, rgba(255, 255, 255, 0.72)),
+      0 8px 24px color-mix(in srgb, var(--shadow, #000) 8%, transparent);
+  }
+
+  .app-topbar__inner {
+    padding: 0 clamp(24px, 3vw, 48px);
+    min-height: 64px;
+    gap: 20px;
+  }
+
+  .app-topbar__brand-name {
+    display: inline;
+  }
+
+  /* Page title is for mobile chrome; desktop uses in-page headings + top links. */
+  .app-topbar__page-title {
+    display: none;
+  }
+
+  .app-topbar__nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .app-topbar__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--textSecondary);
+    text-decoration: none;
+    font: inherit;
+    font-size: 0.925rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 160ms ease, color 160ms ease;
+  }
+
+  .app-topbar__link:hover,
+  .app-topbar__link:focus-visible {
+    color: var(--text);
+    background: color-mix(in srgb, var(--primary) 12%, var(--card));
+    outline: none;
+  }
+
+  .app-topbar__link.is-active {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 16%, var(--card));
+  }
+
+  .app-topbar__link.is-active:hover,
+  .app-topbar__link.is-active:focus-visible {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 20%, var(--card));
+  }
+
+  .app-topbar__mobile-only {
+    display: none;
+  }
+
+  .app-main {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding: calc(64px + 28px) clamp(24px, 3vw, 48px) 48px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scroll-padding-top: 12px;
+    scroll-padding-bottom: 24px;
+  }
+
+  html.keyboard-open .app-main {
+    padding-bottom: 48px;
+  }
+
+  html.keyboard-open .app-tabbar {
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .app-tabbar {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .app-main {
+    padding: calc(64px + 32px) clamp(32px, 3.5vw, 56px) 56px;
+  }
+}
+
+.app-shell-help-dialog.hs-modal {
+  width: min(100%, 480px);
+}
+
+.app-shell-help-dialog .hs-dialog {
+  max-height: min(88dvh, 640px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell-help-dialog .hs-dialog__body {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (max-width: 430px) {
+  .app-topbar__page-title h1,
+  .app-topbar__page-title .header-page-label {
+    font-size: 15px;
+    max-width: min(42vw, 150px);
+  }
+
+  .app-topbar__actions {
+    gap: 12px;
+  }
+}
+
+/* Night vision — top nav links must stay readable on hover/focus */
+html.night-vision .app-topbar {
+  box-shadow:
+    inset 0 -1px 0 var(--crystal-highlight),
+    0 2px 12px rgba(0, 0, 0, 0.28);
+}
+
+@media (min-width: 861px) {
+  html.night-vision .app-topbar__link {
+    color: var(--textSecondary);
+  }
+
+  html.night-vision .app-topbar__link:hover,
+  html.night-vision .app-topbar__link:focus-visible {
+    color: var(--text);
+    background: color-mix(in srgb, var(--primary) 18%, var(--card));
+  }
+
+  html.night-vision .app-topbar__link.is-active {
+    color: color-mix(in srgb, var(--primary) 72%, white);
+    background: color-mix(in srgb, var(--primary) 22%, var(--card));
+  }
+
+  html.night-vision .app-topbar__link.is-active:hover,
+  html.night-vision .app-topbar__link.is-active:focus-visible {
+    color: color-mix(in srgb, var(--primary) 80%, white);
+    background: color-mix(in srgb, var(--primary) 26%, var(--card));
+  }
+}

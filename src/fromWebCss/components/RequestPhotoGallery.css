@@ -1,0 +1,22 @@
+.request-photo-gallery {
+  margin-top: 12px;
+}
+
+.request-photo-gallery__label {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.request-photo-gallery .photo-thumb {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.request-photo-gallery .photo-thumb:focus-visible {
+  outline: 2px solid var(--primary, #2563eb);
+  outline-offset: 2px;
+}

@@ -17,7 +17,12 @@ Wired from `ai-agent-cursor-claude` for the **Customer mobile app**.
 ## Entry point
 Always start with `agent-context/[ticket-id]/AGENT_KICKOFF.md`.
 
+For **customer-web → RN parity** (ongoing product mission), use:
+
+`docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md`
+
 ## Key files
 - `CODEBASE_CONTEXT.md` — this app's patterns (read before Stage 2)
 - `baseline.md` — design / API conventions
+- `docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md` — standing web parity prompt
 - `agent-context/[ticket-id]/REUSABLE_INVENTORY.md` — reuse first

@@ -35,11 +35,13 @@ export interface CreateContactRecommendationRequest {
  */
 export async function createContactRecommendation(
   data: CreateContactRecommendationRequest,
-): Promise<{data: ContactRecommendation; message: string; pointsAwarded: number}> {
+  opts?: {skipAuth?: boolean},
+): Promise<ContactRecommendation> {
   try {
-    return await apiPost<{data: ContactRecommendation; message: string; pointsAwarded: number}>(
+    return await apiPost<ContactRecommendation>(
       '/contactRecommendations',
       data,
+      {skipAuth: opts?.skipAuth},
     );
   } catch (error) {
     console.error('Error creating contact recommendation:', error);

@@ -15,9 +15,32 @@ export interface GeographyDistrict {
   pincode?: string;
 }
 
+export interface GeographyBlock {
+  _id: string;
+  name: string;
+  districtId: string;
+  districtName: string;
+  stateId: string;
+  stateName: string;
+}
+
 export interface GeographyMeta {
   states: GeographyState[];
   districts: GeographyDistrict[];
+  blocks?: GeographyBlock[];
+}
+
+export interface ResolvedGeographyLocation {
+  stateId: string;
+  districtId: string;
+  blockId?: string;
+  blockName?: string;
+  stateName: string;
+  districtName: string;
+  label: string;
+  pincode?: string;
+  addressLine?: string;
+  landmark?: string;
 }
 
 const STORAGE_KEY = 'hs_geography_meta_v1';
@@ -32,6 +55,7 @@ function normalize(data: GeographyMeta | null | undefined): GeographyMeta {
   return {
     states: data?.states || [],
     districts: data?.districts || [],
+    blocks: data?.blocks || [],
   };
 }
 
@@ -137,6 +161,17 @@ async function softRefresh(previous: GeographyMeta): Promise<void> {
   }
 }
 
+/** Clear in-memory + AsyncStorage geography cache (e.g. when blocks missing). */
+export async function clearGeographyMetaCache(): Promise<void> {
+  memoryCache = null;
+  inflight = null;
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 /** Whether a warm cache is already available (memory). */
 export function hasWarmGeographyMeta(): boolean {
   return Boolean(memoryCache?.states?.length || memoryCache?.districts?.length);
@@ -145,4 +180,31 @@ export function hasWarmGeographyMeta(): boolean {
 /** Peek memory cache synchronously (may be empty on cold start). */
 export function peekGeographyMeta(): GeographyMeta | null {
   return memoryCache ? normalize(memoryCache) : null;
+}
+
+/** Backend reverse geocode → Akanso state/district (same contract as web). */
+export async function resolveGeographyFromCoordinates(
+  lat: number,
+  lon: number,
+): Promise<ResolvedGeographyLocation> {
+  const qs = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+  });
+  try {
+    return await apiGet<ResolvedGeographyLocation>(
+      `/geography/resolve?${qs.toString()}`,
+      {skipAuth: true},
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '';
+    const code = message.includes('404')
+      ? 'nomatch'
+      : message.includes('502')
+        ? 'geocode'
+        : message.includes('400')
+          ? 'invalid'
+          : 'unavailable';
+    throw Object.assign(new Error(code), {code});
+  }
 }

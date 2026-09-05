@@ -1,6 +1,8 @@
 {
   "title": "Notifications",
   "noNotifications": "No notifications",
+  "noNotificationsHint": "You're all caught up. Alerts will appear here.",
+  "empty": "No notifications yet.",
   "markAllAsRead": "Mark all as read",
   "markAllRead": "Mark all as read",
   "clearAll": "Clear all",

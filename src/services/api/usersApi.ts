@@ -3,7 +3,8 @@
  * Handles all user operations via backend API
  */
 
-import {apiGet, apiPut} from './apiClient';
+import {apiGet, apiPut, apiDelete} from './apiClient';
+import {uploadAssetFromUri} from './assetsApi';
 
 export interface User {
   _id?: string;
@@ -63,9 +64,14 @@ export interface User {
     pincode?: string;
     latitude?: number;
     longitude?: number;
+    isDefault?: boolean;
   }>;
   profileImage?: string;
+  photoURL?: string;
   gender?: string;
+  customerDisplayId?: number | string | null;
+  customerProfileComplete?: boolean;
+  canSwitchToPartner?: boolean;
   bloodGroup?: string;
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -93,6 +99,39 @@ export async function updateMe(updates: Partial<User>): Promise<User> {
 }
 
 /**
+ * Profile photo: upload-url (customer-profile) → PUT binary → PUT /users/me.
+ * Same asset path as customer-web uploadMyProfileImage (RN URI, not File).
+ */
+export async function uploadMyProfileImage(
+  localUri: string,
+): Promise<{profileImage?: string; url?: string} & Partial<User>> {
+  const uri = String(localUri || '').trim();
+  if (!uri) {
+    throw new Error('No photo selected');
+  }
+  const ref = await uploadAssetFromUri(uri, {
+    purpose: 'customer-profile',
+    fileName: 'profile.jpg',
+    contentType: 'image/jpeg',
+  });
+  const user = await updateMe({
+    profileImage: ref.url,
+    photoURL: ref.url,
+  });
+  const url = user.profileImage || ref.url;
+  return {...user, profileImage: url, url};
+}
+
+export async function updateFcmToken(userId: string, fcmToken: string): Promise<void> {
+  await apiPut(`/users/${userId}/fcmToken`, {fcmToken});
+}
+
+/** Permanently delete the signed-in customer account. */
+export async function deleteMe(): Promise<void> {
+  await apiDelete('/users/me');
+}
+
+/**
  * Get user by ID (if needed for admin/provider endpoints)
  */
 export async function getUserById(userId: string): Promise<User | null> {
@@ -109,5 +148,8 @@ export async function getUserById(userId: string): Promise<User | null> {
 export const usersApi = {
   getMe,
   updateMe,
+  uploadMyProfileImage,
+  updateFcmToken,
+  deleteMe,
   getById: getUserById,
 };

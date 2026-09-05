@@ -1,0 +1,55 @@
+.install-akanso {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--card, #fff));
+}
+
+.install-akanso--compact {
+  padding: 10px 4px;
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  align-items: center;
+}
+
+.install-akanso--compact .install-akanso__copy strong {
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.install-akanso--compact .install-akanso__copy p {
+  display: none;
+}
+
+.install-akanso__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-akanso__copy strong {
+  display: block;
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.install-akanso__copy p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--textSecondary);
+}
+
+.install-akanso__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}

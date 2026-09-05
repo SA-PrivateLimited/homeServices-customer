@@ -1,5 +1,6 @@
 {
   "title": "How was your service?",
+  "subtitle": "{{service}} by {{name}}",
   "rateExperience": "Rate your experience",
   "excellent": "Excellent!",
   "great": "Great!",
@@ -10,18 +11,48 @@
   "whatMadeItAverage": "What made it average?",
   "whatMadeItPoor": "What made it poor?",
   "tellUsMore": "Tell us more (optional)",
-  "shareExperience": "Share your experience...",
-  "addPhoto": "Add Photo",
-  "submitReview": "Submit Review",
+  "commentPlaceholder": "Share your experience...",
+  "addPhoto": "Add Photo ({{count}}/3)",
   "skip": "Skip",
+  "submitReview": "Submit Review",
+  "ratingRequiredTitle": "Rating Required",
+  "ratingRequiredMessage": "Please select a rating",
+  "thankYouTitle": "Thank You!",
+  "thankYouMessage": "Your review has been submitted.",
+  "photoError": "Failed to add photo. Please try again.",
+  "submitError": "Failed to submit review. Please try again.",
   "skipTitle": "Skip Review?",
   "skipMessage": "You can review this service later from your history.",
-  "ratingRequired": "Rating Required",
-  "pleaseSelectRating": "Please select a rating",
-  "thankYou": "Thank You!",
-  "reviewSubmitted": "Your review has been submitted.",
+  "skipConfirm": "Skip",
   "error": "Error",
-  "failedToUploadPhoto": "Failed to upload photo. Please try again.",
-  "failedToSubmitReview": "Failed to submit review. Please try again."
+  "suggestion": {
+    "professional": "Professional",
+    "onTime": "On Time",
+    "cleanTidy": "Clean & Tidy",
+    "goodCommunication": "Good Communication",
+    "qualityWork": "Quality Work",
+    "friendly": "Friendly",
+    "wellEquipped": "Well Equipped",
+    "solvedProblem": "Solved Problem",
+    "averageService": "Average Service",
+    "couldBeBetter": "Could Be Better",
+    "roomForImprovement": "Room for Improvement",
+    "satisfactory": "Satisfactory",
+    "lateArrival": "Late Arrival",
+    "poorQuality": "Poor Quality",
+    "unprofessional": "Unprofessional",
+    "notClean": "Not Clean",
+    "poorCommunication": "Poor Communication",
+    "didNotComplete": "Did Not Complete",
+    "overcharged": "Overcharged",
+    "rudeBehavior": "Rude Behavior"
+  },
+  "comments": {
+    "postFailed": "Failed to post comment"
+  },
+  "role": {
+    "customer": "Customer",
+    "provider": "Provider",
+    "admin": "Admin"
+  }
 }
-
