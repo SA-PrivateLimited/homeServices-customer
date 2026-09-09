@@ -146,6 +146,14 @@ export async function uploadAssetFromUri(
 
   await putBinaryToUploadUrl({...session, uploadUrl}, body);
 
+  if (contentType.startsWith('image/') && contentType !== 'image/svg+xml') {
+    try {
+      await apiPost('/assets/optimize', {key: session.key});
+    } catch {
+      /* best-effort */
+    }
+  }
+
   let publicUrl = session.url;
   if (
     Platform.OS === 'android' &&

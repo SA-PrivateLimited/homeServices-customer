@@ -397,7 +397,7 @@ export default function ProviderRequestModal({
                 if (photos.length >= 3) return;
                 void launchImageLibrary({
                   mediaType: 'photo',
-                  quality: 0.8,
+                  quality: 0.75,
                   selectionLimit: 3 - photos.length,
                 }).then(result => {
                   const uris = (result.assets || [])

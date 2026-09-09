@@ -1092,7 +1092,7 @@ export default function ServiceRequestScreen({
     if (!ok) return null;
     const result = await launchCamera({
       mediaType: 'photo',
-      quality: 0.8,
+      quality: 0.75,
       saveToPhotos: false,
     });
     if (result.didCancel || result.errorCode) return null;
@@ -1104,7 +1104,7 @@ export default function ServiceRequestScreen({
     if (remaining <= 0) return null;
     const result = await launchImageLibrary({
       mediaType: 'photo',
-      quality: 0.8,
+      quality: 0.75,
       selectionLimit: remaining,
     });
     if (result.didCancel || result.errorCode) return null;
