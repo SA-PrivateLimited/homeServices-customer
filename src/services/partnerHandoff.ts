@@ -18,7 +18,7 @@ export async function exchangeContextHandoff(
   return apiPost('/auth/context/exchange', {code: handoffCode}, {skipAuth: true});
 }
 
-export const PARTNER_WEB_URL = 'https://partner.akanso.in';
+export const PARTNER_WEB_URL = 'https://partner.akansho.com';
 
 export function partnerHandoffUrl(code: string): string {
   const safe = typeof code === 'string' ? code.trim() : '';

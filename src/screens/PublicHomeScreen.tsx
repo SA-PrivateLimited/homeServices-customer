@@ -114,7 +114,7 @@ export default function PublicHomeScreen({navigation}: any) {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={[styles.brand, {color: theme.text}]}>Akanso</Text>
+          <Text style={[styles.brand, {color: theme.text}]}>Akansho</Text>
         </View>
         <Text style={[styles.h1, {color: theme.text}]}>{t('home.h1')}</Text>
         <Text style={[styles.lead, {color: theme.textSecondary}]}>

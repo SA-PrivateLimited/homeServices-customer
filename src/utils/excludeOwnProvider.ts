@@ -1,5 +1,5 @@
 /**
- * Defensive filter: never present the current Akanso user's own Partner
+ * Defensive filter: never present the current Akansho user's own Partner
  * profile as a hireable provider. Authoritative exclusion lives on the API.
  * Provider._id === User._id in this codebase.
  */

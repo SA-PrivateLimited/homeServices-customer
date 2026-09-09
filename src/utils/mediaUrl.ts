@@ -22,13 +22,13 @@ export function isUsableMediaUrl(raw: string): boolean {
     const origin =
       typeof window !== 'undefined'
         ? window.location.origin
-        : 'https://akanso.in';
+        : 'https://akansho.com';
     const parsed = new URL(url, origin);
     const path = parsed.pathname;
 
     if (isBareUuidPath(path)) return false;
 
-    if (/^assets\.akanso\.in$/i.test(parsed.hostname)) return true;
+    if (/^assets\.(akanso\.in|akansho\.com)$/i.test(parsed.hostname)) return true;
     if (path.startsWith('/uploads/')) return true;
     if (SAME_ORIGIN_STATIC.test(path) || /^\/logo\.(png|svg)$/i.test(path)) {
       return true;

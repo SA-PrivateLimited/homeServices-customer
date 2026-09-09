@@ -1349,7 +1349,7 @@ export default function ActiveServiceScreen({
   const heroSub = activePhaseSubtitle(phase, {
     providerName: assignedProviderName || undefined,
     serviceType: serviceLabel,
-    brandName: 'Akanso',
+    brandName: 'Akansho',
   });
   const waiting = phase === 'finding' || phase === 'waiting-accept';
   const canEdit = status === 'pending';

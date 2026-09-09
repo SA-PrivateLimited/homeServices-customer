@@ -182,7 +182,7 @@ export function peekGeographyMeta(): GeographyMeta | null {
   return memoryCache ? normalize(memoryCache) : null;
 }
 
-/** Backend reverse geocode → Akanso state/district (same contract as web). */
+/** Backend reverse geocode → Akansho state/district (same contract as web). */
 export async function resolveGeographyFromCoordinates(
   lat: number,
   lon: number,

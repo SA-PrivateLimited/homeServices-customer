@@ -245,7 +245,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@sa-privatelimited.com').catch(() => {
+    Linking.openURL('mailto:support@akansho.com').catch(() => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -795,8 +795,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
             fontSize: 12,
             color: theme.textSecondary,
           }}>
-          {String(t('login.productName') || 'Akanso')} · ©{' '}
-          {COPYRIGHT_OWNER || 'Akanso Pvt Ltd'}
+          {String(t('login.productName') || 'Akansho')} · ©{' '}
+          {COPYRIGHT_OWNER || 'Akansho Pvt Ltd'}
         </Text>
       </ScrollView>
 
@@ -897,7 +897,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                 <Text style={[styles.modalTitle, {color: theme.text}]}>
                   {String(
                     t('settings.aboutBrand', {
-                      brand: t('login.productName') || 'Akanso',
+                      brand: t('login.productName') || 'Akansho',
                     }) || t('settings.about'),
                   )}
                 </Text>
@@ -909,7 +909,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                 {String(t('settings.version', {version: '1.0.0'}) || 'Version 1.0.0')}
               </Text>
               <Text style={{color: theme.textSecondary, marginBottom: 12}}>
-                © {COPYRIGHT_OWNER || 'Akanso Pvt Ltd'}
+                © {COPYRIGHT_OWNER || 'Akansho Pvt Ltd'}
               </Text>
               <ShareAkansoPanel />
               <TouchableOpacity

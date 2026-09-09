@@ -10,5 +10,5 @@ Standing agent context for replicating **homeServices-customer-web** into **Home
 ## Quick start
 
 ```text
-Continue Akanso Customer web→RN parity per HomeServices/docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md. Match [screen name or attach screenshot].
+Continue Akansho Customer web→RN parity per HomeServices/docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md. Match [screen name or attach screenshot].
 ```

@@ -60,7 +60,7 @@ function normalizeGreetingConfig(
     state,
     closeMode,
     waveId: String(raw?.waveId || '').trim() || 'default',
-    greeting: String(raw?.greeting || '').trim() || 'Akanso',
+    greeting: String(raw?.greeting || '').trim() || 'Akansho',
     message: String(raw?.message || '').trim(),
     icon: normalizeIconName(raw?.icon),
     logoAccentUrl: normalizeLogoAccentUrl(raw?.logoAccentUrl),

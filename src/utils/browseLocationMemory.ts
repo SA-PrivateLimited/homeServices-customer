@@ -33,18 +33,18 @@ export type SearchLocationRecord = StoredPlace & {
   updatedAt: string;
 };
 
-export type AkansoLocationMemory = {
+export type AkanshoLocationMemory = {
   version: 1;
   permission?: LocationPermission;
   device?: DeviceLocationRecord;
   search?: SearchLocationRecord;
 };
 
-export async function readLocationMemory(): Promise<AkansoLocationMemory | null> {
+export async function readLocationMemory(): Promise<AkanshoLocationMemory | null> {
   try {
     const raw = await AsyncStorage.getItem(BROWSE_LOCATION_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as AkansoLocationMemory;
+    const parsed = JSON.parse(raw) as AkanshoLocationMemory;
     if (!parsed || parsed.version !== 1) return null;
     return parsed;
   } catch {
@@ -53,7 +53,7 @@ export async function readLocationMemory(): Promise<AkansoLocationMemory | null>
 }
 
 export async function writeLocationMemory(
-  next: AkansoLocationMemory | null,
+  next: AkanshoLocationMemory | null,
 ): Promise<void> {
   try {
     if (!next) {
@@ -67,10 +67,10 @@ export async function writeLocationMemory(
 }
 
 export async function patchLocationMemory(
-  patch: Partial<AkansoLocationMemory>,
-): Promise<AkansoLocationMemory> {
+  patch: Partial<AkanshoLocationMemory>,
+): Promise<AkanshoLocationMemory> {
   const current = (await readLocationMemory()) || {version: 1 as const};
-  const merged: AkansoLocationMemory = {
+  const merged: AkanshoLocationMemory = {
     ...current,
     ...patch,
     version: 1,

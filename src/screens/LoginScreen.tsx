@@ -729,8 +729,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       style={web.utilBtn}
                       onPress={() => {
                         void Share.share({
-                          message: String(t('login.utilShareHint')) + ' https://akanso.in',
-                          url: 'https://akanso.in',
+                          message: String(t('login.utilShareHint')) + ' https://akansho.com',
+                          url: 'https://akansho.com',
                         });
                       }}>
                       <Icon name="share-social-outline" size={20} color={WEB.primary} />
@@ -748,7 +748,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   <View style={web.extrasBottom}>
                     <TouchableOpacity
                       style={web.partnerLink}
-                      onPress={() => void Linking.openURL('https://partner.akanso.in')}>
+                      onPress={() => void Linking.openURL('https://partner.akansho.com')}>
                       <Text style={web.partnerLinkTitle}>{t('mode.switchToPartnerHint')}</Text>
                       <Text style={web.partnerLinkCta}>{t('mode.switchToPartner')}</Text>
                     </TouchableOpacity>

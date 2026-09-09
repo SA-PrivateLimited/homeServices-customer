@@ -1,5 +1,5 @@
 /**
- * Share Akanso — web `ShareAkansoPanel` parity (WhatsApp / copy / system share / QR).
+ * Share Akansho — web `ShareAkansoPanel` parity (WhatsApp / copy / system share / QR).
  */
 
 import React, {useMemo, useState} from 'react';
@@ -17,7 +17,7 @@ import {useStore} from '../../store';
 import {lightTheme, darkTheme} from '../../utils/theme';
 import useTranslation from '../../hooks/useTranslation';
 
-const DEFAULT_SHARE_URL = 'https://akanso.in';
+const DEFAULT_SHARE_URL = 'https://akansho.com';
 
 type Props = {
   url?: string;
@@ -40,8 +40,8 @@ export function ShareAkansoPanel({url, compact = false}: Props) {
       return raw.replace('{{url}}', shareUrl);
     }
     return isHi
-      ? `भरोसेमंद घरेलू सेवाओं के लिए Akanso आज़माएँ: ${shareUrl}`
-      : `Try Akanso for trusted home services near you: ${shareUrl}`;
+      ? `भरोसेमंद घरेलू सेवाओं के लिए Akansho आज़माएँ: ${shareUrl}`
+      : `Try Akansho for trusted home services near you: ${shareUrl}`;
   }, [isHi, shareUrl, t]);
 
   const onCopy = () => {
@@ -56,7 +56,7 @@ export function ShareAkansoPanel({url, compact = false}: Props) {
   const onNativeShare = async () => {
     try {
       await Share.share({
-        title: String(t('ecosystem.shareTitle') || 'Share Akanso'),
+        title: String(t('ecosystem.shareTitle') || 'Share Akansho'),
         message: shareText,
         url: shareUrl,
       });
@@ -75,9 +75,9 @@ export function ShareAkansoPanel({url, compact = false}: Props) {
           borderColor: theme.border,
         },
       ]}
-      accessibilityLabel={String(t('ecosystem.shareTitle') || 'Share Akanso')}>
+      accessibilityLabel={String(t('ecosystem.shareTitle') || 'Share Akansho')}>
       <Text style={[styles.title, {color: theme.text}]}>
-        {t('ecosystem.shareTitle') || 'Share Akanso'}
+        {t('ecosystem.shareTitle') || 'Share Akansho'}
       </Text>
       <Text style={[styles.lead, {color: theme.textSecondary}]}>
         {t('ecosystem.shareLead') ||
@@ -141,7 +141,7 @@ export function ShareAkansoPanel({url, compact = false}: Props) {
             />
           </View>
           <Text style={[styles.qrCaption, {color: theme.textSecondary}]}>
-            {t('ecosystem.qrCaption') || 'Scan with your phone to open Akanso'}
+            {t('ecosystem.qrCaption') || 'Scan with your phone to open Akansho'}
           </Text>
         </View>
       ) : null}
