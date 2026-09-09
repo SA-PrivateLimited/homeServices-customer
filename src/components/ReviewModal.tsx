@@ -118,7 +118,7 @@ export default function ReviewModal({
     try {
       const result = await launchImageLibrary({
         mediaType: 'photo',
-        quality: 0.75,
+        quality: 0.8,
         selectionLimit: 3 - photos.length,
       });
 

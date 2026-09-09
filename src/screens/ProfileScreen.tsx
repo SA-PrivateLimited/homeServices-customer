@@ -100,7 +100,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
 
 
   const pickImage = () => {
-    launchImageLibrary({mediaType: 'photo', quality: 0.75}, response => {
+    launchImageLibrary({mediaType: 'photo', quality: 0.8}, response => {
       if (response.assets && response.assets[0].uri) {
         setProfileImage(response.assets[0].uri);
         setImageError(false);

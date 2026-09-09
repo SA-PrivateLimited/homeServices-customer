@@ -447,7 +447,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     if (!ok) return null;
     const result = await launchCamera({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       cameraType: 'front',
       saveToPhotos: false,
     });
@@ -458,7 +458,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const pickFromGallery = async (): Promise<string | null> => {
     const result = await launchImageLibrary({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       selectionLimit: 1,
     });
     if (result.didCancel || result.errorCode) return null;
