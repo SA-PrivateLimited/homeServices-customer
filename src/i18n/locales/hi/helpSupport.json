@@ -14,7 +14,7 @@
   "emailNotAvailableMessage": "ईमेल नहीं खुल सका। कृपया {{email}} पर लिखें।",
   "emailSubject": "HomeServices सहायता अनुरोध",
   "emailBody": "प्रिय सहायता टीम,\n\nमुझे निम्नलिखित में सहायता चाहिए:\n\n[कृपया यहाँ अपनी समस्या लिखें]\n\nधन्यवाद।\n\n---\nग्राहक: {{name}}\nफोन: {{phone}}",
-  "errorContactSupport": "माफ़ करें, कुछ गलत हुआ: {{error}}। कृपया support@sa-privatelimited.com पर संपर्क करें।",
+  "errorContactSupport": "माफ़ करें, कुछ गलत हुआ: {{error}}। कृपया support@akansho.com पर संपर्क करें।",
   "userFallback": "उपयोगकर्ता",
   "na": "उपलब्ध नहीं"
 }

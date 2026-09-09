@@ -36,7 +36,7 @@ Do **not** wait for a full re-prompt of product rules — this document is the p
 
 ---
 
-## 2. Decision hierarchy (Akanso)
+## 2. Decision hierarchy (Akansho)
 
 1. User’s actual goal  
 2. User simplicity and clarity  
@@ -59,7 +59,7 @@ Prefer the smallest safe change that gives the simplest correct experience.
 - Do not casually rewrite Firebase verifier lifecycle, session/storage keys, or JWT hydration.
 
 ### Multi-role
-- One Akanso user can be Customer, Partner, or both — never force a second phone.
+- One Akansho user can be Customer, Partner, or both — never force a second phone.
 - Customer → Partner: upgrade / enable-partner-profile flows, not “use the other app” dead-ends.
 - Cross-app switch uses **context handoff codes**; preserve handoff screens and APIs.
 
@@ -226,7 +226,7 @@ When user says “continue parity” without a screen:
 
 ## 12. One-line kickoff (user can say only this)
 
-> Continue Akanso Customer web→RN parity per `HomeServices/docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md`. Web is source of truth. Match the next gap (or this screenshot) surgically.
+> Continue Akansho Customer web→RN parity per `HomeServices/docs/CUSTOMER_WEB_RN_PARITY_PROMPT.md`. Web is source of truth. Match the next gap (or this screenshot) surgically.
 
 ---
 

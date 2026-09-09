@@ -63,7 +63,7 @@ class NotificationService {
         {
           title: 'Notifications',
           message:
-            'Akanso can notify you when a partner accepts or updates your request.',
+            'Akansho can notify you when a partner accepts or updates your request.',
           buttonPositive: 'Allow',
           buttonNegative: 'Not now',
         },
@@ -111,7 +111,7 @@ class NotificationService {
   handleFCMMessage(remoteMessage: any) {
     const {notification, data} = remoteMessage || {};
     const title =
-      notification?.title || data?.title || 'Akanso';
+      notification?.title || data?.title || 'Akansho';
     const message =
       notification?.body || data?.body || data?.message || '';
     if (!message && !title) return;

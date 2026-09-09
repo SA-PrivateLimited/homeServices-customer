@@ -14,7 +14,7 @@
   "emailNotAvailableMessage": "Could not open email. Please write to {{email}}.",
   "emailSubject": "HomeServices Support Request",
   "emailBody": "Dear Support Team,\n\nI need assistance with the following:\n\n[Please describe your issue here]\n\nThank you.\n\n---\nCustomer: {{name}}\nPhone: {{phone}}",
-  "errorContactSupport": "Sorry, something went wrong: {{error}}. Please contact support at support@sa-privatelimited.com.",
+  "errorContactSupport": "Sorry, something went wrong: {{error}}. Please contact support at support@akansho.com.",
   "userFallback": "User",
   "na": "N/A"
 }

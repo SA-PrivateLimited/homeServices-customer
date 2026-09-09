@@ -111,7 +111,7 @@ export function activePhaseSubtitle(
         : i18n.t('active.sub.inProgress');
     case 'completed':
       return i18n.t('active.sub.completed', {
-        brand: opts.brandName || 'Akanso',
+        brand: opts.brandName || 'Akansho',
       });
     case 'cancelled':
       return name
