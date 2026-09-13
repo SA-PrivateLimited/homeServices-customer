@@ -13,8 +13,12 @@ export interface ServiceRequest {
   customerPhone: string;
   customerAddress: {
     address: string;
+    landmark?: string;
     city?: string;
+    district?: string;
     state?: string;
+    stateId?: string;
+    districtId?: string;
     pincode: string;
     latitude?: number;
     longitude?: number;
@@ -48,6 +52,7 @@ export interface ServiceRequest {
   }>;
   createdAt: string | Date;
   updatedAt: string | Date;
+  cancelledAt?: string | Date;
 }
 
 export interface ServiceRequestFilters {

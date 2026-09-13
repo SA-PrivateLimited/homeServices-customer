@@ -21,7 +21,7 @@ export function isUsableMediaUrl(raw: string): boolean {
   try {
     const origin =
       typeof window !== 'undefined'
-        ? window.location.origin
+        ? window.location?.origin || 'https://akansho.com'
         : 'https://akansho.com';
     const parsed = new URL(url, origin);
     const path = parsed.pathname;

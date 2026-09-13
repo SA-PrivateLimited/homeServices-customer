@@ -42,9 +42,9 @@ import {
 import {isOwnProvider as isOwnProviderProfile} from '../utils/excludeOwnProvider';
 
 interface ProviderDetailsScreenProps {
-  navigation: any;
-  route: {
-    params: {
+  navigation?: any;
+  route?: {
+    params?: {
       provider: Provider;
       doctor?: Provider; // Backward compatibility
       service?: string;
@@ -57,7 +57,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   navigation,
   route,
 }) => {
-  const routeProvider = (route.params?.provider || route.params?.doctor) as Provider & {
+  const routeProvider = (route?.params?.provider || route?.params?.doctor) as Provider & {
     profileImage?: string;
     photo?: string;
     specialty?: string;
@@ -100,7 +100,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   const [checkingActive, setCheckingActive] = useState(false);
 
   const requestedService = String(
-    route.params?.requestedService || route.params?.service || '',
+    route?.params?.requestedService || route?.params?.service || '',
   ).trim();
   const displayService =
     matchingProviderService(provider as any, requestedService) ||

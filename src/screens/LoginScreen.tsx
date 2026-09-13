@@ -43,7 +43,8 @@ import PhoneNumberInput from '../components/PhoneNumberInput';
 import {INDIA_DIAL_CODE, localTenDigits} from '../utils/phone';
 import {useFirebasePhoneAuth} from '../hooks/useFirebasePhoneAuth';
 import NotificationService from '../services/notificationService';
-import {WHATSAPP_SUPPORT_URL} from '../config/support';
+import {PARTNER_WEB_URL} from '../services/partnerHandoff';
+import {isWeakPin, LOGIN_PIN_LENGTH, LOGIN_PIN_RE} from '../components/login/pinUtils';
 
 interface LoginScreenProps {
   navigation: any;
@@ -76,6 +77,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [pin, setPin] = useState('');
   const [otp, setOtp] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [createdPin, setCreatedPin] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('phone');
   const [otpMode, setOtpMode] = useState<OtpMode>('signup');
@@ -246,6 +248,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setPin('');
       setOtp('');
       setNewPin('');
+    setConfirmPin('');
 
       if (lookup.exists && lookup.hasPin) {
         setStep('pin');
@@ -285,8 +288,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
   const handleLoginWithPin = async (pinOverride?: string) => {
     const code = (pinOverride ?? pin).trim();
-    if (!/^\d{6}$/.test(code)) {
-      setInlineError(t('auth.pinMustBeSixDigits'));
+    if (!LOGIN_PIN_RE.test(code)) {
+      setInlineError(t('auth.pinMustBeFourDigits'));
       return;
     }
     if (pinLoginInFlight.current || loading) return;
@@ -317,8 +320,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
   const handleCreateCustomer = async () => {
     const code = pin.trim();
-    if (!/^\d{6}$/.test(code)) {
-      setInlineError(t('auth.pinMustBeSixDigits'));
+    if (!LOGIN_PIN_RE.test(code)) {
+      setInlineError(t('auth.pinMustBeFourDigits'));
       return;
     }
     setCreatingCustomer(true);
@@ -339,6 +342,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setInlineError(null);
     setOtp('');
     setNewPin('');
+    setConfirmPin('');
     try {
       setOtpMode('forgot');
       setOtpBanner(null);
@@ -375,8 +379,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setInlineError(t('auth.pleaseEnterCode'));
       return;
     }
-    if (!/^\d{6}$/.test(newPin.trim())) {
-      setInlineError(t('auth.pinMustBeSixDigits'));
+    if (!LOGIN_PIN_RE.test(newPin.trim())) {
+      setInlineError(t('auth.pinMustBeFourDigits'));
+      return;
+    }
+    if (newPin.trim() !== confirmPin.trim()) {
+      setInlineError(t('errors.pinMismatch'));
+      return;
+    }
+    if (isWeakPin(newPin.trim())) {
+      setInlineError(t('errors.weakPin'));
       return;
     }
 
@@ -413,6 +425,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setPin('');
     setOtp('');
     setNewPin('');
+    setConfirmPin('');
     setCreatedPin(null);
     setInlineError(null);
     setOtpBanner(null);
@@ -583,7 +596,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                     </View>
                     <PinBoxesInput
                       value={pin}
-                      length={6}
+                      length={LOGIN_PIN_LENGTH}
                       onChange={text => {
                         setPin(text);
                         setInlineError(null);
@@ -604,14 +617,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         <Text style={web.customerOnlyTitle}>{t('login.partnerOnlyTitle')}</Text>
                         <Text style={web.customerOnlyBody}>{t('login.partnerOnlyBody')}</Text>
                         <TouchableOpacity
-                          style={[web.primaryFill, (loading || creatingCustomer || pin.length !== 6) && {opacity: 0.65}]}
+                          style={[web.primaryFill, (loading || creatingCustomer || pin.length !== LOGIN_PIN_LENGTH) && {opacity: 0.65}]}
                           onPress={() => void handleCreateCustomer()}
-                          disabled={loading || creatingCustomer || pin.length !== 6}>
+                          disabled={loading || creatingCustomer || pin.length !== LOGIN_PIN_LENGTH}>
                           {creatingCustomer ? (
                             <ActivityIndicator color="#fff" />
                           ) : (
                             <Text style={web.primaryFillText}>{t('login.createCustomerAccount')}</Text>
                           )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[web.guestBtn, loading && {opacity: 0.65}]}
+                          onPress={() => void Linking.openURL(PARTNER_WEB_URL)}
+                          disabled={loading}
+                          accessibilityRole="button"
+                          accessibilityLabel={String(t('login.partnerLogin'))}>
+                          <Text style={web.guestBtnText}>{t('login.partnerLogin')}</Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
@@ -620,7 +641,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         <TouchableOpacity
                           style={fillBtn}
                           onPress={() => void handleLoginWithPin()}
-                          disabled={loading}>
+                          disabled={loading || pin.length !== LOGIN_PIN_LENGTH}>
                           {loading ? (
                             <ActivityIndicator color="#fff" />
                           ) : (
@@ -659,12 +680,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         autoFocus
                       />
                     </View>
-                    <Text style={web.label}>
-                      {otpMode === 'forgot' ? t('login.createPinTitleForgot') : t('login.createPinTitle')}
-                    </Text>
+                    <Text style={web.label}>{t('login.newPinLabel')}</Text>
                     <PinBoxesInput
                       value={newPin}
-                      length={6}
+                      length={LOGIN_PIN_LENGTH}
                       onChange={text => {
                         setNewPin(text);
                         setInlineError(null);
@@ -676,8 +695,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       textColor={WEB.text}
                       focusedBorder={WEB.primary}
                     />
+                    <Text style={web.label}>{t('login.confirmPinLabel')}</Text>
+                    <PinBoxesInput
+                      value={confirmPin}
+                      length={LOGIN_PIN_LENGTH}
+                      onChange={text => {
+                        setConfirmPin(text);
+                        setInlineError(null);
+                      }}
+                      editable={!loading}
+                      secure={false}
+                      cellBackground={WEB.card}
+                      cellBorder={WEB.border}
+                      textColor={WEB.text}
+                      focusedBorder={WEB.primary}
+                    />
                     {inlineError ? <Text style={web.fieldError}>{inlineError}</Text> : null}
-                    <TouchableOpacity style={fillBtn} onPress={() => void handleVerifyOtpAndSetPin()} disabled={loading}>
+                    <TouchableOpacity
+                      style={[
+                        fillBtn,
+                        (newPin.length !== LOGIN_PIN_LENGTH ||
+                          confirmPin.length !== LOGIN_PIN_LENGTH) && {opacity: 0.65},
+                      ]}
+                      onPress={() => void handleVerifyOtpAndSetPin()}
+                      disabled={
+                        loading ||
+                        newPin.length !== LOGIN_PIN_LENGTH ||
+                        confirmPin.length !== LOGIN_PIN_LENGTH
+                      }>
                       {loading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
@@ -723,7 +768,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   <View style={web.utilRow}>
                     <TouchableOpacity style={web.utilBtn} onPress={() => navigation.navigate('HelpSupport')}>
                       <Icon name="help-circle-outline" size={20} color={WEB.primary} />
-                      <Text style={web.utilBtnText}>{t('ecosystem.supportChip')}</Text>
+                      <Text style={web.utilBtnText}>{t('login.helpCta')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={web.utilBtn}
@@ -736,21 +781,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       <Icon name="share-social-outline" size={20} color={WEB.primary} />
                       <Text style={web.utilBtnText}>{t('login.utilShareShort')}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={web.utilBtn} onPress={() => void Linking.openURL(WHATSAPP_SUPPORT_URL)}>
-                      <Icon name="logo-whatsapp" size={20} color={WEB.primary} />
-                      <Text style={web.utilBtnText}>{t('login.feedbackCall')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={web.utilBtn} onPress={() => navigation.navigate('HelpSupport')}>
-                      <Icon name="chatbox-ellipses-outline" size={20} color={WEB.primary} />
-                      <Text style={web.utilBtnText}>{t('login.feedbackCta')}</Text>
-                    </TouchableOpacity>
                   </View>
                   <View style={web.extrasBottom}>
                     <TouchableOpacity
                       style={web.partnerLink}
-                      onPress={() => void Linking.openURL('https://partner.akansho.com')}>
-                      <Text style={web.partnerLinkTitle}>{t('mode.switchToPartnerHint')}</Text>
-                      <Text style={web.partnerLinkCta}>{t('mode.switchToPartner')}</Text>
+                      onPress={() => void Linking.openURL(PARTNER_WEB_URL)}>
+                      <Text style={web.partnerLinkTitle}>{t('login.customerBannerTitle')}</Text>
+                      <Text style={web.partnerLinkCta}>{t('login.customerBannerCta')}</Text>
                     </TouchableOpacity>
                     <View style={web.extrasFoot}>
                       <Text style={web.extrasTrust}>{t('login.heroSafety')}</Text>

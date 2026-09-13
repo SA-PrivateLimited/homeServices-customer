@@ -10,6 +10,7 @@ export interface User {
   _id?: string;
   id?: string;
   name?: string;
+  displayName?: string;
   email?: string;
   phone?: string;
   phoneNumber?: string;

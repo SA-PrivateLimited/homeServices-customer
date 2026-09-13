@@ -12,10 +12,12 @@ const ICON_GLYPH: Record<string, string> = {
   'inbox-outline': '📭',
 };
 
-const EmptyState: React.FC<EmptyStateProps> = ({icon, iconGlyph, ...rest}) => {
+type Props = Omit<EmptyStateProps, 'message'> & {message?: string};
+
+const EmptyState: React.FC<Props> = ({icon, iconGlyph, message = '', ...rest}) => {
   const glyph =
     iconGlyph || (icon ? ICON_GLYPH[icon] || '📭' : undefined);
-  return <PackageEmptyState {...rest} iconGlyph={glyph} />;
+  return <PackageEmptyState {...rest} iconGlyph={glyph} message={message} />;
 };
 
 export default EmptyState;

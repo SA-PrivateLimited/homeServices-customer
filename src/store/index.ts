@@ -10,9 +10,9 @@ export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'consultation' | 'reminder' | 'system';
-  consultationId?: string;
-  userId: string; // User ID who should receive this notification (customerId or providerId)
+  type: 'service' | 'reminder' | 'system';
+  serviceRequestId?: string;
+  userId: string;
   read: boolean;
   createdAt: Date;
 }

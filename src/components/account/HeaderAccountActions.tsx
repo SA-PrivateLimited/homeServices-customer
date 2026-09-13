@@ -1,5 +1,5 @@
-import React from 'react';
-import {StyleSheet, View, type ReactNode} from 'react-native';
+import React, {type ReactNode} from 'react';
+import {StyleSheet, View} from 'react-native';
 import NotificationIcon from '../NotificationIcon';
 import {AccountMenu} from './AccountMenu';
 import LanguageSwitcher from '../LanguageSwitcher';

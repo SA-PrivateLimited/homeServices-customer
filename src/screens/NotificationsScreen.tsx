@@ -52,8 +52,8 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
     // Navigate based on notification type
     // Use getParent() to navigate to root navigator, then to the correct tab
-    if (notification.consultationId) {
-      const serviceRequestId = notification.consultationId;
+    if (notification.serviceRequestId) {
+      const serviceRequestId = notification.serviceRequestId;
       try {
         // Try to navigate to ServiceHistory
         const parent = navigation.getParent();
@@ -76,10 +76,8 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
   const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
-      case 'consultation':
+      case 'service':
         return 'build-outline';
-      case 'prescription':
-        return 'document-text-outline';
       case 'reminder':
         return 'time-outline';
       default:

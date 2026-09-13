@@ -33,17 +33,11 @@ import {updateUserProfile} from '../services/authService';
 import {deleteMe, uploadMyProfileImage} from '../services/api/usersApi';
 import useTranslation from '../hooks/useTranslation';
 import {HelpSupportPanel} from '../components/help/HelpSupportPanel';
-import {BecomePartnerCard} from '../components/ecosystem/BecomePartnerCard';
 import {ShareAkansoPanel} from '../components/ecosystem/ShareAkansoPanel';
 import {NotificationsSettingsCard} from '../components/NotificationsSettingsCard';
 import {HeaderAccountActions} from '../components/account/HeaderAccountActions';
 import {AppHeaderLeading} from '../components/AppHeaderLeading';
 import {formatFullAddressLine} from '../utils/addressDisplay';
-import {
-  createPartnerContextHandoff,
-  partnerHandoffUrl,
-  PARTNER_WEB_URL,
-} from '../services/partnerHandoff';
 import {
   launchCamera,
   launchImageLibrary,
@@ -79,7 +73,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const [showHelpSupportModal, setShowHelpSupportModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showAppUpdateModal, setShowAppUpdateModal] = useState(false);
-  const [partnerBusy, setPartnerBusy] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
@@ -447,7 +440,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     if (!ok) return null;
     const result = await launchCamera({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       cameraType: 'front',
       saveToPhotos: false,
     });
@@ -458,7 +451,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const pickFromGallery = async (): Promise<string | null> => {
     const result = await launchImageLibrary({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       selectionLimit: 1,
     });
     if (result.didCancel || result.errorCode) return null;
@@ -681,35 +674,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
             onToggleEdit={() => setIsEditing(true)}
             onSave={() => void handleSaveProfile()}
             onCancel={resetEdit}
-          />
-        ) : null}
-
-        {currentUser ? (
-          <BecomePartnerCard
-            canSwitch={Boolean((currentUser as {canSwitchToPartner?: boolean}).canSwitchToPartner)}
-            busy={partnerBusy}
-            onBecomePartner={() => {
-              if (partnerBusy) return;
-              const canSwitch = Boolean(
-                (currentUser as {canSwitchToPartner?: boolean}).canSwitchToPartner,
-              );
-              if (canSwitch) {
-                setPartnerBusy(true);
-                void createPartnerContextHandoff()
-                  .then(code => Linking.openURL(partnerHandoffUrl(code)))
-                  .catch(() => {
-                    setAlertModal({
-                      visible: true,
-                      title: String(t('common.error')),
-                      message: String(t('errors.generic') || 'Could not open Partner.'),
-                      type: 'error',
-                    });
-                  })
-                  .finally(() => setPartnerBusy(false));
-                return;
-              }
-              void Linking.openURL(PARTNER_WEB_URL);
-            }}
           />
         ) : null}
 

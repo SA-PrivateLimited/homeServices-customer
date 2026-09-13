@@ -163,7 +163,7 @@ export function AvailableProviders({
                       {p.location}
                     </Text>
                   ) : null}
-                  {phone ? (
+                  {phone && canCall ? (
                     <View style={styles.phoneRow}>
                       <Icon name="phone" size={14} color={theme.textSecondary} />
                       <Text

@@ -110,6 +110,32 @@ export const accountMenuStyles = StyleSheet.create({
     fontWeight: '700',
     color: HEADER.primaryDark,
   },
+  modeUnavailable: {
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  modeUnavailableTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: HEADER.textSecondary,
+  },
+  modeCreate: {
+    alignSelf: 'stretch',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: `${HEADER.primary}59`,
+    borderRadius: 10,
+    backgroundColor: `${HEADER.primary}14`,
+    alignItems: 'center',
+  },
+  modeCreateText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: HEADER.primaryDark,
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',

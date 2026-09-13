@@ -35,7 +35,7 @@ export function ProfileCompletionPrompt() {
       onCancel={() => setOpen(false)}
       onConfirm={() => {
         setOpen(false);
-        navigation.navigate('Settings', {screen: 'Profile'});
+        navigation.navigate('Settings', {screen: 'SettingsMain'});
       }}
     />
   );

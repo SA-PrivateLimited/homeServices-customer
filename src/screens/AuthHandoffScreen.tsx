@@ -30,6 +30,14 @@ export default function AuthHandoffScreen({navigation, route}: any) {
   const paramCode = String(route?.params?.code || '').trim();
 
   useEffect(() => {
+    const sub = Linking.addEventListener('url', ({url}) => {
+      const next = codeFromUrl(url);
+      if (next) navigation.setParams({code: next});
+    });
+    return () => sub.remove();
+  }, [navigation]);
+
+  useEffect(() => {
     let active = true;
     void (async () => {
       const initial = await Linking.getInitialURL();
@@ -38,6 +46,7 @@ export default function AuthHandoffScreen({navigation, route}: any) {
         if (active) setError('CODE_MISSING');
         return;
       }
+      setError(null);
       try {
         const {user, token} = await exchangeContextHandoff(code);
         await setSession(token, user as any);

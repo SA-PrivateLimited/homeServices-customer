@@ -45,7 +45,7 @@ export const calculateETA = (distanceKm: number): number => {
 };
 
 export const getDistanceToCustomer = (
-  providerLoc: {latitude: number; longitude: number},
+  providerLoc: ProviderLocation,
   customerLoc: {latitude: number; longitude: number},
 ): {distanceKm: number; distanceFormatted: string; etaMinutes: number} => {
   const distanceKm = calculateDistance(

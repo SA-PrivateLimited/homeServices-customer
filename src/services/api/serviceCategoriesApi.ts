@@ -21,6 +21,7 @@ export interface ServiceCategory {
   _id?: string;
   id?: string;
   name: string;
+  nameHi?: string;
   description?: string;
   descriptionHi?: string;
   icon?: string;
@@ -28,6 +29,11 @@ export interface ServiceCategory {
   order?: number;
   isActive?: boolean;
   requiresVehicle?: boolean;
+  sectionKey?: string;
+  searchTerms?: string[];
+  isPopular?: boolean;
+  sectionLabelEn?: string;
+  sectionLabelHi?: string;
   questionnaire?: QuestionnaireQuestion[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
