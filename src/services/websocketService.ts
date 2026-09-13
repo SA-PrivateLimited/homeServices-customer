@@ -5,6 +5,7 @@
 
 import io, { Socket } from 'socket.io-client';
 import {SOCKET_URL} from '../config/api';
+import {getStoredJwt} from './session';
 
 export type ServiceRequestStatusPayload = {
   type?: string;
@@ -256,11 +257,14 @@ class WebSocketService {
    */
   async emitNewBooking(providerId: string, bookingData: any): Promise<void> {
     try {
+      const jwt = await getStoredJwt();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (jwt) headers.Authorization = `Bearer ${jwt}`;
       const response = await fetch(`${SOCKET_URL}/emit-booking`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           providerId,
           bookingData,
