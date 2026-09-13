@@ -34,6 +34,7 @@ import ProvidersListScreen from '../screens/ProvidersListScreen';
 import ProviderDetailsScreen from '../screens/ProviderDetailsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import {ProfileCompletionPrompt} from '../components/ProfileCompletionPrompt';
+import {PushEnablePrompt} from '../components/PushEnablePrompt';
 
 import {HeaderAccountActions} from '../components/account/HeaderAccountActions';
 import {AccountMenuProvider} from '../components/account/AccountMenu';
@@ -184,6 +185,11 @@ const ProvidersStack = () => {
         }
       />
       <Stack.Screen
+        name="ShareContactRecommendation"
+        component={ShareContactRecommendationScreen}
+        options={{title: t('recommendations.shareContact')}}
+      />
+      <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
         options={{title: t('notifications.title')}}
@@ -277,23 +283,16 @@ const HistoryStack = () => {
   );
 };
 
-/** Guest: browse + login. */
-const GuestStack = () => {
+/** Guest browse tab: profession list → details (back returns to list). */
+const GuestBrowseStack = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
   return (
     <Stack.Navigator
-      screenOptions={{
-        ...stackHeaderOptions(theme),
-        contentStyle: {backgroundColor: theme.background},
-      }}>
-      <Stack.Screen
-        name="GuestHome"
-        component={PublicHomeScreen}
-        options={{headerShown: false}}
-      />
+      initialRouteName="GuestProviders"
+      screenOptions={stackHeaderOptions(theme)}>
       <Stack.Screen
         name="GuestProviders"
         component={ProvidersListScreen}
@@ -302,12 +301,9 @@ const GuestStack = () => {
           headerRight: () => (
             <View style={{flexDirection: 'row', alignItems: 'center'}}>
               <TouchableOpacity
-                onPress={() => navigation.navigate('HelpSupport')}
-                style={{marginRight: 4, padding: 6}}>
-                <Icon name="help-circle-outline" size={22} color={theme.text} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ShareContactRecommendation')}
+                onPress={() =>
+                  navigation.navigate('ShareContactRecommendation')
+                }
                 style={{marginRight: 4, padding: 6}}>
                 <Icon name="person-add-outline" size={22} color={theme.text} />
               </TouchableOpacity>
@@ -351,12 +347,122 @@ const GuestStack = () => {
         component={ShareContactRecommendationScreen}
         options={{title: t('recommendations.shareContact')}}
       />
-      <Stack.Screen
-        name="HelpSupport"
-        component={HelpSupportScreen}
-        options={{headerShown: false}}
-      />
     </Stack.Navigator>
+  );
+};
+
+/** Guest: Home + Browse tabs, matching web AppShell. */
+const GuestTabs = () => {
+  const {isDarkMode} = useStore();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+  const {t} = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  return (
+    <View style={{flex: 1}}>
+      <Tab.Navigator
+        initialRouteName="GuestHome"
+        screenOptions={({route}) => ({
+          headerShown: false,
+          tabBarIcon: ({focused, color}) => {
+            const iconName =
+              route.name === 'GuestBrowse'
+                ? focused
+                  ? 'people'
+                  : 'people-outline'
+                : focused
+                  ? 'home'
+                  : 'home-outline';
+            return (
+              <Icon
+                name={iconName}
+                size={CUSTOMER_WEB.tabIcon}
+                color={color}
+              />
+            );
+          },
+          tabBarActiveTintColor: theme.primary,
+          tabBarInactiveTintColor: theme.textSecondary,
+          tabBarStyle: webTabBarStyle({
+            height: CUSTOMER_WEB.tabBarH,
+            padTop: CUSTOMER_WEB.tabBarPadTop,
+            safeBottom: insets.bottom,
+            borderTopColor: CUSTOMER_WEB.border50,
+          }),
+          tabBarItemStyle: {
+            borderWidth: 0,
+            borderRightWidth: 0,
+            borderLeftWidth: 0,
+          },
+          tabBarButton: props => (
+            <TouchableOpacity
+              {...props}
+              style={[
+                props.style,
+                {
+                  borderWidth: 0,
+                  borderRightWidth: 0,
+                  borderLeftWidth: 0,
+                  borderColor: 'transparent',
+                },
+              ]}
+            />
+          ),
+          tabBarShowLabel: true,
+          tabBarLabelStyle: webTabLabelStyle(
+            CUSTOMER_WEB.tabLabelSize,
+            CUSTOMER_WEB.tabLabelWeight,
+          ),
+        })}>
+        <Tab.Screen
+          name="GuestHome"
+          component={PublicHomeScreen}
+          options={{title: String(t('nav.home') || t('common.home'))}}
+        />
+        <Tab.Screen
+          name="GuestBrowse"
+          component={GuestBrowseStack}
+          options={{title: String(t('nav.browse') || t('common.browse'))}}
+        />
+      </Tab.Navigator>
+      <AkansoSupportChip
+        hidden={helpOpen}
+        onOpenHelp={() => setHelpOpen(true)}
+      />
+      <Modal
+        visible={helpOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setHelpOpen(false)}>
+        <View
+          style={[
+            helpStyles.root,
+            {backgroundColor: theme.background, paddingTop: insets.top},
+          ]}>
+          <View
+            style={[
+              helpStyles.bar,
+              {
+                backgroundColor: theme.card,
+                borderBottomColor: theme.border,
+              },
+            ]}>
+            <Text style={[helpStyles.title, {color: theme.text}]}>
+              {String(t('help.title') || 'Help & Support')}
+            </Text>
+            <Pressable
+              onPress={() => setHelpOpen(false)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={String(t('common.close') || 'Close')}>
+              <Icon name="close" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+          <HelpSupportPanel surfaceOverride="login" />
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -398,7 +504,7 @@ const MainTabs = () => {
   }, [navFocus]);
 
   if (isGuest) {
-    return <GuestStack />;
+    return <GuestTabs />;
   }
 
   return (
@@ -426,7 +532,7 @@ const MainTabs = () => {
                     iconName = focused ? 'build' : 'build-outline';
                     break;
                   case 'Providers':
-                    iconName = focused ? 'people' : 'people-outline';
+                    iconName = focused ? 'home' : 'home-outline';
                     break;
                   case 'History':
                     iconName = focused ? 'time' : 'time-outline';
@@ -482,7 +588,7 @@ const MainTabs = () => {
             <Tab.Screen
               name="Providers"
               component={ProvidersStack}
-              options={{title: t('nav.browse') || t('common.browse')}}
+              options={{title: t('nav.home') || t('common.home')}}
             />
             <Tab.Screen
               name="Services"
@@ -555,6 +661,7 @@ const MainTabs = () => {
           </Modal>
 
           <ProfileCompletionPrompt />
+          <PushEnablePrompt />
         </View>
       </AccountMenuProvider>
     </>

@@ -18,9 +18,15 @@ import useTranslation from '../../hooks/useTranslation';
 type Props = {
   onOpenHelp: () => void;
   hidden?: boolean;
+  /** Guest home has no tab bar — float above the safe area only. */
+  floatAboveTabs?: boolean;
 };
 
-export function AkansoSupportChip({onOpenHelp, hidden}: Props) {
+export function AkansoSupportChip({
+  onOpenHelp,
+  hidden,
+  floatAboveTabs = true,
+}: Props) {
   const {t} = useTranslation();
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -29,7 +35,7 @@ export function AkansoSupportChip({onOpenHelp, hidden}: Props) {
   if (hidden) return null;
 
   const bottom =
-    CUSTOMER_WEB.tabBarH + Math.max(insets.bottom, 0) + 16;
+    (floatAboveTabs ? CUSTOMER_WEB.tabBarH : 0) + Math.max(insets.bottom, 0) + 16;
 
   return (
     <View

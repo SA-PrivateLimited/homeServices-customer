@@ -4,7 +4,39 @@
 
 import i18n from '../i18n';
 
-export type ErrorContext = 'login' | 'otp' | 'pin' | 'generic';
+export type ErrorContext = 'login' | 'otp' | 'pin' | 'browse' | 'generic';
+
+export type ConnectionFailureKind = 'send' | 'load' | 'refresh';
+
+export function isConnectionFailure(error: unknown): boolean {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+  return /failed to fetch|networkerror|network request failed|load failed|network error|\binternet\b|\boffline\b|econnrefused|timed out|timeout/i.test(
+    raw,
+  );
+}
+
+export function connectionFailureMessage(
+  kind: ConnectionFailureKind = 'load',
+): string {
+  if (kind === 'send') {
+    return translate(
+      'errors.couldNotSend',
+      "Couldn't send. Try again.",
+    );
+  }
+  if (kind === 'refresh') {
+    return translate(
+      'errors.couldNotRefresh',
+      "Couldn't refresh. Try again.",
+    );
+  }
+  return translate('errors.couldNotLoad', "Couldn't load. Try again.");
+}
 
 const TECHNICAL_EXACT = new Set(
   [

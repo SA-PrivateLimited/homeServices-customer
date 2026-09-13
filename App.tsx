@@ -127,10 +127,6 @@ const App = () => {
       }
     })();
     
-    NotificationService.initializeAndSaveToken().catch(error => {
-      console.error('Error initializing notifications:', error);
-    });
-
     // Cleanup
     return () => {
       if (typeof global.removeEventListener === 'function') {
@@ -141,7 +137,11 @@ const App = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    void NotificationService.saveTokenToBackend();
+    NotificationService.initializeAndSaveToken()
+      .then(token => NotificationService.saveTokenToBackend(token))
+      .catch(error => {
+        console.error('Error initializing notifications:', error);
+      });
   }, [currentUser]);
 
 

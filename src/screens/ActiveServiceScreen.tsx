@@ -54,9 +54,9 @@ import {contactHintMessage} from '../utils/providerContact';
 import {toSafeMaterialIcon} from '../utils/serviceIcons';
 
 interface ActiveServiceScreenProps {
-  navigation: any;
-  route: {
-    params: {
+  navigation?: any;
+  route?: {
+    params?: {
       serviceRequestId: string;
       jobCardId?: string;
     };
@@ -67,7 +67,8 @@ export default function ActiveServiceScreen({
   navigation,
   route,
 }: ActiveServiceScreenProps) {
-  const {serviceRequestId, jobCardId} = route.params;
+  const serviceRequestId = route?.params?.serviceRequestId || '';
+  const jobCardId = route?.params?.jobCardId;
   const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();

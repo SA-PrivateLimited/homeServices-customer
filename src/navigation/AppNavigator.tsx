@@ -11,10 +11,9 @@ import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
 import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
 import {onSessionExpired} from '../services/sessionExpiry';
+import {customerLinking} from './linking';
 
 import LoginScreen from '../screens/LoginScreen';
-import SignUpScreen from '../screens/SignUpScreen';
-import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
 import MainTabs from './MainTabs';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
@@ -89,6 +88,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
+      linking={customerLinking}
       theme={{
         dark: isDarkMode,
         colors: {
@@ -105,12 +105,6 @@ export default function AppNavigator() {
         screenOptions={{headerShown: false}}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="AuthHandoff" component={AuthHandoffScreen} />
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen
-          name="PhoneVerification"
-          component={PhoneVerificationScreen}
-          options={{headerShown: false}}
-        />
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen
           name="ServiceRequest"

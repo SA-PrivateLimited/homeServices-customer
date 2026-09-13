@@ -5,11 +5,14 @@ import {
 } from 'sapvt-ltd-app-packages';
 import useTranslation from '../hooks/useTranslation';
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = props => {
+type Props = ConfirmationModalProps & {icon?: string};
+
+const ConfirmationModal: React.FC<Props> = ({icon, iconGlyph, ...props}) => {
   const {t} = useTranslation();
   return (
     <PackageConfirmationModal
       {...props}
+      iconGlyph={iconGlyph || icon}
       confirmText={props.confirmText || t('common.confirm') || 'Confirm'}
       cancelText={props.cancelText || t('common.cancel') || 'Cancel'}
     />

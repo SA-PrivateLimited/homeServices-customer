@@ -44,6 +44,19 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="akansho.com" android:pathPrefix="/auth/handoff" />
+            <data android:scheme="https" android:host="www.akansho.com" android:pathPrefix="/auth/handoff" />
+        </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="akansho" android:host="auth" android:pathPrefix="/handoff" />
+        </intent-filter>
       </activity>
 
       <!-- Local notification receivers -->

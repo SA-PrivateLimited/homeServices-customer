@@ -24,6 +24,7 @@ import {contactRecommendationsApi} from '../services/api/contactRecommendationsA
 import PhoneNumberInput from '../components/PhoneNumberInput';
 import {ContactPickModal} from '../components/ContactPickModal';
 import {localTenDigits, toE164} from '../utils/phone';
+import {getGeographyMeta} from '../services/api/geographyApi';
 
 interface ShareContactRecommendationScreenProps {
   navigation: any;
@@ -40,7 +41,15 @@ export default function ShareContactRecommendationScreen({
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   const [providerName, setProviderName] = useState('');
   const [providerPhone, setProviderPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  const [stateId, setStateId] = useState('');
+  const [districtId, setDistrictId] = useState('');
+  const [geoStates, setGeoStates] = useState<{value: string; label: string}[]>(
+    [],
+  );
+  const [geoDistricts, setGeoDistricts] = useState<
+    {value: string; label: string; stateId: string}[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [pickOpen, setPickOpen] = useState(false);
@@ -58,7 +67,37 @@ export default function ShareContactRecommendationScreen({
 
   useEffect(() => {
     loadServiceCategories();
+    void getGeographyMeta()
+      .then(meta => {
+        setGeoStates(
+          (meta.states || []).map(s => ({value: s._id, label: s.name})),
+        );
+        setGeoDistricts(
+          (meta.districts || []).map(d => ({
+            value: d._id,
+            label: d.name,
+            stateId: d.stateId,
+          })),
+        );
+      })
+      .catch(() => {
+        setGeoStates([]);
+        setGeoDistricts([]);
+      });
   }, []);
+
+  const districtOptions = geoDistricts.filter(
+    d => !stateId || d.stateId === stateId,
+  );
+
+  const buildAddress = () => {
+    const stateLabel = geoStates.find(s => s.value === stateId)?.label;
+    const districtLabel = districtOptions.find(
+      d => d.value === districtId,
+    )?.label;
+    const parts = [districtLabel, stateLabel, notes.trim()].filter(Boolean);
+    return parts.length ? parts.join(', ') : undefined;
+  };
 
   const loadServiceCategories = async () => {
     try {
@@ -130,7 +169,7 @@ export default function ShareContactRecommendationScreen({
             providerName.trim() || String(t('providers.title') || 'Service Provider'),
           recommendedProviderPhone: toE164(providerPhone),
           serviceType: selectedServiceType,
-          address: address.trim() || undefined,
+          address: buildAddress(),
         },
         {skipAuth: !currentUser},
       );
@@ -145,7 +184,9 @@ export default function ShareContactRecommendationScreen({
       // Reset form
       setProviderName('');
       setProviderPhone('');
-      setAddress('');
+      setNotes('');
+      setStateId('');
+      setDistrictId('');
       setSelectedServiceType('');
 
       // Navigate back after a delay
@@ -244,10 +285,50 @@ export default function ShareContactRecommendationScreen({
             </TouchableOpacity>
           </View>
 
-          {/* Address (Optional) */}
+          {geoStates.length ? (
+            <View style={styles.formGroup}>
+              <Select
+                variant="crystal"
+                label={`${t('browse.state') || t('common.state') || 'State'} (${t('common.optional')})`}
+                options={[{value: '', label: '—'}, ...geoStates]}
+                value={stateId}
+                onChange={value => {
+                  setStateId(value);
+                  setDistrictId('');
+                }}
+                placeholder={String(t('browse.state') || 'State')}
+                title={String(t('browse.state') || 'State')}
+                colors={{
+                  card: isDarkMode
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'rgba(255,255,255,0.55)',
+                }}
+              />
+            </View>
+          ) : null}
+
+          {districtOptions.length ? (
+            <View style={styles.formGroup}>
+              <Select
+                variant="crystal"
+                label={`${t('browse.district') || 'District'} (${t('common.optional')})`}
+                options={[{value: '', label: '—'}, ...districtOptions]}
+                value={districtId}
+                onChange={setDistrictId}
+                placeholder={String(t('browse.district') || 'District')}
+                title={String(t('browse.district') || 'District')}
+                colors={{
+                  card: isDarkMode
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'rgba(255,255,255,0.55)',
+                }}
+              />
+            </View>
+          ) : null}
+
           <View style={styles.formGroup}>
             <Text style={[styles.label, {color: theme.text}]}>
-              {t('recommendations.address')} ({t('common.optional')})
+              {t('collab.notesLabel') || t('recommendations.address')} ({t('common.optional')})
             </Text>
             <TextInput
               style={[
@@ -257,8 +338,8 @@ export default function ShareContactRecommendationScreen({
               ]}
               placeholder={t('recommendations.addressPlaceholder')}
               placeholderTextColor={theme.textSecondary}
-              value={address}
-              onChangeText={setAddress}
+              value={notes}
+              onChangeText={setNotes}
               multiline
               numberOfLines={3}
               textAlignVertical="top"

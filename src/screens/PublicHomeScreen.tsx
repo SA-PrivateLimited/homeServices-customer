@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +24,8 @@ import {
 import {toSafeMaterialIcon} from '../utils/serviceIcons';
 import {getGeographyMeta} from '../services/api/geographyApi';
 import {CrystalSurface} from '../components/CrystalSurface';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import {PARTNER_WEB_URL} from '../services/partnerHandoff';
 
 const HOW = [
   {icon: 'handyman', titleKey: 'home.how1Title', bodyKey: 'home.how1Body'},
@@ -68,10 +71,16 @@ export default function PublicHomeScreen({navigation}: any) {
 
   const goBrowse = (svc?: BrowseService | null) => {
     const chosen = svc || selectedService;
-    navigation.navigate('GuestProviders', {
+    const params = {
       service: chosen?.apiName || serviceQuery.trim() || undefined,
       locationQuery: locationQuery.trim() || undefined,
-    });
+    };
+    const tabs = navigation.getParent();
+    if (tabs?.navigate) {
+      tabs.navigate('GuestBrowse', {screen: 'GuestProviders', params});
+      return;
+    }
+    navigation.navigate('GuestProviders', params);
   };
 
   const goLogin = () => {
@@ -94,19 +103,21 @@ export default function PublicHomeScreen({navigation}: any) {
           <Text style={[styles.eyebrow, {color: theme.primary}]}>
             {t('home.eyebrow')}
           </Text>
-          {/* Web AppShell guest: header Sign in */}
-          <TouchableOpacity
-            onPress={goLogin}
-            style={[
-              styles.signInBtn,
-              {backgroundColor: `${theme.primary}1A`},
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={String(t('actions.signIn'))}>
-            <Text style={[styles.signInText, {color: theme.primary}]}>
-              {t('actions.signIn')}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <LanguageSwitcher compact />
+            <TouchableOpacity
+              onPress={goLogin}
+              style={[
+                styles.signInBtn,
+                {backgroundColor: `${theme.primary}1A`},
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={String(t('actions.signIn'))}>
+              <Text style={[styles.signInText, {color: theme.primary}]}>
+                {t('actions.signIn')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.brandRow}>
           <Image
@@ -275,6 +286,33 @@ export default function PublicHomeScreen({navigation}: any) {
           onPress={() => goBrowse()}
         />
 
+        <CrystalSurface
+          primary={theme.primary}
+          card={theme.card}
+          isDark={isDarkMode}
+          accent
+          radius={20}
+          style={styles.partnerBand}
+          contentStyle={styles.partnerBandInner}>
+          <Text style={[styles.partnerKicker, {color: theme.primary}]}>
+            {t('home.partnerKicker')}
+          </Text>
+          <Text style={[styles.h2, {color: theme.text}]}>
+            {t('home.partnerTitle')}
+          </Text>
+          <Text style={{color: theme.textSecondary, fontSize: 14, lineHeight: 20}}>
+            {t('home.partnerLead')}
+          </Text>
+          <Text style={{color: theme.textSecondary, fontSize: 13, lineHeight: 18}}>
+            {t('home.partnerHint')}
+          </Text>
+          <Button
+            variant="primary"
+            title={String(t('home.partnerCta'))}
+            onPress={() => void Linking.openURL(PARTNER_WEB_URL)}
+          />
+        </CrystalSurface>
+
         {/* Web public-home__foot */}
         <View style={[styles.foot, {borderTopColor: theme.border}]}>
           <TouchableOpacity onPress={() => goBrowse()} accessibilityRole="link">
@@ -285,6 +323,13 @@ export default function PublicHomeScreen({navigation}: any) {
           <TouchableOpacity onPress={goLogin} accessibilityRole="link">
             <Text style={[styles.footLink, {color: theme.primary}]}>
               {t('actions.signIn')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => void Linking.openURL(PARTNER_WEB_URL)}
+            accessibilityRole="link">
+            <Text style={[styles.footLink, {color: theme.primary}]}>
+              {t('home.footerPartner')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -316,6 +361,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  partnerBand: {borderRadius: 20, marginTop: 8},
+  partnerBandInner: {padding: 16, gap: 8},
+  partnerKicker: {fontSize: 12, fontWeight: '700'},
   eyebrow: {fontSize: 13, fontWeight: '700', flexShrink: 1},
   signInBtn: {
     paddingHorizontal: 14,

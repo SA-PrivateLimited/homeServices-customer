@@ -504,6 +504,8 @@ export default function ServiceRequestScreen({
             icon: 'build',
             color: theme.primary,
             questionnaire: [],
+            isActive: true,
+            order: 0,
           } as ServiceCategory);
         }
       }
@@ -535,6 +537,8 @@ export default function ServiceRequestScreen({
             icon: 'build',
             color: theme.primary,
             questionnaire: [],
+            isActive: true,
+            order: 0,
           } as ServiceCategory);
         }
       }
@@ -627,7 +631,7 @@ export default function ServiceRequestScreen({
                 city: addr.city,
                 district: (addr as any).district || addr.city,
                 state: addr.state,
-                pincode: addr.pincode,
+                pincode: addr.pincode || '',
                 latitude: addr.latitude,
                 longitude: addr.longitude,
               },
@@ -1092,7 +1096,7 @@ export default function ServiceRequestScreen({
     if (!ok) return null;
     const result = await launchCamera({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       saveToPhotos: false,
     });
     if (result.didCancel || result.errorCode) return null;
@@ -1104,7 +1108,7 @@ export default function ServiceRequestScreen({
     if (remaining <= 0) return null;
     const result = await launchImageLibrary({
       mediaType: 'photo',
-      quality: 0.75,
+      quality: 0.8,
       selectionLimit: remaining,
     });
     if (result.didCancel || result.errorCode) return null;
@@ -1127,7 +1131,7 @@ export default function ServiceRequestScreen({
   const requirePhoneLogin = () => {
     setRedirectAfterLogin({
       route: 'ServiceRequest',
-      params: route.params,
+      params: route?.params,
     });
     setAlertModal({
       visible: true,
@@ -1901,7 +1905,9 @@ export default function ServiceRequestScreen({
             opacity: canSubmit ? 1 : 0.5,
           },
         ]}
-        onPress={handleSubmit}
+        onPress={() => {
+          void handleSubmit();
+        }}
         disabled={!canSubmit}>
         {loading ? (
           <ActivityIndicator color="#fff" />

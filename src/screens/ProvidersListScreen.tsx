@@ -53,6 +53,9 @@ import useTranslation from '../hooks/useTranslation';
 import AlertModal from '../components/AlertModal';
 import ProviderRequestModal from '../components/ProviderRequestModal';
 import {filterOutOwnProvider} from '../utils/excludeOwnProvider';
+import {sortBrowseRows} from '../utils/browseDiscovery';
+import {isConnectionFailure} from '../utils/userFacingError';
+import {ConnectionNotice} from '../components/ConnectionNotice';
 import {contactHintMessage} from '../utils/providerContact';
 import {otherVisibleProviderServices, matchingProviderService, visibleProviderServices} from '../utils/matchingProviderService';
 import {resolveServiceMeta} from '../services/serviceCatalog';
@@ -164,6 +167,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
   const [filteredProviders, setFilteredProviders] = useState<ProviderWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [connectionFailed, setConnectionFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProfession, setSelectedProfession] = useState(ALL_PROFESSIONS);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
@@ -461,24 +465,22 @@ export default function ProvidersListScreen({navigation, route}: any) {
         list.push(provider);
       }
 
-      list.sort((a, b) => {
-        if (a.isOnline && !b.isOnline) return -1;
-        if (!a.isOnline && b.isOnline) return 1;
-        if (a.eta && b.eta) return a.eta - b.eta;
-        if (a.rating && b.rating) return b.rating - a.rating;
-        return 0;
-      });
-
-      setProviders(filterOutOwnProvider(list, currentUser));
+      setConnectionFailed(false);
+      setProviders(filterOutOwnProvider(sortBrowseRows(list), currentUser));
     } catch (error: any) {
       console.error('Error loading providers:', error);
-      setProviders([]);
-      setAlertModal({
-        visible: true,
-        title: t('common.error'),
-        message: error?.message || t('providers.failedToLoad'),
-        type: 'error',
-      });
+      if (isConnectionFailure(error)) {
+        setConnectionFailed(true);
+        if (!refreshing) setProviders([]);
+      } else {
+        setProviders([]);
+        setAlertModal({
+          visible: true,
+          title: t('common.error'),
+          message: error?.message || t('providers.failedToLoad'),
+          type: 'error',
+        });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1064,20 +1066,25 @@ export default function ProvidersListScreen({navigation, route}: any) {
               <HsIcon name="refresh" size={20} color={theme.primary} />
             </TouchableOpacity>
           </View>
-          {!isGuest ? (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ShareContactRecommendation')}>
-              <Text
-                style={{
-                  color: theme.primary,
-                  fontWeight: '600',
-                  fontSize: 13,
-                }}>
-                {t('browse.suggestCta')}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ShareContactRecommendation')}>
+            <Text
+              style={{
+                color: theme.primary,
+                fontWeight: '600',
+                fontSize: 13,
+              }}>
+              {t('browse.suggestCta')}
+            </Text>
+          </TouchableOpacity>
         </View>
+      ) : null}
+
+      {connectionFailed && filteredProviders.length > 0 ? (
+        <ConnectionNotice
+          kind="refresh"
+          onRetry={() => void handleRefresh()}
+        />
       ) : null}
 
       {loading && filteredProviders.length === 0 ? (
@@ -1087,18 +1094,22 @@ export default function ProvidersListScreen({navigation, route}: any) {
             {t('browse.loading') || t('providers.loading')}
           </Text>
         </View>
+      ) : connectionFailed && filteredProviders.length === 0 ? (
+        <ConnectionNotice
+          kind="load"
+          emptyTitle={String(t('browse.loadFailedTitle') || emptyTitle)}
+          onRetry={() => void loadOnlineProviders()}
+        />
       ) : filteredProviders.length === 0 ? (
         <View style={styles.emptyWrap}>
           <EmptyState icon="search-outline" title={emptyTitle} />
-          {!isGuest ? (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ShareContactRecommendation')}
-              style={styles.emptyAction}>
-              <Text style={[styles.emptyActionText, {color: theme.primary}]}>
-                {t('browse.suggestCta')}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ShareContactRecommendation')}
+            style={styles.emptyAction}>
+            <Text style={[styles.emptyActionText, {color: theme.primary}]}>
+              {t('browse.suggestCta')}
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList

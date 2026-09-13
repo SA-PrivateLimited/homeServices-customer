@@ -38,5 +38,5 @@ export function localizedServiceDescription(
   raw?: string | null,
   extras?: {nameHi?: string; descriptionHi?: string},
 ): string {
-  return serviceDescription(raw, currentAppLang(), extras);
+  return serviceDescription(raw, currentAppLang(), undefined, extras);
 }

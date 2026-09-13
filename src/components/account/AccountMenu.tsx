@@ -141,8 +141,12 @@ function AccountMenuHost({
   };
 
   const openPartner = () => {
-    if (busy || !canSwitch) return;
+    if (busy) return;
     onClose();
+    if (!canSwitch) {
+      void Linking.openURL(PARTNER_WEB_URL);
+      return;
+    }
     setBusy(true);
     void createPartnerContextHandoff()
       .then(code => Linking.openURL(partnerHandoffUrl(code)))
@@ -177,14 +181,14 @@ function AccountMenuHost({
                   ) : null}
                 </View>
 
-                {canSwitch ? (
-                  <View style={s.modeBlock}>
-                    <View style={s.modeCurrent}>
-                      <Icon name="check" size={16} color={HEADER.primaryDark} />
-                      <Text style={s.modeCurrentText}>
-                        {t('mode.customer')}
-                      </Text>
-                    </View>
+                <View style={s.modeBlock}>
+                  <View style={s.modeCurrent}>
+                    <Icon name="check" size={16} color={HEADER.primaryDark} />
+                    <Text style={s.modeCurrentText}>
+                      {t('mode.customer')}
+                    </Text>
+                  </View>
+                  {canSwitch ? (
                     <TouchableOpacity
                       style={s.item}
                       disabled={busy}
@@ -201,8 +205,29 @@ function AccountMenuHost({
                         </Text>
                       </View>
                     </TouchableOpacity>
-                  </View>
-                ) : null}
+                  ) : (
+                    <View style={s.modeUnavailable}>
+                      <Text style={s.modeUnavailableTitle}>
+                        {t('mode.partner')}
+                      </Text>
+                      <Text style={s.itemHint}>
+                        {t('mode.partnerNotCreated')}
+                      </Text>
+                      <TouchableOpacity
+                        style={s.modeCreate}
+                        disabled={busy}
+                        onPress={openPartner}
+                        accessibilityRole="button"
+                        accessibilityLabel={String(
+                          t('mode.createPartnerAccount'),
+                        )}>
+                        <Text style={s.modeCreateText}>
+                          {t('mode.createPartnerAccount')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
 
                 <TouchableOpacity style={s.item} onPress={goSettings}>
                   <Icon name="person" size={20} color={HEADER.text} />

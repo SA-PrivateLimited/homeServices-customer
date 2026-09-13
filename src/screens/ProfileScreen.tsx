@@ -100,7 +100,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
 
 
   const pickImage = () => {
-    launchImageLibrary({mediaType: 'photo', quality: 0.75}, response => {
+    launchImageLibrary({mediaType: 'photo', quality: 0.8}, response => {
       if (response.assets && response.assets[0].uri) {
         setProfileImage(response.assets[0].uri);
         setImageError(false);
@@ -548,18 +548,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   {currentUser?.secondaryPhoneVerified ? (
                     <Icon name="checkmark-circle" size={20} color="#4CAF50" />
                   ) : (
-                    <TouchableOpacity
-                      onPress={() => {
-                        navigation.navigate('PhoneVerification', {
-                          mode: 'secondary',
-                          phoneNumber: secondaryPhone,
-                        });
-                      }}
-                      style={{padding: 4}}>
-                      <Text style={[styles.verifyLink, {color: theme.primary}]}>
-                        {t('profile.verify')}
-                      </Text>
-                    </TouchableOpacity>
+                    <Text style={[styles.verifiedBadge, {color: theme.textSecondary}]}>
+                      {t('profile.notVerified')}
+                    </Text>
                   )}
                   <TouchableOpacity
                     onPress={async () => {
@@ -594,18 +585,23 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity
-                  onPress={() => {
-                    navigation.navigate('PhoneVerification', {
-                      mode: 'secondary',
-                    });
-                  }}
-                  style={[styles.addButton, {borderColor: theme.primary}]}>
-                  <Icon name="add-circle-outline" size={20} color={theme.primary} />
-                  <Text style={[styles.addButtonText, {color: theme.primary}]}>
-                    {t('profile.addSecondaryPhone') || '+ Add Secondary Phone'}
-                  </Text>
-                </TouchableOpacity>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      backgroundColor: theme.card,
+                      borderColor: theme.border,
+                      minWidth: 160,
+                      textAlign: 'right',
+                    },
+                  ]}
+                  value={secondaryPhone}
+                  onChangeText={setSecondaryPhone}
+                  placeholder={t('profile.addSecondaryPhone') || 'Add secondary phone'}
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="phone-pad"
+                />
               )}
             </View>
           ) : (

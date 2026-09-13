@@ -200,8 +200,9 @@ class WebSocketService {
       } else {
         console.log('🔌 [WEBSOCKET] Socket is null, connecting first...');
         this.connect();
-        if (this.socket) {
-          this.socket.once('connect', () => {
+        const sock = this.socket as Socket | null;
+        if (sock) {
+          sock.once('connect', () => {
             const roomName = `customer-${customerId}`;
             this.socket?.emit('join-customer-room', customerId);
             console.log(`✅ [WEBSOCKET] Joined customer room: ${roomName}`);

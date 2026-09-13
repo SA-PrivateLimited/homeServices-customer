@@ -235,7 +235,7 @@ class GeolocationService {
             
             // Handle specific Google Play Services errors - fallback to community geolocation
             const errorMessage = error?.message || String(error) || '';
-            const errorCode = error?.code || '';
+            const errorCode = String(error?.code ?? '');
             
             if (errorMessage.includes('RNFusedLocation') || 
                 errorMessage.includes('FusedLocationProviderClient') ||
