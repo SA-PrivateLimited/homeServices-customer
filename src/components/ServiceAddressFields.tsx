@@ -326,17 +326,8 @@ export function ServiceAddressFields({
     if (!editable) return;
     setDetecting(true);
     try {
-      const permission = await GeolocationService.requestLocationPermission();
-      if (permission !== 'granted') {
-        Alert.alert(
-          String(t('common.permissionRequired')),
-          String(t('services.locationPermissionRequired')),
-        );
-        return;
-      }
-
       const [location, meta] = await Promise.all([
-        GeolocationService.getCurrentLocation(),
+        GeolocationService.getLocationWithPrompt(),
         getGeographyMeta(),
       ]);
       setStates(meta.states);
@@ -416,12 +407,60 @@ export function ServiceAddressFields({
         longitude: location.longitude,
         country: 'IN',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as {code: string}).code)
+          : '';
+      if (code === 'services_off') {
+        Alert.alert(
+          String(t('ecosystem.turnOnLocationTitle')),
+          String(t('ecosystem.turnOnLocationMessage')),
+          [
+            {text: String(t('common.cancel') || 'Cancel'), style: 'cancel'},
+            {
+              text: String(t('ecosystem.turnOnLocationAction')),
+              onPress: () => {
+                void GeolocationService.promptEnableDeviceLocation().then(
+                  result => {
+                    if (result === 'enabled') {
+                      void fillFromCurrentLocation();
+                    }
+                  },
+                );
+              },
+            },
+          ],
+        );
+        return;
+      }
+      if (code === 'never_ask_again') {
+        Alert.alert(
+          String(t('ecosystem.allowLocationTitle')),
+          String(t('ecosystem.locationNeverAskAgain')),
+          [
+            {text: String(t('common.cancel') || 'Cancel'), style: 'cancel'},
+            {
+              text: String(t('ecosystem.openAppSettings')),
+              onPress: () => {
+                void GeolocationService.openAppPermissionSettings();
+              },
+            },
+          ],
+        );
+        return;
+      }
+      if (code === 'denied') {
+        Alert.alert(
+          String(t('ecosystem.allowLocationTitle')),
+          String(t('ecosystem.locationDenied')),
+        );
+        return;
+      }
       Alert.alert(
         String(t('common.error')),
         getUserFacingErrorMessage(error, 'generic') ||
-          error?.message ||
-          String(t('services.detectLocationFailed')),
+          String(t('ecosystem.locationUnavailable') || t('services.detectLocationFailed')),
       );
     } finally {
       setDetecting(false);
@@ -554,6 +593,14 @@ export function ServiceAddressFields({
             clearAriaLabel={String(t('common.clear') || 'Clear')}
             onChange={onStateChange}
             colors={crystalColors}
+            showSearch
+            searchPlaceholder={String(
+              t('browse.searchStatePlaceholder') || 'Search state...',
+            )}
+            emptySearchText={String(
+              t('browse.noStatesFound') ||
+                'No states found\nTry a different name.',
+            )}
           />
 
           <Text style={[styles.label, {color: theme.text}]}>
@@ -571,6 +618,14 @@ export function ServiceAddressFields({
             clearAriaLabel={String(t('common.clear') || 'Clear')}
             onChange={onDistrictChange}
             colors={crystalColors}
+            showSearch
+            searchPlaceholder={String(
+              t('browse.searchDistrictPlaceholder') || 'Search district...',
+            )}
+            emptySearchText={String(
+              t('browse.noDistrictsFound') ||
+                'No districts found\nTry a different name.',
+            )}
           />
 
           {blockOptions.length > 0 ? (
@@ -588,6 +643,14 @@ export function ServiceAddressFields({
                 clearAriaLabel={String(t('common.clear') || 'Clear')}
                 onChange={onBlockChange}
                 colors={crystalColors}
+                showSearch
+                searchPlaceholder={String(
+                  t('browse.searchBlockPlaceholder') || 'Search block...',
+                )}
+                emptySearchText={String(
+                  t('browse.noBlocksFound') ||
+                    'No blocks found\nTry a different name.',
+                )}
               />
             </>
           ) : null}

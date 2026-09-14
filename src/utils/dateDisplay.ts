@@ -55,3 +55,34 @@ export function formatJobCalendarDate(
   if (Number.isNaN(d.getTime())) return fallback;
   return formatParts(d, locale, JOB_DISPLAY_TIME_ZONE);
 }
+
+/** Customer-facing "5 Sep 2026 · 11:02 PM" for request timestamps. */
+export function formatJobDateTime(
+  date?: string | Date | null,
+  lang?: string,
+  fallback = '',
+): string {
+  if (!date) return fallback;
+  if (typeof date === 'string' && DATE_ONLY.test(date.trim())) {
+    return formatJobCalendarDate(date, lang, fallback);
+  }
+  const d = parseDisplayDate(date);
+  if (Number.isNaN(d.getTime())) return fallback;
+  const locale = localeTag(lang);
+  try {
+    const day = d.toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: JOB_DISPLAY_TIME_ZONE,
+    });
+    const time = d.toLocaleTimeString(locale, {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: JOB_DISPLAY_TIME_ZONE,
+    });
+    return `${day} · ${time}`;
+  } catch {
+    return formatJobCalendarDate(date, lang, fallback);
+  }
+}

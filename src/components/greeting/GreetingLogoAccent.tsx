@@ -11,8 +11,6 @@ import {useGreetingStore} from '../../store/greetingStore';
 import {lightTheme, darkTheme} from '../../utils/theme';
 import {isUsableMediaUrl} from '../../utils/mediaUrl';
 
-const MATERIAL_ICON_NAME = /^[a-z][a-z0-9_]{0,63}$/;
-
 function isDoodleStillOn(
   doodleEnabled: boolean,
   doodleEndsAt: string | null,
@@ -101,8 +99,10 @@ export function GreetingLogoAccent() {
     );
   }
 
-  const icon = String(config.icon || '').trim();
-  if (!MATERIAL_ICON_NAME.test(icon)) return null;
+  const iconRaw = String(config.icon || '').trim();
+  // MaterialIcons uses hyphens; backend/web may send underscores (e.g. auto_awesome).
+  const icon = iconRaw.replace(/_/g, '-');
+  if (!icon || !/^[a-z][a-z0-9-]{0,63}$/.test(icon)) return null;
 
   return (
     <Animated.View

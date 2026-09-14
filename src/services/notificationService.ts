@@ -9,16 +9,27 @@ import messaging from '@react-native-firebase/messaging';
 import {Platform, PermissionsAndroid} from 'react-native';
 import {getUserId, readStoredUser} from './session';
 import {usersApi} from './api/usersApi';
+import {navigateFromNotificationData} from './notificationNavigation';
 
 export const CUSTOMER_FCM_CHANNEL = 'service_requests';
 
 class NotificationService {
   private listenersBound = false;
+  private openHandlersBound = false;
 
   constructor() {
     try {
       PushNotification.configure({
         onNotification: function (notification: any) {
+          try {
+            if (notification?.userInteraction) {
+              navigateFromNotificationData(
+                notification?.data || notification || {},
+              );
+            }
+          } catch {
+            // ignore
+          }
           notification.finish?.();
         },
         permissions: {
@@ -82,6 +93,42 @@ class NotificationService {
     await usersApi.updateFcmToken(userId, fcmToken);
   }
 
+  /**
+   * Unlink this device from the logged-in customer so the next account
+   * on the same phone does not receive the previous customer's pushes.
+   */
+  async unlinkDeviceToken(): Promise<void> {
+    try {
+      const user = await readStoredUser();
+      const userId = getUserId(user);
+      if (!userId) return;
+      const token = await this.getFCMToken();
+      await usersApi.clearFcmToken(userId, token || undefined);
+    } catch (error: any) {
+      console.warn('FCM unlink on logout:', error?.message || error);
+    }
+  }
+
+  bindOpenHandlers(): void {
+    if (this.openHandlersBound) return;
+    this.openHandlersBound = true;
+    try {
+      messaging().onNotificationOpenedApp(remoteMessage => {
+        navigateFromNotificationData(remoteMessage?.data || {});
+      });
+      void messaging()
+        .getInitialNotification()
+        .then(remoteMessage => {
+          if (remoteMessage?.data) {
+            navigateFromNotificationData(remoteMessage.data);
+          }
+        })
+        .catch(() => {});
+    } catch (error: any) {
+      console.warn('FCM open handlers:', error?.message || error);
+    }
+  }
+
   async initializeFCM(): Promise<void> {
     try {
       const authStatus = await messaging().requestPermission();
@@ -92,6 +139,7 @@ class NotificationService {
 
       const token = await messaging().getToken();
       await this.saveTokenToBackend(token);
+      this.bindOpenHandlers();
 
       if (this.listenersBound) return;
       this.listenersBound = true;
@@ -115,7 +163,7 @@ class NotificationService {
     const message =
       notification?.body || data?.body || data?.message || '';
     if (!message && !title) return;
-    this.showLocalNotification(title, message);
+    this.showLocalNotification(title, message, data);
   }
 
   async getFCMToken(): Promise<string | null> {
@@ -131,7 +179,11 @@ class NotificationService {
     return this.getFCMToken();
   }
 
-  showLocalNotification(title: string, message: string): void {
+  showLocalNotification(
+    title: string,
+    message: string,
+    data?: Record<string, unknown>,
+  ): void {
     try {
       PushNotification.localNotification({
         channelId: CUSTOMER_FCM_CHANNEL,
@@ -141,6 +193,7 @@ class NotificationService {
         soundName: 'default',
         importance: 'high',
         vibrate: true,
+        userInfo: data || {},
       });
     } catch (e) {
       console.warn('Local notification failed:', e);

@@ -1,0 +1,18 @@
+{
+  "widenToDistrict": "{{district}} में सभी देखें",
+  "widenToState": "{{state}} में सभी देखें",
+  "clearPlaceFilter": "जगह फ़िल्टर हटाएँ",
+  "nameSearchOptional": "या नाम से खोजें",
+  "callLeavesAppHint": "कॉल करने के लिए फ़ोन ऐप खुलेगा।",
+  "emptyHint": "दूसरी सेवा या जगह आज़माएँ।",
+  "changeLocationCta": "जगह बदलें",
+  "searchByNamePlaceholder": "नाम से खोजें",
+  "alsoLead": "और",
+  "guestNote": "आज़ादी से देखें। सेवा अनुरोध के लिए साइन इन करें।",
+  "searchStatePlaceholder": "राज्य खोजें...",
+  "searchDistrictPlaceholder": "ज़िला खोजें...",
+  "searchBlockPlaceholder": "ब्लॉक खोजें...",
+  "noStatesFound": "कोई राज्य नहीं मिला\nदूसरा नाम आज़माएँ।",
+  "noDistrictsFound": "कोई ज़िला नहीं मिला\nदूसरा नाम आज़माएँ।",
+  "noBlocksFound": "कोई ब्लॉक नहीं मिला\nदूसरा नाम आज़माएँ।"
+}

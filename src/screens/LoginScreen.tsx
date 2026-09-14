@@ -591,9 +591,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                 {step === 'pin' ? (
                   <View style={web.form}>
                     <View style={web.readonlyPhone}>
-                      <Text style={web.readonlyPhoneLabel}>{t('login.enterPinLabel')}</Text>
+                      <View style={web.readonlyPhoneTop}>
+                        <Text style={web.readonlyPhoneLabel}>
+                          {t('login.mobileLabel')}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => void handleUseAnotherNumber()}
+                          disabled={loading}
+                          hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                          accessibilityRole="button"
+                          accessibilityLabel={String(t('login.changeMobile'))}>
+                          <Text style={web.changeNumberLink}>
+                            {t('shareContact.change') || t('common.change') || 'Change'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                       <Text style={web.readonlyPhoneValue}>{fullPhone()}</Text>
                     </View>
+                    <Text style={web.label}>{t('login.enterPinLabel')}</Text>
                     <PinBoxesInput
                       value={pin}
                       length={LOGIN_PIN_LENGTH}
@@ -653,9 +668,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                     <View style={web.linkRow}>
                       <TouchableOpacity style={web.textLink} onPress={() => void handleForgotPin()} disabled={loading}>
                         <Text style={web.textLinkLabel}>{t('login.forgotPin')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={web.textLink} onPress={() => void handleUseAnotherNumber()} disabled={loading}>
-                        <Text style={web.textLinkMuted}>{t('login.changeMobile')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

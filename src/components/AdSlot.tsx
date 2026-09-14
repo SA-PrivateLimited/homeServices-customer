@@ -35,20 +35,15 @@ export default function AdSlot({adUnitId, size = 'banner', style}: AdSlotProps) 
   const [adError, setAdError] = useState(false);
   const unitId = adUnitId || (__DEV__ ? BANNER_TEST_ID : '');
 
-  // Never show sample/test ads or empty slots in production builds.
-  if (!unitId || isGoogleSampleAdId(unitId) || adError || !BannerAd) {
-    if (!__DEV__) {
-      return null;
-    }
-    return (
-      <View
-        style={[
-          styles.placeholder,
-          size === 'large' && styles.placeholderLarge,
-          style,
-        ]}
-      />
-    );
+  // Never reserve empty grey space when an ad is unavailable.
+  // Only mount a real BannerAd (or nothing).
+  if (!unitId || adError || !BannerAd) {
+    return null;
+  }
+
+  // Block Google sample IDs in release builds (Play policy).
+  if (!__DEV__ && isGoogleSampleAdId(unitId)) {
+    return null;
   }
 
   const adSize =
@@ -71,13 +66,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
-  },
-  placeholder: {
-    height: 50,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    width: '100%',
-  },
-  placeholderLarge: {
-    height: 100,
   },
 });

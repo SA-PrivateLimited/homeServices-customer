@@ -874,8 +874,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({navigation}) => {
       {/* Success Modal */}
       <SuccessModal
         visible={showSuccessModal}
-        title={t('common.success')}
+        title={String(t('profile.profileUpdatedTitle') || 'Profile updated')}
         message={successMessage}
+        buttonText={String(t('common.done') || 'Done')}
         onClose={() => setShowSuccessModal(false)}
       />
     </ScrollView>

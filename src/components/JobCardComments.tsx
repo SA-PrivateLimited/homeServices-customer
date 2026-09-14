@@ -42,12 +42,6 @@ type Props = {
   postLabel?: string;
 };
 
-function roleIcon(role: JobComment['role']): string {
-  if (role === 'customer') return 'person';
-  if (role === 'provider') return 'engineering';
-  return 'admin-panel-settings';
-}
-
 function formatTime(value?: string | Date): string {
   if (!value) return '';
   try {
@@ -124,22 +118,18 @@ export default function JobCardComments({
             key={c._id}
             style={[styles.item, {borderBottomColor: theme.border}]}>
             <View style={styles.meta}>
-              <Icon name={roleIcon(c.role)} size={16} color={theme.primary} />
-              <Text style={[styles.role, {color: theme.primary}]}>
-                {roleLabel(c.role)}
+              <Text
+                style={[styles.authorPrimary, {color: theme.text}]}
+                numberOfLines={1}>
+                {c.authorName?.trim() || roleLabel(c.role)}
               </Text>
-              {c.authorName ? (
-                <Text
-                  style={[styles.author, {color: theme.textSecondary}]}
-                  numberOfLines={1}>
-                  {c.authorName}
-                </Text>
-              ) : null}
               <Text style={[styles.time, {color: theme.textSecondary}]}>
                 {formatTime(c.createdAt)}
               </Text>
             </View>
-            <Text style={[styles.body, {color: theme.text}]}>{c.text}</Text>
+            <Text style={[styles.body, {color: theme.text}]}>
+              {`“${c.text}”`}
+            </Text>
           </View>
         ))
       )}
@@ -225,6 +215,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flexShrink: 1,
   },
+  authorPrimary: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
   time: {
     fontSize: 11,
     marginLeft: 'auto',
@@ -232,6 +227,7 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 14,
     lineHeight: 20,
+    fontStyle: 'italic',
   },
   composer: {
     marginTop: 12,

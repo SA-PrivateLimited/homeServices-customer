@@ -1,0 +1,7 @@
+{
+  "requestedOn": "{{date}} को अनुरोध",
+  "requested": "{{date}} को अनुरोध",
+  "completedOn": "{{date}} को पूरा",
+  "cancelledOn": "{{date}} को रद्द",
+  "notAvailable": "—"
+}

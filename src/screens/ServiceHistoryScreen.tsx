@@ -700,27 +700,33 @@ export default function ServiceHistoryScreen({navigation}: any) {
           contentContainerStyle={styles.filterScrollContent}>
           {(
             [
-              {key: 'now', label: `${t('status.filter.now')} (${nowCount})`},
-              {key: 'all', label: `${t('common.all')} (${allCount})`},
+              {
+                key: 'now',
+                label: `${t('status.filter.now')} (${nowCount})`,
+              },
               {
                 key: 'pending',
-                label: `${t('services.pending')} (${pendingCount})`,
+                label: `${t('status.filter.waiting') || t('status.filter.pending')} (${pendingCount})`,
               },
               {
                 key: 'accepted',
-                label: `${t('services.accepted')} (${acceptedCount})`,
+                label: `${t('status.filter.accepted')} (${acceptedCount})`,
               },
               {
                 key: 'in-progress',
-                label: `${t('services.inProgress')} (${inProgressCount})`,
+                label: `${t('status.filter.inProgress')} (${inProgressCount})`,
               },
               {
                 key: 'completed',
-                label: `${t('services.completed')} (${completedCount})`,
+                label: `${t('status.filter.completed')} (${completedCount})`,
               },
               {
                 key: 'cancelled',
-                label: `${t('services.cancelled')} (${cancelledCount})`,
+                label: `${t('status.filter.cancelled') || t('history.cancelledChip')} (${cancelledCount})`,
+              },
+              {
+                key: 'all',
+                label: `${t('status.filter.all') || t('common.all')} (${allCount})`,
               },
             ] as const
           ).map(chip => {
@@ -735,19 +741,25 @@ export default function ServiceHistoryScreen({navigation}: any) {
                       ? theme.primary
                       : isDarkMode
                         ? 'rgba(255,255,255,0.08)'
-                        : 'rgba(255,255,255,0.82)',
+                        : 'rgba(255,255,255,0.92)',
                     borderColor: active
                       ? theme.primary
                       : isDarkMode
                         ? 'rgba(255,255,255,0.16)'
-                        : 'rgba(15,28,46,0.12)',
+                        : 'rgba(15,28,46,0.10)',
+                    borderWidth: active ? 0 : StyleSheet.hairlineWidth,
                   },
                 ]}
-                onPress={() => setFilter(chip.key)}>
+                onPress={() => setFilter(chip.key)}
+                accessibilityRole="button"
+                accessibilityState={{selected: active}}>
                 <Text
                   style={[
                     styles.filterButtonText,
-                    {color: active ? '#fff' : theme.text},
+                    {
+                      color: active ? '#fff' : theme.text,
+                      fontWeight: active ? '700' : '600',
+                    },
                   ]}>
                   {chip.label}
                 </Text>
@@ -960,7 +972,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         onClose={() => setAlertModal({...alertModal, visible: false})}
       />
 
-      {/* Completed Service Details Modal */}
+      {/* Completed Service Details Modal — compact outcome sheet */}
       <Modal
         visible={showCompletedServiceModal}
         transparent
@@ -972,258 +984,224 @@ export default function ServiceHistoryScreen({navigation}: any) {
           onPress={() => setShowCompletedServiceModal(false)}>
           <TouchableOpacity
             activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.completedServiceModal, {backgroundColor: theme.card}]}>
-              {/* Drag Indicator */}
+            onPress={e => e.stopPropagation()}>
+            <View
+              style={[
+                styles.completedServiceModal,
+                {backgroundColor: theme.card},
+              ]}>
               <View style={styles.dragIndicator} />
 
-              {/* Header with gradient background */}
-              <View style={[styles.completedModalHeader, {backgroundColor: theme.primary}]}>
-                <View style={styles.completedHeaderContent}>
-                  <View style={styles.completedHeaderIcon}>
-                    <Icon name="check-circle" size={32} color="#fff" />
-                  </View>
-                  <View style={styles.completedHeaderText}>
-                    <Text style={styles.completedModalTitle}>
-                      Service Completed
-                    </Text>
-                    <Text style={styles.completedModalSubtitle}>
-                      View service details below
-                    </Text>
-                  </View>
+              <View style={styles.completedCompactHeader}>
+                <View
+                  style={[
+                    styles.completedSuccessIcon,
+                    {backgroundColor: `${theme.success || theme.primary}18`},
+                  ]}>
+                  <Icon
+                    name="check-circle"
+                    size={26}
+                    color={theme.success || theme.primary}
+                  />
                 </View>
+                <Text style={[styles.completedModalTitle, {color: theme.text}]}>
+                  {String(
+                    t('activeService.serviceCompleted') ||
+                      t('services.serviceCompleted') ||
+                      'Service completed',
+                  )}
+                </Text>
                 <TouchableOpacity
-                  style={styles.closeIconButton}
-                  onPress={() => setShowCompletedServiceModal(false)}>
-                  <Icon name="close" size={24} color="#fff" />
+                  style={styles.closeIconButtonMuted}
+                  onPress={() => setShowCompletedServiceModal(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel={String(t('common.close') || 'Close')}>
+                  <Icon name="close" size={22} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
 
-              {selectedCompletedService && (
+              {selectedCompletedService ? (
                 <ScrollView
                   style={styles.completedServiceContent}
                   contentContainerStyle={styles.completedServiceContentContainer}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled={true}>
+                  showsVerticalScrollIndicator
+                  nestedScrollEnabled>
+                  <Text
+                    style={[styles.completedLeadService, {color: theme.text}]}>
+                    {selectedCompletedService.serviceType}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.completedLeadProvider,
+                      {color: theme.textSecondary},
+                    ]}>
+                    {selectedCompletedService.providerName}
+                  </Text>
 
-                  {/* Service Type Card */}
-                  <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                    <View style={styles.detailCardHeader}>
-                      <Icon name="build" size={24} color={theme.primary} />
-                      <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                        Service Information
-                      </Text>
-                    </View>
-                    <Text style={[styles.detailCardValue, {color: theme.text}]}>
-                      {selectedCompletedService.serviceType}
+                  {selectedCompletedService.createdAt ? (
+                    <Text
+                      style={[
+                        styles.completedMetaLine,
+                        {color: theme.textSecondary},
+                      ]}>
+                      {new Date(
+                        selectedCompletedService.createdAt,
+                      ).toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
                     </Text>
-                  </View>
+                  ) : null}
 
-                  {/* Provider Card */}
-                  <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                    <View style={styles.detailCardHeader}>
-                      <Icon name="person" size={24} color={theme.primary} />
-                      <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                        Service Provider
-                      </Text>
-                    </View>
-                    <Text style={[styles.detailCardValue, {color: theme.text}]}>
-                      {selectedCompletedService.providerName}
+                  {selectedCompletedService.problem ? (
+                    <Text
+                      style={[
+                        styles.completedMetaLine,
+                        {color: theme.textSecondary},
+                      ]}>
+                      {selectedCompletedService.problem}
                     </Text>
-                    {providerDetails?.phone && (
-                      <View style={styles.providerContactRow}>
-                        <Icon name="phone" size={18} color={theme.primary} />
-                        <Text style={[styles.providerPhoneText, {color: theme.textSecondary}]}>
-                          {providerDetails.phone}
-                        </Text>
-                        <TouchableOpacity
-                          style={[styles.modalCallButton, {backgroundColor: theme.primary}]}
-                          onPress={() => handleCallProvider(providerDetails.phone)}>
-                          <Icon name="phone" size={16} color="#fff" />
-                          <Text style={styles.modalCallButtonText}>Call</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
+                  ) : null}
 
-                  {/* Provider Address Card */}
-                  {providerDetails?.address && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="home" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Provider Address
-                        </Text>
-                      </View>
-                      <Text style={[styles.detailCardValue, {color: theme.textSecondary}]}>
-                        {typeof providerDetails.address === 'string'
-                          ? providerDetails.address
-                          : providerDetails.address.address
-                          ? `${providerDetails.address.address}${providerDetails.address.city ? ', ' + providerDetails.address.city : ''}${providerDetails.address.state ? ', ' + providerDetails.address.state : ''}${providerDetails.address.pincode ? ' - ' + providerDetails.address.pincode : ''}`
-                          : 'N/A'}
+                  {selectedCompletedService.customerAddress ? (
+                    <Text
+                      style={[
+                        styles.completedMetaLine,
+                        {color: theme.textSecondary},
+                      ]}>
+                      {typeof selectedCompletedService.customerAddress ===
+                      'string'
+                        ? selectedCompletedService.customerAddress
+                        : selectedCompletedService.customerAddress.address || ''}
+                    </Text>
+                  ) : null}
+
+                  {providerDetails?.phone ? (
+                    <View style={styles.providerContactRow}>
+                      <Icon name="phone" size={16} color={theme.primary} />
+                      <Text
+                        style={[
+                          styles.providerPhoneText,
+                          {color: theme.textSecondary},
+                        ]}>
+                        {providerDetails.phone}
                       </Text>
-                    </View>
-                  )}
-
-                  {/* Review Card */}
-                  {providerReview && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="star" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Your Review
+                      <TouchableOpacity
+                        style={[
+                          styles.modalCallButton,
+                          {backgroundColor: theme.primary},
+                        ]}
+                        onPress={() =>
+                          handleCallProvider(providerDetails.phone)
+                        }>
+                        <Text style={styles.modalCallButtonText}>
+                          {String(t('browse.call') || 'Call')}
                         </Text>
-                      </View>
-                      <View style={styles.reviewRatingRow}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Icon
-                            key={star}
-                            name={star <= providerReview.rating ? 'star' : 'star-border'}
-                            size={20}
-                            color={star <= providerReview.rating ? '#FFD700' : theme.textSecondary}
-                          />
-                        ))}
-                        <Text style={[styles.reviewRatingText, {color: theme.textSecondary}]}>
-                          {providerReview.rating}/5
-                        </Text>
-                      </View>
-                      {providerReview.comment && (
-                        <Text style={[styles.reviewComment, {color: theme.textSecondary}]}>
-                          "{providerReview.comment}"
-                        </Text>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Date Card */}
-                  {selectedCompletedService.createdAt && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="calendar-today" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Service Date
-                        </Text>
-                      </View>
-                      <Text style={[styles.detailCardValue, {color: theme.text}]}>
-                        {new Date(selectedCompletedService.createdAt).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Problem/Description Card */}
-                  {selectedCompletedService.problem && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="description" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Service Details
-                        </Text>
-                      </View>
-                      <Text style={[styles.detailCardValue, {color: theme.textSecondary}]}>
-                        {selectedCompletedService.problem}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Address Card */}
-                  {selectedCompletedService.customerAddress && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="location-on" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          Service Location
-                        </Text>
-                      </View>
-                      <Text style={[styles.detailCardValue, {color: theme.textSecondary}]}>
-                        {typeof selectedCompletedService.customerAddress === 'string'
-                          ? selectedCompletedService.customerAddress
-                          : selectedCompletedService.customerAddress.address || 'N/A'}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Amount Card */}
-                  {(selectedCompletedService as any).totalAmount || (selectedCompletedService as any).serviceAmount ? (
-                    <View style={[styles.detailCard, styles.amountCard, {backgroundColor: theme.primary + '15'}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="payment" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          {String(t('serviceHistory.totalAmount'))}
-                        </Text>
-                      </View>
-                      <Text style={[styles.amountValue, {color: theme.primary}]}>
-                        ₹{(selectedCompletedService as any).totalAmount || (selectedCompletedService as any).serviceAmount || 0}
-                      </Text>
-                      {(selectedCompletedService as any).materialsUsed && (selectedCompletedService as any).materialsUsed.length > 0 && (
-                        <View style={styles.materialsBreakdown}>
-                          {(selectedCompletedService as any).serviceAmount > 0 && (
-                            <Text style={[styles.materialsBreakdownText, {color: theme.textSecondary}]}>
-                              {String(t('serviceHistory.serviceFee'))}: ₹{(selectedCompletedService as any).serviceAmount.toFixed(2)}
-                            </Text>
-                          )}
-                          {(selectedCompletedService as any).materialsUsed.reduce((sum: number, m: any) => sum + (m.total || 0), 0) > 0 && (
-                            <Text style={[styles.materialsBreakdownText, {color: theme.textSecondary}]}>
-                              {String(t('serviceHistory.materials'))}: ₹{(selectedCompletedService as any).materialsUsed.reduce((sum: number, m: any) => sum + (m.total || 0), 0).toFixed(2)}
-                            </Text>
-                          )}
-                        </View>
-                      )}
+                      </TouchableOpacity>
                     </View>
                   ) : null}
 
-                  {/* Job Card PDF */}
-                  {(selectedCompletedService as any).jobCardPdfUrl && (
-                    <View style={[styles.detailCard, {backgroundColor: theme.background}]}>
-                      <View style={styles.detailCardHeader}>
-                        <Icon name="description" size={24} color={theme.primary} />
-                        <Text style={[styles.detailCardTitle, {color: theme.text}]}>
-                          {String(t('serviceHistory.jobCard'))}
+                  {providerReview ? (
+                    <View
+                      style={[
+                        styles.completedInlineCard,
+                        {backgroundColor: theme.background},
+                      ]}>
+                      <View style={styles.reviewRatingRow}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Icon
+                            key={star}
+                            name={
+                              star <= providerReview.rating
+                                ? 'star'
+                                : 'star-border'
+                            }
+                            size={18}
+                            color={
+                              star <= providerReview.rating
+                                ? '#FFD700'
+                                : theme.textSecondary
+                            }
+                          />
+                        ))}
+                        <Text
+                          style={[
+                            styles.reviewRatingText,
+                            {color: theme.textSecondary},
+                          ]}>
+                          {providerReview.rating}/5
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        style={[styles.pdfButton, {backgroundColor: theme.primary}]}
-                        onPress={() => {
-                          Linking.openURL((selectedCompletedService as any).jobCardPdfUrl).catch(err => {
-                            setAlertModal({
-                              visible: true,
-                              title: String(t('common.error')),
-                              message: String(t('serviceHistory.failedToOpenPDF')),
-                              type: 'error',
-                            });
-                          });
-                        }}>
-                        <Icon name="picture-as-pdf" size={20} color="#fff" />
-                        <Text style={styles.pdfButtonText}>
-                          {String(t('serviceHistory.viewJobCard'))}
+                      {providerReview.comment ? (
+                        <Text
+                          style={[
+                            styles.reviewComment,
+                            {color: theme.textSecondary},
+                          ]}>
+                          "{providerReview.comment}"
                         </Text>
-                        <Icon name="open-in-new" size={18} color="#fff" />
-                      </TouchableOpacity>
+                      ) : null}
                     </View>
-                  )}
+                  ) : null}
 
-                  {/* Status Badge */}
-                  <View style={styles.statusBadgeContainer}>
-                    <View style={styles.completedBadge}>
-                      <Icon name="verified" size={20} color="#4CAF50" />
-                      <Text style={styles.completedBadgeText}>
-                        Service Successfully Completed
+                  {(selectedCompletedService as any).totalAmount ||
+                  (selectedCompletedService as any).serviceAmount ? (
+                    <Text
+                      style={[
+                        styles.completedAmountLine,
+                        {color: theme.primary},
+                      ]}>
+                      ₹
+                      {(selectedCompletedService as any).totalAmount ||
+                        (selectedCompletedService as any).serviceAmount ||
+                        0}
+                    </Text>
+                  ) : null}
+
+                  {(selectedCompletedService as any).jobCardPdfUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.pdfButton,
+                        {backgroundColor: theme.primary},
+                      ]}
+                      onPress={() => {
+                        Linking.openURL(
+                          (selectedCompletedService as any).jobCardPdfUrl,
+                        ).catch(() => {
+                          setAlertModal({
+                            visible: true,
+                            title: String(t('common.error')),
+                            message: String(
+                              t('serviceHistory.failedToOpenPDF'),
+                            ),
+                            type: 'error',
+                          });
+                        });
+                      }}>
+                      <Icon name="picture-as-pdf" size={18} color="#fff" />
+                      <Text style={styles.pdfButtonText}>
+                        {String(t('serviceHistory.viewJobCard'))}
                       </Text>
-                    </View>
-                  </View>
+                    </TouchableOpacity>
+                  ) : null}
                 </ScrollView>
-              )}
+              ) : null}
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.dismissButton, {borderColor: theme.border}]}
+                  style={[
+                    styles.dismissButton,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: theme.background,
+                    },
+                  ]}
                   onPress={() => setShowCompletedServiceModal(false)}>
-                  <Text style={[styles.dismissButtonText, {color: theme.textSecondary}]}>
-                    Close
+                  <Text
+                    style={[styles.dismissButtonText, {color: theme.text}]}>
+                    {String(t('common.close') || 'Close')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1463,24 +1441,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   filterContainer: {
-    paddingVertical: 12,
-    paddingTop: 16,
-    borderBottomWidth: 1,
+    paddingVertical: 8,
+    paddingTop: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
   },
   filterScrollContent: {
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   filterButton: {
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 999,
-    marginRight: 8,
     alignItems: 'center',
-    minHeight: 30,
-    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+    minHeight: 32,
   },
   filterButtonActive: {
     // Active state handled by backgroundColor
@@ -1572,10 +1550,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   completedServiceModal: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '78%',
     width: '100%',
     position: 'absolute',
     bottom: 0,
@@ -1592,52 +1569,69 @@ const styles = StyleSheet.create({
     backgroundColor: '#DDD',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  completedModalHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  completedHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  completedHeaderIcon: {
-    marginRight: 16,
-  },
-  completedHeaderText: {
-    flex: 1,
-  },
-  completedModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
+    marginTop: 10,
     marginBottom: 4,
   },
-  completedModalSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '400',
+  completedCompactHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+    alignItems: 'center',
+    position: 'relative',
   },
-  closeIconButton: {
+  completedSuccessIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  completedModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: 36,
+  },
+  closeIconButtonMuted: {
+    position: 'absolute',
+    right: 10,
+    top: 4,
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  completedLeadService: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  completedLeadProvider: {
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  completedMetaLine: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  completedAmountLine: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  completedInlineCard: {
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 4,
   },
   completedServiceContent: {
-    flex: 1,
+    flexGrow: 0,
     paddingHorizontal: 16,
   },
   completedServiceContentContainer: {
-    paddingTop: 16,
-    paddingBottom: 100, // Extra padding to ensure content is scrollable
+    paddingTop: 4,
+    paddingBottom: 16,
   },
   detailCard: {
     padding: 16,

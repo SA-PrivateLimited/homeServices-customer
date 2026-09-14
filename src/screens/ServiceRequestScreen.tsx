@@ -1897,6 +1897,27 @@ export default function ServiceRequestScreen({
       ) : null}
 
       {/* Submit */}
+      {!canSubmit && !loading ? (
+        <Text style={[styles.submitHint, {color: theme.textSecondary}]}>
+          {!selectedServiceType
+            ? String(t('request.selectServiceFirst'))
+            : addressSel.mode === 'edit'
+              ? String(
+                  t('request.finishAddressEdit') ||
+                    t('request.selectAddress') ||
+                    'Finish editing your address',
+                )
+              : !selectedAddress?.address || !selectedAddress?.pincode
+                ? String(t('request.selectAddress'))
+                : !problemFlowComplete
+                  ? String(
+                      t('request.answerRequired') ||
+                        t('request.selectProblem') ||
+                        t('request.problemRequired'),
+                    )
+                  : null}
+        </Text>
+      ) : null}
       <TouchableOpacity
         style={[
           styles.submitButton,
@@ -2688,6 +2709,13 @@ const styles = StyleSheet.create({
   },
 
 
+  submitHint: {
+    marginHorizontal: 14,
+    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',

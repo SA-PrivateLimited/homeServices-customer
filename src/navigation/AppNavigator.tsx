@@ -12,6 +12,11 @@ import useTranslation from '../hooks/useTranslation';
 import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
 import {onSessionExpired} from '../services/sessionExpiry';
 import {customerLinking} from './linking';
+import {
+  flushPendingNotificationNavigation,
+  setNotificationNavigationRef,
+} from '../services/notificationNavigation';
+import NotificationService from '../services/notificationService';
 
 import LoginScreen from '../screens/LoginScreen';
 import MainTabs from './MainTabs';
@@ -27,9 +32,10 @@ const navigationRef = createNavigationContainerRef();
 
 export default function AppNavigator() {
   const [initializing, setInitializing] = useState(true);
-  const {isDarkMode, setCurrentUser} = useStore();
+  const {isDarkMode, setCurrentUser, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
+  const isAuthed = Boolean(currentUser?.id || currentUser?._id);
 
   useEffect(() => {
     let mounted = true;
@@ -88,6 +94,11 @@ export default function AppNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
+      onReady={() => {
+        setNotificationNavigationRef(navigationRef);
+        flushPendingNotificationNavigation();
+        NotificationService.bindOpenHandlers();
+      }}
       linking={customerLinking}
       theme={{
         dark: isDarkMode,
@@ -101,7 +112,7 @@ export default function AppNavigator() {
         },
       }}>
       <Stack.Navigator
-        initialRouteName="Main"
+        initialRouteName={isAuthed ? 'Main' : 'Login'}
         screenOptions={{headerShown: false}}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="AuthHandoff" component={AuthHandoffScreen} />

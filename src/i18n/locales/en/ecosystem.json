@@ -1,0 +1,19 @@
+{
+  "locationDenied": "Akansho needs location access while you use the app to find nearby professionals. You can also choose your area manually.",
+  "locationNeverAskAgain": "Location permission is blocked for Akansho. Open Settings to allow location, or choose your area manually.",
+  "locationUnavailable": "Couldn't get your location. Please try again or choose your area manually.",
+  "locationTimeout": "Location took too long. Try again, or choose your area below.",
+  "locationUnsupported": "This device cannot share location. Please choose your area below.",
+  "locationGeocodeFailed": "Could not identify your area. Please choose state and district below.",
+  "locationNoMatch": "Your location is outside our supported areas. Please choose state and district below.",
+  "turnOnLocationTitle": "Turn on location",
+  "turnOnLocationMessage": "Akansho needs your device location to find services near you.",
+  "turnOnLocationAction": "Turn on location",
+  "allowLocationTitle": "Use your location",
+  "allowLocationMessage": "Akansho uses your location to find nearby service professionals.",
+  "allowLocation": "Allow",
+  "notNow": "Not now",
+  "openAppSettings": "Open Settings",
+  "tryAgainLocation": "Try again",
+  "chooseAreaManually": "Choose city / area"
+}

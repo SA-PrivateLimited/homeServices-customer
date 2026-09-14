@@ -15,7 +15,7 @@ Replicate **homeServices-customer-web** UX/UI/behavior into this RN app.
 Cursor rule: `.cursor/rules/customer-web-rn-parity.mdc`
 
 Web is source of truth. Backend (`homeservices-backend`) owns contracts.  
-Never change `applicationId` `com.homeservices.customer`.
+Never change `applicationId` `com.akansho.customer`.
 
 ## How to use this agent
 1. Intake: `python scripts/agent_orchestrator.py --prompt "..." --name feature-slug --no-figma --stage intake`

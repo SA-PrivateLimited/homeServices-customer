@@ -21,6 +21,18 @@ export interface RequestOptions {
   skipAuth?: boolean;
 }
 
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+
+  constructor(message: string, options?: {status?: number; code?: string}) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = options?.status;
+    this.code = options?.code;
+  }
+}
+
 let handlingUnauthorized = false;
 
 async function handleUnauthorized(): Promise<void> {
@@ -113,17 +125,29 @@ export async function apiRequest<T>(
         );
       }
 
-      throw new Error(
+      throw new ApiRequestError(
         errorData.message ||
           errorData.error ||
           `HTTP ${response.status}: ${response.statusText}`,
+        {
+          status: response.status,
+          code:
+            typeof errorData.code === 'string' ? errorData.code : undefined,
+        },
       );
     }
 
     const data: ApiResponse<T> = await response.json();
 
     if (!data.success) {
-      throw new Error(data.message || data.error || 'API request failed');
+      throw new ApiRequestError(
+        data.message || data.error || 'API request failed',
+        {
+          code: typeof (data as {code?: string}).code === 'string'
+            ? (data as {code?: string}).code
+            : undefined,
+        },
+      );
     }
 
     return data.data as T;

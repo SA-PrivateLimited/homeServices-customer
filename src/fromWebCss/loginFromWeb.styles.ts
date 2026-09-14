@@ -234,9 +234,22 @@ export const loginFromWeb = StyleSheet.create({
     borderWidth: 1,
     borderColor: WEB.border,
   },
+  readonlyPhoneTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   readonlyPhoneLabel: {
     fontSize: 12,
     color: WEB.textSecondary,
+    flexShrink: 1,
+  },
+  changeNumberLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: WEB.primary,
+    flexShrink: 0,
   },
   readonlyPhoneValue: {
     fontSize: 16,

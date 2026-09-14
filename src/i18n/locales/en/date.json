@@ -1,0 +1,7 @@
+{
+  "requestedOn": "Requested {{date}}",
+  "requested": "Requested {{date}}",
+  "completedOn": "Completed on {{date}}",
+  "cancelledOn": "Cancelled on {{date}}",
+  "notAvailable": "—"
+}

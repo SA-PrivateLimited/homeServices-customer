@@ -27,54 +27,42 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
+  const title = String(
+    t('settings.logoutConfirmTitle') || t('common.logoutTitle') || 'Log out?',
+  );
+  const message = String(
+    t('settings.logoutConfirmMessage') ||
+      t('common.logoutMessage') ||
+      "You'll need to sign in again to use Akansho.",
+  );
+
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="fade"
       onRequestClose={onCancel}>
       <View style={styles.overlay}>
-        <View
-          style={[
-            styles.modalContainer,
-            {
-              backgroundColor: theme.card,
-              shadowColor: isDarkMode ? '#000' : '#000',
-            },
-          ]}>
-          {/* Header with Icon */}
+        <View style={[styles.modalContainer, {backgroundColor: theme.card}]}>
           <View style={styles.headerContainer}>
             <View
               style={[
                 styles.iconContainer,
-                {backgroundColor: theme.error + '15'},
+                {backgroundColor: `${theme.error}18`},
               ]}>
-              <Icon
-                name="log-out-outline"
-                size={32}
-                color={theme.error}
-              />
+              <Icon name="log-out-outline" size={22} color={theme.error} />
             </View>
             <Text style={[styles.headerTitle, {color: theme.text}]}>
-              {t('settings.logoutConfirmTitle') || t('common.logoutTitle')}
+              {title}
             </Text>
           </View>
 
-          {/* Message */}
           <View style={styles.contentContainer}>
             <Text style={[styles.messageText, {color: theme.textSecondary}]}>
-              {t('settings.logoutConfirmMessage') || t('common.logoutMessage')}
-            </Text>
-            <Text
-              style={[
-                styles.subMessageText,
-                {color: theme.textSecondary},
-              ]}>
-              {t('common.logoutSubMessage')}
+              {message}
             </Text>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[
@@ -85,23 +73,24 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
                 },
               ]}
               onPress={onCancel}
-              activeOpacity={0.7}>
-              <Text
-                style={[
-                  styles.cancelButtonText,
-                  {color: theme.text},
-                ]}>
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={String(
+                t('actions.cancel') || t('common.cancel') || 'Cancel',
+              )}>
+              <Text style={[styles.cancelButtonText, {color: theme.text}]}>
                 {t('actions.cancel') || t('common.cancel')}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                {backgroundColor: theme.error},
-              ]}
+              style={[styles.confirmButton, {backgroundColor: theme.error}]}
               onPress={onConfirm}
-              activeOpacity={0.8}>
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={String(
+                t('settings.logout') || t('common.logout') || 'Log out',
+              )}>
               <Text style={styles.confirmButtonText}>
                 {t('settings.logout') || t('common.logout')}
               </Text>
@@ -114,7 +103,7 @@ const LogoutConfirmationModal: React.FC<LogoutConfirmationModalProps> = ({
 };
 
 const {width} = Dimensions.get('window');
-const modalWidth = width * 0.85;
+const modalWidth = Math.min(width * 0.86, 360);
 
 const styles = StyleSheet.create({
   overlay: {
@@ -122,86 +111,80 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   modalContainer: {
     width: modalWidth,
-    maxWidth: 400,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
     elevation: 10,
+    shadowColor: '#000',
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
+    lineHeight: 24,
   },
   contentContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
     alignItems: 'center',
+    gap: 6,
   },
   messageText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 22,
-  },
-  subMessageText: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    minHeight: 44,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   confirmButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    minHeight: 44,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   confirmButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
 });
 
 export default LogoutConfirmationModal;
-

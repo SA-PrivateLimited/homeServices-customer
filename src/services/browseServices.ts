@@ -13,8 +13,10 @@ import {
 
 export type BrowseService = ServiceMeta;
 
-export async function loadBrowseServices(): Promise<BrowseService[]> {
-  return hydrateServiceCatalogFromApi();
+export async function loadBrowseServices(
+  options?: {force?: boolean},
+): Promise<BrowseService[]> {
+  return hydrateServiceCatalogFromApi(options);
 }
 
 export function popularBrowseServices(all: BrowseService[]): BrowseService[] {

@@ -1,0 +1,42 @@
+{
+  "status": {
+    "accepted": "Request accepted",
+    "inProgress": "Service in progress",
+    "completed": "Service completed",
+    "cancelled": "Request cancelled",
+    "finding": "Finding a professional",
+    "waitingAccept": "Waiting for acceptance",
+    "waitingAcceptNamed": "Waiting for {{name}}",
+    "rejected": "Request declined",
+    "rejectedNamed": "{{name}} declined"
+  },
+  "sub": {
+    "accepted": "{{name}} accepted your request",
+    "acceptedGeneric": "A professional accepted your request",
+    "inProgress": "Work is underway",
+    "inProgressNamed": "{{name}} is working on your request",
+    "completed": "Hope everything went well with {{brand}}",
+    "finding": "We're looking for someone for {{type}}",
+    "waitingAccept": "Nearby professionals can accept your {{type}} request",
+    "waitingAcceptNamed": "Waiting for {{name}} to accept your {{type}} request",
+    "cancelled": "This {{type}} request was cancelled",
+    "cancelledNamed": "Your request with {{name}} was cancelled",
+    "rejected": "No one accepted this {{type}} request",
+    "rejectedNamed": "{{name}} declined your {{type}} request"
+  },
+  "serviceDetails": "Your request",
+  "serviceType": "Service",
+  "problem": "What you need",
+  "address": "Address",
+  "yourProfessional": "Your professional",
+  "requestStatus": "Request status",
+  "updatesMessages": "Updates & messages",
+  "currentlyOffline": "Currently offline",
+  "currentlyOnline": "Currently online",
+  "requested": "Requested",
+  "stepSent": "Sent",
+  "stepAccepted": "Accepted",
+  "stepInProgress": "In progress",
+  "stepDone": "Done",
+  "callNamed": "Call {{name}}"
+}
