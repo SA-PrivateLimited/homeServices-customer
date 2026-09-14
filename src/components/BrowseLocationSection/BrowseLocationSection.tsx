@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Button, Select} from 'sapvt-ltd-app-packages';
+import {Pressable, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import {Select} from 'sapvt-ltd-app-packages';
 import type {
   GeographyBlock,
   GeographyDistrict,
@@ -161,21 +162,46 @@ export function BrowseLocationSection({
 
       {expanded ? (
         <View style={[styles.picker, {backgroundColor: primaryTint}]}>
-          <Button
-            variant={deviceLocationSelected ? 'secondary' : 'primary'}
+          <Pressable
             onPress={onUseMyLocation}
-            loading={locating}
             disabled={locating}
-            block
-            title={
-              locating
+            style={[
+              styles.useLocationBtn,
+              {
+                backgroundColor: deviceLocationSelected
+                  ? 'rgba(74, 144, 226, 0.22)'
+                  : theme.primary,
+                borderColor: theme.primary,
+                opacity: locating ? 0.7 : 1,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{
+              selected: deviceLocationSelected,
+              busy: locating,
+            }}>
+            {deviceLocationSelected && !locating ? (
+              <Icon name="check-circle" size={20} color={theme.primary} />
+            ) : (
+              <Icon
+                name="my-location"
+                size={20}
+                color={deviceLocationSelected ? theme.primary : '#fff'}
+              />
+            )}
+            <Text
+              style={[
+                styles.useLocationLabel,
+                {color: deviceLocationSelected ? theme.primary : '#fff'},
+              ]}
+              numberOfLines={1}>
+              {locating
                 ? String(t('ecosystem.locating'))
                 : deviceLocationSelected
                   ? String(t('ecosystem.usingMyLocation'))
-                  : String(t('ecosystem.useMyLocation'))
-            }
-            colors={selectColors}
-          />
+                  : String(t('ecosystem.useMyLocation'))}
+            </Text>
+          </Pressable>
           <Text style={[styles.or, {color: theme.textSecondary}]}>
             {t('ecosystem.orChooseArea')}
           </Text>
@@ -191,6 +217,14 @@ export function BrowseLocationSection({
             title={String(t('browse.selectState'))}
             style={{marginBottom: 0}}
             colors={selectColors}
+            showSearch
+            searchPlaceholder={String(
+              t('browse.searchStatePlaceholder') || 'Search state...',
+            )}
+            emptySearchText={String(
+              t('browse.noStatesFound') ||
+                'No states found\nTry a different name.',
+            )}
           />
           <Select
             variant="crystal"
@@ -208,6 +242,14 @@ export function BrowseLocationSection({
             title={String(t('browse.selectDistrict'))}
             style={{marginBottom: 0}}
             colors={selectColors}
+            showSearch
+            searchPlaceholder={String(
+              t('browse.searchDistrictPlaceholder') || 'Search district...',
+            )}
+            emptySearchText={String(
+              t('browse.noDistrictsFound') ||
+                'No districts found\nTry a different name.',
+            )}
           />
           {filteredBlocks.length > 0 && onBlockChange ? (
             <Select
@@ -226,6 +268,14 @@ export function BrowseLocationSection({
               title={String(t('browse.selectBlock'))}
               style={{marginBottom: 0}}
               colors={selectColors}
+              showSearch
+              searchPlaceholder={String(
+                t('browse.searchBlockPlaceholder') || 'Search block...',
+              )}
+              emptySearchText={String(
+                t('browse.noBlocksFound') ||
+                  'No blocks found\nTry a different name.',
+              )}
             />
           ) : null}
         </View>
@@ -257,6 +307,20 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     borderWidth: 0,
+  },
+  useLocationBtn: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  useLocationLabel: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   or: {fontSize: 13, textAlign: 'center'},
 });

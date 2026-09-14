@@ -105,7 +105,7 @@ const CancelTaskModal: React.FC<CancelTaskModalProps> = ({
                   styles.iconContainer,
                   {backgroundColor: '#FF3B30' + '15'},
                 ]}>
-                <Icon name="close-circle" size={32} color="#FF3B30" />
+                <Icon name="close-circle" size={22} color="#FF3B30" />
               </View>
               <Text style={[styles.headerTitle, {color: theme.text}]}>
                 {String(t('activeService.cancelService') || 'Cancel Service')}
@@ -247,46 +247,48 @@ const styles = StyleSheet.create({
     width: modalWidth,
     maxWidth: 500,
     maxHeight: modalHeight,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
     elevation: 10,
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 12,
   },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   contentContainer: {
     maxHeight: height * 0.4,
   },
   quickReasonsContainer: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   reasonsGrid: {
     flexDirection: 'row',

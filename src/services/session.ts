@@ -135,8 +135,16 @@ export async function clearAllCredentials(): Promise<void> {
 /**
  * Customer logout: clear JWT session only.
  * Keeps remembered phone (30 days) so next visit asks for PIN only.
+ * Also unlinks this device's FCM token from the outgoing customer account.
  */
 export async function logoutCustomer(): Promise<void> {
+  try {
+    // Dynamic import avoids a hard cycle with notificationService → session.
+    const NotificationService = require('./notificationService').default;
+    await NotificationService.unlinkDeviceToken();
+  } catch {
+    // Non-fatal — still clear local session.
+  }
   await clearSession();
   // Also clear legacy store key used by zustand hydrate()
   await AsyncStorage.removeItem('currentUser');

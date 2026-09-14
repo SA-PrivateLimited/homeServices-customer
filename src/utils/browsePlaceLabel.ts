@@ -3,6 +3,7 @@ import type {
   GeographyDistrict,
   GeographyState,
 } from '../services/api/geographyApi';
+import {dedupePlaceParts} from './addressDisplay';
 
 /** Customer-facing place label — never fake "near you" when location is unknown. */
 export function formatBrowsePlaceLabel(
@@ -19,17 +20,18 @@ export function formatBrowsePlaceLabel(
   const district = districts.find((d) => d._id === districtId);
   const state = states.find((s) => s._id === stateId);
 
-  const structuredParts = [
+  const structuredParts = dedupePlaceParts([
     block?.name || blockName?.trim(),
     district?.name,
     state?.name,
-  ].filter(Boolean);
+  ]);
   if (structuredParts.length) return structuredParts.join(', ');
 
   if (locationLabel?.trim()) return locationLabel.trim();
 
   if (district?.name && state?.name) {
-    return `${district.name}, ${state.name}`;
+    const pair = dedupePlaceParts([district.name, state.name]);
+    return pair.join(', ');
   }
   if (district?.name) return district.name;
   if (state?.name) return state.name;

@@ -1,5 +1,6 @@
 {
   "ok": "OK",
+  "done": "Done",
   "cancel": "Cancel",
   "save": "Save",
   "delete": "Delete",
@@ -33,9 +34,8 @@
   "providers": "Providers",
   "settings": "Settings",
   "logout": "Logout",
-  "logoutTitle": "Logout",
-  "logoutMessage": "Are you sure you want to logout?",
-  "logoutSubMessage": "You'll only need your PIN next time — your number stays saved for 30 days.",
+  "logoutTitle": "Log out?",
+  "logoutMessage": "You'll need to sign in again to use Akansho.",
   "request": "Request",
   "browse": "Browse",
   "cancellationReason": "Cancellation Reason",

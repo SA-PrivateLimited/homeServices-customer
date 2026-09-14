@@ -20,6 +20,11 @@ import enProviders from './locales/en/providers.json';
 import enRecommendations from './locales/en/recommendations.json';
 import enReview from './locales/en/review.json';
 import enHelpSupport from './locales/en/helpSupport.json';
+import enEcosystem from './locales/en/ecosystem.json';
+import enBrowse from './locales/en/browse.json';
+import enHelp from './locales/en/help.json';
+import enActive from './locales/en/active.json';
+import enDate from './locales/en/date.json';
 import enWeb from './locales/web/en.json';
 
 // Hindi translations
@@ -40,6 +45,11 @@ import hiProviders from './locales/hi/providers.json';
 import hiRecommendations from './locales/hi/recommendations.json';
 import hiReview from './locales/hi/review.json';
 import hiHelpSupport from './locales/hi/helpSupport.json';
+import hiEcosystem from './locales/hi/ecosystem.json';
+import hiBrowse from './locales/hi/browse.json';
+import hiHelp from './locales/hi/help.json';
+import hiActive from './locales/hi/active.json';
+import hiDate from './locales/hi/date.json';
 import hiWeb from './locales/web/hi.json';
 import {mergeWebLocale} from '../utils/mergeWebI18n';
 
@@ -63,6 +73,11 @@ const en = mergeWebLocale(
     recommendations: enRecommendations,
     review: enReview,
     helpSupport: enHelpSupport,
+    ecosystem: enEcosystem,
+    browse: enBrowse,
+    help: enHelp,
+    active: enActive,
+    date: enDate,
   },
   enWeb as Record<string, unknown>,
 ) as Record<string, unknown>;
@@ -86,6 +101,11 @@ const hi = mergeWebLocale(
     recommendations: hiRecommendations,
     review: hiReview,
     helpSupport: hiHelpSupport,
+    ecosystem: hiEcosystem,
+    browse: hiBrowse,
+    help: hiHelp,
+    active: hiActive,
+    date: hiDate,
   },
   hiWeb as Record<string, unknown>,
 );

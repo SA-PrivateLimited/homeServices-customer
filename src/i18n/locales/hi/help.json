@@ -1,0 +1,14 @@
+{
+  "chatWhatsApp": "Akansho सहायता से चैट करें",
+  "callSupport": "Akansho सहायता को कॉल करें",
+  "chatWhatsAppSupportHint": "Akansho सहायता से मदद लें",
+  "feedbackTitle": "फ़ीडबैक भेजें",
+  "feedbackLead": "Akansho को बेहतर बनाने में मदद करें",
+  "feedbackHint": "बताएँ कि Akansho आपके लिए कैसे और बेहतर हो सकता है।",
+  "feedbackPrompt": "आप क्या सुधारना चाहेंगे?",
+  "feedbackPlaceholder": "अपनी बात लिखें...",
+  "feedbackSend": "फ़ीडबैक भेजें",
+  "feedbackWhatsApp": "WhatsApp पर फ़ीडबैक भेजें",
+  "feedbackThanksTitle": "फ़ीडबैक के लिए धन्यवाद",
+  "feedbackThanksBody": "आपकी राय से हम Akansho को बेहतर बनाते हैं।"
+}

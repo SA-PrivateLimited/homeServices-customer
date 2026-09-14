@@ -44,6 +44,8 @@ function splitTips(raw: string): string[] {
 type Props = {
   surfaceOverride?: HelpSurface;
   onHistory?: boolean;
+  /** Notify parent when feedback sub-screen opens (for modal title chrome). */
+  onFeedbackOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -53,6 +55,7 @@ type Props = {
 export function HelpSupportPanel({
   surfaceOverride = 'settings',
   onHistory = false,
+  onFeedbackOpenChange,
 }: Props) {
   const {t, i18n} = useTranslation();
   const request = useHelpRequestSnapshot();
@@ -61,6 +64,11 @@ export function HelpSupportPanel({
   const [view, setView] = useState<ViewState>({level: 'home'});
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [pickingRequest, setPickingRequest] = useState(false);
+
+  const setFeedback = (open: boolean) => {
+    setFeedbackOpen(open);
+    onFeedbackOpenChange?.(open);
+  };
 
   useEffect(() => {
     if (!onHistory) {
@@ -188,13 +196,13 @@ export function HelpSupportPanel({
 
   if (feedbackOpen) {
     return (
-      <ScrollView contentContainerStyle={styles.pad}>
-        <Pressable style={styles.back} onPress={() => setFeedbackOpen(false)}>
-          <Icon name="arrow_back" size={18} />
-          <Text>{t('help.backShort')}</Text>
-        </Pressable>
-        <HelpFeedbackForm onClose={() => setFeedbackOpen(false)} />
-      </ScrollView>
+      <HelpFeedbackForm
+        showChrome
+        onBack={() => setFeedback(false)}
+        onClose={() => {
+          setFeedback(false);
+        }}
+      />
     );
   }
 
@@ -380,7 +388,7 @@ export function HelpSupportPanel({
         </Pressable>
       </View>
 
-      <Pressable style={styles.ideaLink} onPress={() => setFeedbackOpen(true)}>
+      <Pressable style={styles.ideaLink} onPress={() => setFeedback(true)}>
         <Text style={styles.ideaText}>
           {t('help.haveIdea')}{' '}
           <Text style={styles.ideaAccent}>{t('help.giveFeedback')}</Text>
@@ -391,13 +399,18 @@ export function HelpSupportPanel({
 }
 
 const styles = StyleSheet.create({
-  pad: {paddingBottom: 24, gap: 8},
+  pad: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 20,
+    gap: 6,
+  },
   lead: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#1A202C',
-    lineHeight: 20,
-    marginBottom: 4,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 2,
   },
   pickerHint: {fontSize: 13, color: '#718096', marginBottom: 4},
   back: {flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8},
@@ -407,22 +420,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 48,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    minHeight: 52,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(15, 28, 46, 0.08)',
   },
   whatsappRow: {
-    backgroundColor: 'rgba(37, 211, 102, 0.1)',
+    backgroundColor: 'rgba(37, 211, 102, 0.12)',
+    borderColor: 'rgba(37, 211, 102, 0.22)',
   },
   topicIcon: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(49, 130, 206, 0.1)',
+    backgroundColor: 'rgba(49, 130, 206, 0.12)',
   },
   copy: {flex: 1, minWidth: 0},
   strong: {fontSize: 14, fontWeight: '700', color: '#1A202C'},
@@ -435,8 +451,8 @@ const styles = StyleSheet.create({
   },
   contactActions: {gap: 8, marginTop: 12},
   contactSection: {
-    marginTop: 8,
-    paddingTop: 10,
+    marginTop: 6,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',
     gap: 6,
@@ -465,8 +481,9 @@ const styles = StyleSheet.create({
   },
   ideaLink: {
     alignSelf: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 8,
+    marginTop: 2,
   },
   ideaText: {fontSize: 13, color: '#718096', textAlign: 'center'},
   ideaAccent: {fontWeight: '700', color: '#3182CE'},

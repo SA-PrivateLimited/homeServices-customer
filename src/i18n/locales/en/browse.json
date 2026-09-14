@@ -1,0 +1,18 @@
+{
+  "widenToDistrict": "See all in {{district}}",
+  "widenToState": "See all in {{state}}",
+  "clearPlaceFilter": "Clear place filter",
+  "nameSearchOptional": "Or search by name",
+  "callLeavesAppHint": "This opens your Phone app to call the provider.",
+  "emptyHint": "Try another service or location.",
+  "changeLocationCta": "Change location",
+  "searchByNamePlaceholder": "Search by name",
+  "alsoLead": "Also",
+  "guestNote": "Browse freely. Sign in to request a service.",
+  "searchStatePlaceholder": "Search state...",
+  "searchDistrictPlaceholder": "Search district...",
+  "searchBlockPlaceholder": "Search block...",
+  "noStatesFound": "No states found\nTry a different name.",
+  "noDistrictsFound": "No districts found\nTry a different name.",
+  "noBlocksFound": "No blocks found\nTry a different name."
+}

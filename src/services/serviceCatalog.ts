@@ -158,8 +158,18 @@ export function getServiceSections(): ServiceSectionLabel[] {
   return SERVICE_SECTION_LABELS;
 }
 
-/** Load Admin service categories + section titles and make them the live catalog. */
-export async function hydrateServiceCatalogFromApi(): Promise<ServiceMeta[]> {
+let catalogHydrated = false;
+
+/**
+ * Load Admin service categories + section titles once and keep them in memory.
+ * Pass `{force: true}` only when an explicit refresh is required.
+ */
+export async function hydrateServiceCatalogFromApi(
+  options?: {force?: boolean},
+): Promise<ServiceMeta[]> {
+  if (!options?.force && catalogHydrated) {
+    return SERVICE_CATALOG;
+  }
   if (hydratePromise) return hydratePromise;
   hydratePromise = (async () => {
     try {
@@ -193,7 +203,12 @@ export async function hydrateServiceCatalogFromApi(): Promise<ServiceMeta[]> {
       const metas = rows
         .filter((c) => c.isActive !== false)
         .map(categoryToServiceMeta);
-      return setServiceCatalog(metas);
+      const next = setServiceCatalog(metas);
+      catalogHydrated = true;
+      return next;
+    } catch (error) {
+      catalogHydrated = false;
+      throw error;
     } finally {
       hydratePromise = null;
     }

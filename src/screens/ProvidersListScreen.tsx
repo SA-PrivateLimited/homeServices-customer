@@ -3,29 +3,45 @@
  * Customer app - Browse individual online service providers
  */
 
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   View,
   Text,
   StyleSheet,
-          FlatList,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
   Linking,
   StatusBar,
+  Alert,
+  AppState,
+  Platform,
+  Pressable,
+  Animated,
+  Easing,
+  InteractionManager,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  type AppStateStatus,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {Icon as HsIcon, SearchBar, canCallThisProvider, canRequestThisProvider} from 'sapvt-ltd-app-packages';
+import {SearchBar, canCallThisProvider, canRequestThisProvider} from 'sapvt-ltd-app-packages';
 import {PopularServices, ServiceCatalogOverlay} from '../components/PopularServices/PopularServices';
 import {ActiveRequestConflictBanner} from '../components/ActiveRequestConflictBanner';
 import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
 import {loadBrowseServices, type BrowseService} from '../services/browseServices';
+import {callButtonLabel} from '../utils/providerCallLabel';
 import {localizedServiceName} from '../utils/serviceDisplay';
 import {providersApi} from '../services/api/providersApi';
 import {usersApi} from '../services/api/usersApi';
-import {serviceCategoriesApi} from '../services/api/serviceCategoriesApi';
 import {
   getGeographyMeta,
   clearGeographyMetaCache,
@@ -34,15 +50,29 @@ import {
   type GeographyDistrict,
   type GeographyState,
 } from '../services/api/geographyApi';
-import {BrowseLocationSection} from '../components/BrowseLocationSection/BrowseLocationSection';
+import {BrowseLocationPickerModal} from '../components/BrowseLocationSection/BrowseLocationPickerModal';
+import {ProvidersBrowseHeader} from '../components/ProvidersBrowseHeader';
 import GeolocationService from '../services/geolocationService';
+import type {LocationErrorCode} from '../services/geolocationService';
 import {
   clearSearchLocation,
-  readSearchLocation,
+  isDeviceLocationFresh,
+  readFreshDeviceLocation,
+  readLocationMemory,
   saveDeviceAsSearchLocation,
+  saveDeviceLocationCache,
   saveManualSearchLocation,
+  type DeviceLocationRecord,
+  type SearchLocationRecord,
 } from '../utils/browseLocationMemory';
-import {formatBrowsePlaceLabel} from '../utils/browsePlaceLabel';
+import {
+  formatBrowsePlaceLabel,
+  hasBrowseLocationFilter,
+} from '../utils/browsePlaceLabel';
+import {
+  dedupePlaceParts,
+  formatProviderLocationLine,
+} from '../utils/addressDisplay';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import EmptyState from '../components/EmptyState';
@@ -63,7 +93,24 @@ import {resolveServiceMeta} from '../services/serviceCatalog';
 const ALL_PROFESSIONS = '__all__';
 const ALL_STATES = '__all_states__';
 const ALL_DISTRICTS = '__all_districts__';
-const FALLBACK_PROFESSIONS = ['Electrician', 'Plumber'];
+
+/** Debounce for professional-name filter (local). Text field stays instant. */
+const PROVIDER_NAME_SEARCH_DEBOUNCE_MS = 400;
+/** Past this offset the in-list service block has scrolled away. */
+const SERVICE_PIN_MIN_Y = 72;
+/** Meaningful downward movement before hiding the pinned service bar. */
+const SERVICE_PIN_HIDE_PX = 28;
+/** Small upward movement to reveal pinned service controls. */
+const SERVICE_PIN_SHOW_PX = 18;
+const SERVICE_PIN_ANIM_MS = 180;
+
+function ProviderListSeparator() {
+  return <View style={separatorStyles.row} />;
+}
+
+const separatorStyles = StyleSheet.create({
+  row: {height: 8},
+});
 
 interface ProviderWithStatus {
   id: string;
@@ -93,8 +140,10 @@ interface ProviderWithStatus {
     latitude?: number;
     longitude?: number;
     address?: string;
+    landmark?: string;
     city?: string;
     district?: string;
+    block?: string;
     state?: string;
     stateId?: string;
     districtId?: string;
@@ -121,6 +170,11 @@ function districtOf(
   p: ProviderWithStatus,
   districts?: GeographyDistrict[],
 ): string {
+  const fromAddr = formatProviderLocationLine({
+    address: p.address as any,
+    location: (p as any).location,
+  });
+  if (fromAddr) return fromAddr;
   const named = (p.address?.district || p.address?.city || '').trim();
   if (named) return named;
   const id = p.address?.districtId;
@@ -129,6 +183,8 @@ function districtOf(
   }
   return '';
 }
+
+type BrowseListRow = ProviderWithStatus;
 
 /** Web BrowsePage: match by catalog key (serviceCategories), not specialization alone. */
 function matchesProfession(p: ProviderWithStatus, selected: string): boolean {
@@ -169,8 +225,8 @@ export default function ProvidersListScreen({navigation, route}: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [connectionFailed, setConnectionFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedProfession, setSelectedProfession] = useState(ALL_PROFESSIONS);
-  const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [geoStates, setGeoStates] = useState<GeographyState[]>([]);
   const [geoDistricts, setGeoDistricts] = useState<GeographyDistrict[]>([]);
   const [geoBlocks, setGeoBlocks] = useState<GeographyBlock[]>([]);
@@ -182,6 +238,57 @@ export default function ProvidersListScreen({navigation, route}: any) {
   const [locating, setLocating] = useState(false);
   const [usingDeviceLocation, setUsingDeviceLocation] = useState(false);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  /** False until Browse location bootstrap finishes (avoids empty-then-refetch providers). */
+  const [locationReady, setLocationReady] = useState(false);
+  /** Resume "use my location" after device Location or app Settings. */
+  const locationResumeRef = useRef<'device_location' | 'app_permission' | null>(
+    null,
+  );
+  const locationFlowBusyRef = useRef(false);
+  const locationLeftAppRef = useRef(false);
+  /**
+   * Bumped on every customer-intent location change (manual or explicit GPS).
+   * In-flight GPS results must match this epoch before becoming ACTIVE.
+   */
+  const locationEpochRef = useRef(0);
+  const locationBootstrapDoneRef = useRef(false);
+  const openLocationPicker = useCallback(() => {
+    setLocationPickerOpen(true);
+  }, []);
+
+  const bumpLocationEpoch = useCallback(() => {
+    locationEpochRef.current += 1;
+    return locationEpochRef.current;
+  }, []);
+
+  const applyActiveLocationToState = useCallback(
+    (
+      place: {
+        stateId?: string;
+        districtId?: string;
+        blockId?: string;
+        blockName?: string;
+        label?: string;
+      },
+      source: 'manual' | 'device',
+      epoch: number,
+    ) => {
+      if (epoch !== locationEpochRef.current) {
+        return false;
+      }
+      const nextStateId = place.stateId || ALL_STATES;
+      const nextDistrictId = place.districtId || ALL_DISTRICTS;
+      const nextBlockId = place.blockId || '';
+      setSelectedStateId(nextStateId);
+      setSelectedDistrictId(nextDistrictId);
+      setSelectedBlockId(nextBlockId);
+      setBlockName(place.blockName || '');
+      setLocationLabel(place.label || null);
+      setUsingDeviceLocation(source === 'device');
+      return true;
+    },
+    [],
+  );
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogServices, setCatalogServices] = useState<BrowseService[]>([]);
   const [activeConflict, setActiveConflict] = useState<
@@ -192,7 +299,6 @@ export default function ProvidersListScreen({navigation, route}: any) {
 
 
   useEffect(() => {
-    loadProfessionOptions();
     void (async () => {
       let meta = await getGeographyMeta();
       if (!meta.blocks?.length) {
@@ -203,61 +309,391 @@ export default function ProvidersListScreen({navigation, route}: any) {
       setGeoDistricts(meta.districts || []);
       setGeoBlocks(meta.blocks || []);
 
-      const saved = await readSearchLocation();
-      if (saved) {
-        if (saved.stateId) setSelectedStateId(saved.stateId);
-        if (saved.districtId) setSelectedDistrictId(saved.districtId);
-        if (saved.blockId) setSelectedBlockId(saved.blockId);
-        if (saved.blockName) setBlockName(saved.blockName);
-        if (saved.label) setLocationLabel(saved.label);
-        setUsingDeviceLocation(saved.source === 'device');
+      const incomingState = String(route?.params?.stateId || '').trim();
+      const incomingDistrict = String(route?.params?.districtId || '').trim();
+      const incomingBlock = String(route?.params?.blockId || '').trim();
+      const incomingPlace = String(route?.params?.locationQuery || '').trim();
+      if (incomingState) setSelectedStateId(incomingState);
+      if (incomingDistrict) setSelectedDistrictId(incomingDistrict);
+      if (incomingBlock) setSelectedBlockId(incomingBlock);
+      if (incomingPlace) setSearchQuery(incomingPlace);
+
+      // Route params already force a place — do not auto GPS overwrite.
+      if (incomingState || incomingDistrict || incomingBlock) {
+        locationBootstrapDoneRef.current = true;
+        setLocationReady(true);
+        return;
+      }
+
+      if (locationBootstrapDoneRef.current) {
+        setLocationReady(true);
+        return;
+      }
+      locationBootstrapDoneRef.current = true;
+
+      const memory = await readLocationMemory();
+      const saved: SearchLocationRecord | null = memory?.search || null;
+      const device: DeviceLocationRecord | undefined = memory?.device;
+      const epoch = locationEpochRef.current;
+
+      if (saved && (saved.stateId || saved.districtId || saved.blockId || saved.label)) {
+        applyActiveLocationToState(saved, saved.source, epoch);
+        // Stale GPS-sourced active location: refresh quietly; never if manual.
+        if (
+          saved.source === 'device' &&
+          !isDeviceLocationFresh(device)
+        ) {
+          void (async () => {
+            const started = locationEpochRef.current;
+            try {
+              const perm =
+                await GeolocationService.checkLocationPermission();
+              if (perm !== 'granted') return;
+              if (!(await GeolocationService.isDeviceLocationEnabled())) {
+                return;
+              }
+              const loc = await GeolocationService.getCurrentLocation();
+              if (started !== locationEpochRef.current) return;
+              const resolved = await resolveGeographyFromCoordinates(
+                loc.latitude,
+                loc.longitude,
+              );
+              if (started !== locationEpochRef.current) return;
+              const mem = await readLocationMemory();
+              if (mem?.search?.source === 'manual') {
+                await saveDeviceLocationCache(
+                  {
+                    stateId: resolved.stateId || '',
+                    districtId: resolved.districtId || '',
+                    blockId: resolved.blockId || undefined,
+                    stateName: resolved.stateName,
+                    districtName: resolved.districtName,
+                    blockName: resolved.blockName,
+                    label: resolved.label || '',
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                  },
+                  {promoteToActive: false},
+                );
+                return;
+              }
+              const label =
+                resolved.label ||
+                [resolved.blockName, resolved.districtName, resolved.stateName]
+                  .filter(Boolean)
+                  .join(', ') ||
+                '';
+              const applied = applyActiveLocationToState(
+                {
+                  stateId: resolved.stateId,
+                  districtId: resolved.districtId,
+                  blockId: resolved.blockId,
+                  blockName: resolved.blockName,
+                  label,
+                },
+                'device',
+                started,
+              );
+              if (!applied) return;
+              await saveDeviceAsSearchLocation({
+                stateId: resolved.stateId || '',
+                districtId: resolved.districtId || '',
+                blockId: resolved.blockId || undefined,
+                stateName: resolved.stateName,
+                districtName: resolved.districtName,
+                blockName: resolved.blockName,
+                label,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+              });
+            } catch {
+              // Keep existing active location; fail soft.
+            }
+          })();
+        }
+        setLocationReady(true);
+        return;
+      }
+
+      // No ACTIVE location — promote fresh GPS cache if present.
+      const freshDevice = await readFreshDeviceLocation();
+      if (freshDevice) {
+        applyActiveLocationToState(freshDevice, 'device', epoch);
+        await saveDeviceLocationCache(freshDevice, {promoteToActive: true});
+        setLocationReady(true);
+        return;
+      }
+
+      // Auto-init current location only when permission + device Location already OK.
+      // Do not force consent/settings loops on every Browse open.
+      try {
+        const perm = await GeolocationService.checkLocationPermission();
+        const servicesOn = await GeolocationService.isDeviceLocationEnabled();
+        if (perm !== 'granted' || !servicesOn) {
+          setLocationReady(true);
+          return;
+        }
+        const started = locationEpochRef.current;
+        setLocating(true);
+        const loc = await GeolocationService.getCurrentLocation();
+        if (started !== locationEpochRef.current) {
+          setLocationReady(true);
+          return;
+        }
+        const resolved = await resolveGeographyFromCoordinates(
+          loc.latitude,
+          loc.longitude,
+        );
+        if (started !== locationEpochRef.current) {
+          setLocationReady(true);
+          return;
+        }
+        const label =
+          resolved.label ||
+          [resolved.blockName, resolved.districtName, resolved.stateName]
+            .filter(Boolean)
+            .join(', ') ||
+          '';
+        const applied = applyActiveLocationToState(
+          {
+            stateId: resolved.stateId,
+            districtId: resolved.districtId,
+            blockId: resolved.blockId,
+            blockName: resolved.blockName,
+            label,
+          },
+          'device',
+          started,
+        );
+        if (!applied) {
+          setLocationReady(true);
+          return;
+        }
+        await saveDeviceAsSearchLocation({
+          stateId: resolved.stateId || '',
+          districtId: resolved.districtId || '',
+          blockId: resolved.blockId || undefined,
+          stateName: resolved.stateName,
+          districtName: resolved.districtName,
+          blockName: resolved.blockName,
+          label,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        });
+      } catch {
+        // Leave "Choose your place" — manual always available.
+      } finally {
+        setLocating(false);
+        setLocationReady(true);
       }
     })();
+    // One-time service catalog hydrate for chips + overlay (cached in serviceCatalog).
     void loadBrowseServices()
       .then(setCatalogServices)
       .catch(() => setCatalogServices([]));
     const incomingService = String(route?.params?.service || '').trim();
     if (incomingService) setSelectedProfession(incomingService);
-    const incomingState = String(route?.params?.stateId || '').trim();
-    const incomingDistrict = String(route?.params?.districtId || '').trim();
-    const incomingBlock = String(route?.params?.blockId || '').trim();
-    const incomingPlace = String(route?.params?.locationQuery || '').trim();
-    if (incomingState) setSelectedStateId(incomingState);
-    if (incomingDistrict) setSelectedDistrictId(incomingDistrict);
-    if (incomingBlock) setSelectedBlockId(incomingBlock);
-    if (incomingPlace) setSearchQuery(incomingPlace);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time Browse location bootstrap
   }, []);
 
   useEffect(() => {
+    if (!locationReady) {
+      return;
+    }
     void loadOnlineProviders();
-  }, [selectedStateId, selectedDistrictId, selectedBlockId, selectedProfession]);
+  }, [locationReady, selectedStateId, selectedDistrictId, selectedBlockId, selectedProfession]);
+
+  // Debounce professional-name filter only — input text stays immediate.
+  // Empty query restores the list immediately (no wait).
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedSearchQuery('');
+      return;
+    }
+    const handle = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, PROVIDER_NAME_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   useEffect(() => {
     filterProviders();
-  }, [providers, searchQuery, selectedProfession]);
+  }, [providers, debouncedSearchQuery, selectedProfession]);
 
-  const loadProfessionOptions = async () => {
-    try {
-      const cats = await serviceCategoriesApi.getAll();
-      const names = (cats || [])
-        .filter(c => c.isActive !== false)
-        .map(c => c.name)
-        .filter(Boolean) as string[];
-      setCategoryNames(names.length ? names : FALLBACK_PROFESSIONS);
-    } catch {
-      setCategoryNames(FALLBACK_PROFESSIONS);
+  const handleUseMyLocation = useCallback(async () => {
+    if (locationFlowBusyRef.current) {
+      return;
     }
-  };
+    locationFlowBusyRef.current = true;
 
-  const handleUseMyLocation = async () => {
+    const keepManualPicker = () => {
+      setLocationPickerOpen(true);
+    };
+
+    const enableDeviceLocationAndRetry = async () => {
+      locationResumeRef.current = 'device_location';
+      try {
+        const result = await GeolocationService.promptEnableDeviceLocation();
+        if (result === 'enabled') {
+          locationResumeRef.current = null;
+          locationFlowBusyRef.current = false;
+          await handleUseMyLocation();
+          return;
+        }
+        if (result === 'opened_settings') {
+          // AppState resume will continue when user returns.
+          return;
+        }
+        // cancelled
+        locationResumeRef.current = null;
+        Alert.alert(
+          String(t('ecosystem.turnOnLocationTitle')),
+          String(t('ecosystem.turnOnLocationMessage')),
+          [
+            {
+              text: String(t('ecosystem.chooseAreaManually')),
+              onPress: keepManualPicker,
+            },
+            {
+              text: String(t('common.cancel') || 'Cancel'),
+              style: 'cancel',
+            },
+          ],
+        );
+      } catch {
+        locationResumeRef.current = null;
+        await GeolocationService.openDeviceLocationSettings();
+        locationResumeRef.current = 'device_location';
+      }
+    };
+
+    const openAppSettingsAndResume = async () => {
+      locationResumeRef.current = 'app_permission';
+      await GeolocationService.openAppPermissionSettings();
+    };
+
+    const showLocationFlowError = (code: string) => {
+      if (code === 'services_off') {
+        Alert.alert(
+          String(t('ecosystem.turnOnLocationTitle')),
+          String(t('ecosystem.turnOnLocationMessage')),
+          [
+            {
+              text: String(t('ecosystem.chooseAreaManually')),
+              onPress: keepManualPicker,
+            },
+            {
+              text: String(t('ecosystem.turnOnLocationAction')),
+              onPress: () => {
+                void enableDeviceLocationAndRetry();
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      if (code === 'never_ask_again') {
+        Alert.alert(
+          String(t('ecosystem.allowLocationTitle')),
+          String(t('ecosystem.locationNeverAskAgain')),
+          [
+            {
+              text: String(t('ecosystem.chooseAreaManually')),
+              onPress: keepManualPicker,
+            },
+            {
+              text: String(t('ecosystem.openAppSettings')),
+              onPress: () => {
+                void openAppSettingsAndResume();
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      if (code === 'denied') {
+        Alert.alert(
+          String(t('ecosystem.allowLocationTitle')),
+          String(t('ecosystem.locationDenied')),
+          [
+            {
+              text: String(t('ecosystem.chooseAreaManually')),
+              onPress: keepManualPicker,
+            },
+            {
+              text: String(t('ecosystem.tryAgainLocation')),
+              onPress: () => {
+                locationFlowBusyRef.current = false;
+                void handleUseMyLocation();
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      const messageKey =
+        code === 'timeout'
+          ? 'ecosystem.locationTimeout'
+          : code === 'unsupported'
+            ? 'ecosystem.locationUnsupported'
+            : code === 'geocode'
+              ? 'ecosystem.locationGeocodeFailed'
+              : code === 'nomatch'
+                ? 'ecosystem.locationNoMatch'
+                : 'ecosystem.locationUnavailable';
+
+      Alert.alert(
+        String(t('common.error') || "Couldn't get your location"),
+        String(
+          t(messageKey, {
+            defaultValue:
+              "Couldn't get your location. Please try again or choose your area manually.",
+          }),
+        ),
+        [
+          {
+            text: String(t('ecosystem.chooseAreaManually')),
+            onPress: keepManualPicker,
+          },
+          {
+            text: String(t('ecosystem.tryAgainLocation')),
+            onPress: () => {
+              locationFlowBusyRef.current = false;
+              void handleUseMyLocation();
+            },
+          },
+        ],
+      );
+    };
+
     try {
+      // Explicit customer intent: switch ACTIVE location to current GPS.
+      const startedEpoch = bumpLocationEpoch();
+
+      // Android often hides the system permission dialog while another RN Modal
+      // is open (Select Address). Close it first so the prompt can appear.
+      setLocationPickerOpen(false);
+      await new Promise<void>(resolve => {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(resolve, 280);
+        });
+      });
+
       setLocating(true);
       const loc = await GeolocationService.getLocationWithPrompt();
-      if (!loc) return;
+      if (startedEpoch !== locationEpochRef.current) {
+        return;
+      }
       const resolved = await resolveGeographyFromCoordinates(
         loc.latitude,
         loc.longitude,
       );
+      if (startedEpoch !== locationEpochRef.current) {
+        return;
+      }
       const nextStateId = resolved.stateId || ALL_STATES;
       const nextDistrictId = resolved.districtId || ALL_DISTRICTS;
       const nextBlockId = resolved.blockId || '';
@@ -268,13 +704,23 @@ export default function ProvidersListScreen({navigation, route}: any) {
           .filter(Boolean)
           .join(', ') ||
         null;
-      setSelectedStateId(nextStateId);
-      setSelectedDistrictId(nextDistrictId);
-      setSelectedBlockId(nextBlockId);
-      setBlockName(nextBlockName);
-      setLocationLabel(label);
-      setUsingDeviceLocation(true);
-      setLocationPickerOpen(false);
+      const applied = applyActiveLocationToState(
+        {
+          stateId: resolved.stateId,
+          districtId: resolved.districtId,
+          blockId: nextBlockId,
+          blockName: nextBlockName,
+          label: label || undefined,
+        },
+        'device',
+        startedEpoch,
+      );
+      if (!applied) {
+        return;
+      }
+      // Re-open picker so the customer sees the selected (ticked) current location.
+      setLocationPickerOpen(true);
+      locationResumeRef.current = null;
       void saveDeviceAsSearchLocation({
         stateId: nextStateId === ALL_STATES ? '' : nextStateId,
         districtId: nextDistrictId === ALL_DISTRICTS ? '' : nextDistrictId,
@@ -287,13 +733,14 @@ export default function ProvidersListScreen({navigation, route}: any) {
         longitude: loc.longitude,
       });
     } catch (err: unknown) {
-      // Match web BrowsePage locationErrorMessage → ecosystem.location*
-      let code = 'unavailable';
+      let code: LocationErrorCode | string = 'unavailable';
       if (err && typeof err === 'object' && 'code' in err) {
         const c = String((err as {code: string}).code);
         if (
           [
+            'services_off',
             'denied',
+            'never_ask_again',
             'timeout',
             'unsupported',
             'geocode',
@@ -308,45 +755,104 @@ export default function ProvidersListScreen({navigation, route}: any) {
         const m = err.message.toLowerCase();
         if (m.includes('permission') || m.includes('denied')) code = 'denied';
         else if (m.includes('timeout')) code = 'timeout';
-        else if (
-          [
-            'unavailable',
-            'nomatch',
-            'geocode',
-            'invalid',
-            'unsupported',
-          ].includes(err.message)
-        ) {
-          code = err.message;
+        else if (m.includes('location services') || m.includes('disabled')) {
+          code = 'services_off';
         }
       }
-      const messageKey =
-        code === 'denied'
-          ? 'ecosystem.locationDenied'
-          : code === 'timeout'
-            ? 'ecosystem.locationTimeout'
-            : code === 'unsupported'
-              ? 'ecosystem.locationUnsupported'
-              : code === 'geocode'
-                ? 'ecosystem.locationGeocodeFailed'
-                : code === 'nomatch'
-                  ? 'ecosystem.locationNoMatch'
-                  : 'ecosystem.locationUnavailable';
-      setAlertModal({
-        visible: true,
-        title: String(t('common.error')),
-        message: String(
-          t(messageKey, {
-            defaultValue:
-              'Could not read your location. Choose state and district below, or try again.',
-          }),
-        ),
-        type: 'error',
-      });
+      showLocationFlowError(code);
     } finally {
       setLocating(false);
+      locationFlowBusyRef.current = false;
     }
-  };
+  }, [t, bumpLocationEpoch, applyActiveLocationToState]);
+
+  useEffect(() => {
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'background' || next === 'inactive') {
+        if (locationResumeRef.current) {
+          locationLeftAppRef.current = true;
+        }
+        return;
+      }
+      if (next !== 'active') {
+        return;
+      }
+      if (!locationLeftAppRef.current) {
+        return;
+      }
+      locationLeftAppRef.current = false;
+      const pending = locationResumeRef.current;
+      if (!pending) {
+        return;
+      }
+      // Clear first so we never loop on repeated active events.
+      locationResumeRef.current = null;
+      void (async () => {
+        if (pending === 'device_location') {
+          const enabled = await GeolocationService.isDeviceLocationEnabled();
+          if (enabled) {
+            await handleUseMyLocation();
+            return;
+          }
+          Alert.alert(
+            String(t('ecosystem.turnOnLocationTitle')),
+            String(t('ecosystem.turnOnLocationMessage')),
+            [
+              {
+                text: String(t('ecosystem.chooseAreaManually')),
+                onPress: () => setLocationPickerOpen(true),
+              },
+              {
+                text: String(t('ecosystem.turnOnLocationAction')),
+                onPress: () => {
+                  locationResumeRef.current = 'device_location';
+                  void GeolocationService.promptEnableDeviceLocation().then(
+                    result => {
+                      if (result === 'enabled') {
+                        locationResumeRef.current = null;
+                        void handleUseMyLocation();
+                      } else if (result === 'opened_settings') {
+                        locationResumeRef.current = 'device_location';
+                      } else {
+                        locationResumeRef.current = null;
+                      }
+                    },
+                  );
+                },
+              },
+            ],
+          );
+          return;
+        }
+
+        const permission = await GeolocationService.checkLocationPermission();
+        if (permission === 'granted') {
+          await handleUseMyLocation();
+          return;
+        }
+        Alert.alert(
+          String(t('ecosystem.allowLocationTitle')),
+          String(t('ecosystem.locationNeverAskAgain')),
+          [
+            {
+              text: String(t('ecosystem.chooseAreaManually')),
+              onPress: () => setLocationPickerOpen(true),
+            },
+            {
+              text: String(t('ecosystem.openAppSettings')),
+              onPress: () => {
+                locationResumeRef.current = 'app_permission';
+                void GeolocationService.openAppPermissionSettings();
+              },
+            },
+          ],
+        );
+      })();
+    };
+
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
+  }, [handleUseMyLocation, t]);
 
   // -----------------------------
   // Load Providers
@@ -423,11 +929,17 @@ export default function ProvidersListScreen({navigation, route}: any) {
             address:
               data.location?.address ||
               (data as any).address?.address,
+            landmark:
+              data.location?.landmark ||
+              (data as any).address?.landmark,
             city: data.location?.city || (data as any).address?.city,
             district:
               data.location?.district ||
               (data as any).address?.district ||
               data.location?.city,
+            block:
+              data.location?.block ||
+              (data as any).address?.block,
             state: data.location?.state || (data as any).address?.state,
             stateId:
               data.location?.stateId || (data as any).address?.stateId,
@@ -522,8 +1034,8 @@ export default function ProvidersListScreen({navigation, route}: any) {
       list = list.filter(p => matchesProfession(p, selectedProfession));
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
       list = list.filter(
         p =>
           p.name.toLowerCase().includes(q) ||
@@ -552,10 +1064,31 @@ export default function ProvidersListScreen({navigation, route}: any) {
       });
       return;
     }
-    Linking.openURL(`tel:${phone}`);
+    const dial = () => {
+      void Linking.openURL(`tel:${phone}`);
+    };
+    // Guest (and anyone leaving the app): confirm before jumping to Phone.
+    if (isGuest || route?.name === 'GuestProviders') {
+      Alert.alert(
+        String(t('browse.call') || t('providers.call') || 'Call'),
+        String(
+          t('browse.callLeavesAppHint') ||
+            'This opens your Phone app to call the provider.',
+        ),
+        [
+          {text: String(t('common.cancel') || 'Cancel'), style: 'cancel'},
+          {
+            text: String(t('browse.call') || 'Call'),
+            onPress: dial,
+          },
+        ],
+      );
+      return;
+    }
+    dial();
   };
 
-  const goLogin = () => {
+  const goLogin = useCallback(() => {
     // Login lives on the root stack (above GuestStack / Main)
     const root = navigation.getParent()?.getParent() ?? navigation.getParent();
     if (root) {
@@ -563,7 +1096,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
     } else {
       navigation.navigate('Login');
     }
-  };
+  }, [navigation]);
 
   const selectedServiceForAlso =
     selectedProfession !== ALL_PROFESSIONS ? selectedProfession : undefined;
@@ -593,8 +1126,9 @@ export default function ProvidersListScreen({navigation, route}: any) {
         isOnline={Boolean(item.isOnline)}
         onlineLabel={String(t('providers.online'))}
         phone={phone || null}
-        callLabel={String(t('providers.callProvider'))}
+        callLabel={callButtonLabel(item.name, t as any)}
         requestLabel={String(t('providers.requestService'))}
+        compact
         hidePhoto
         onPress={isGuest ? undefined : () => openProviderDetails(item)}
         onCall={phone ? () => handleCallProvider(item) : undefined}
@@ -688,7 +1222,6 @@ export default function ProvidersListScreen({navigation, route}: any) {
           alsoServices.length ? String(t('browse.alsoLead')) : undefined
         }
         location={location || undefined}
-        experienceLabel={experienceLabel}
         rating={item.rating}
         reviewsLabel={reviewsLabel}
         image={item.profileImage}
@@ -696,8 +1229,9 @@ export default function ProvidersListScreen({navigation, route}: any) {
         isOnline={Boolean(item.isOnline)}
         onlineLabel={String(t('providers.online'))}
         phone={phone || null}
-        callLabel={String(t('providers.callProvider'))}
+        callLabel={callButtonLabel(item.name, t as any)}
         requestLabel={String(t('providers.requestService'))}
+        compact
         onPress={() => openProviderDetails(item)}
         onCall={phone ? () => handleCallProvider(item) : undefined}
         onRequest={
@@ -724,23 +1258,6 @@ export default function ProvidersListScreen({navigation, route}: any) {
     );
   };
 
-  const professionOptions = useMemo(() => {
-    const fromProviders = providers
-      .map(p => professionOf(p))
-      .filter(name => name && name !== 'Service provider');
-    const merged = [...categoryNames, ...fromProviders, ...FALLBACK_PROFESSIONS];
-    const unique: string[] = [];
-    const seen = new Set<string>();
-    for (const name of merged) {
-      const key = name.toLowerCase().trim();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      unique.push(name);
-    }
-    unique.sort((a, b) => a.localeCompare(b));
-    return unique;
-  }, [categoryNames, providers]);
-
   const activeBlockName = useMemo(() => {
     if (selectedBlockId) {
       const match = geoBlocks.find(b => b._id === selectedBlockId);
@@ -760,7 +1277,70 @@ export default function ProvidersListScreen({navigation, route}: any) {
     activeBlockName,
   );
 
+  const browseHasLocation = hasBrowseLocationFilter(
+    locationLabel,
+    selectedStateId === ALL_STATES ? '' : selectedStateId,
+    selectedDistrictId === ALL_DISTRICTS ? '' : selectedDistrictId,
+    selectedBlockId,
+  );
+
+  const headerLocationLabel = useMemo(() => {
+    if (!browseHasLocation) {
+      return String(t('browse.chooseYourPlace'));
+    }
+    const state = geoStates.find(s => s._id === selectedStateId);
+    const district = geoDistricts.find(d => d._id === selectedDistrictId);
+    const block = geoBlocks.find(b => b._id === selectedBlockId);
+    const parts = dedupePlaceParts([
+      block?.name || activeBlockName?.trim(),
+      district?.name,
+      state?.name,
+    ]);
+    // Show leaf + parent (Block · District or District · State), not leaf alone.
+    if (parts.length >= 2) return `${parts[0]} · ${parts[1]}`;
+    if (parts.length === 1) return parts[0];
+    return activePlace || String(t('browse.chooseYourPlace'));
+  }, [
+    browseHasLocation,
+    geoStates,
+    selectedStateId,
+    geoDistricts,
+    selectedDistrictId,
+    geoBlocks,
+    selectedBlockId,
+    activeBlockName,
+    activePlace,
+    t,
+  ]);
+
+  const guestBrowse = isGuest || route?.name === 'GuestProviders';
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      header: (props: {navigation: any}) => (
+        <ProvidersBrowseHeader
+          navigation={props.navigation}
+          theme={theme}
+          title={String(t('nav.browse') || t('common.browse'))}
+          locationLabel={headerLocationLabel}
+          locating={locating}
+          onLocationPress={openLocationPicker}
+          guest={guestBrowse}
+        />
+      ),
+    });
+  }, [
+    navigation,
+    theme,
+    t,
+    headerLocationLabel,
+    locating,
+    guestBrowse,
+    openLocationPicker,
+  ]);
+
   const applyManualState = (id: string) => {
+    bumpLocationEpoch();
     const nextStateId = id || ALL_STATES;
     setUsingDeviceLocation(false);
     setLocationLabel(null);
@@ -782,6 +1362,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
   };
 
   const applyManualDistrict = (id: string) => {
+    bumpLocationEpoch();
     const nextDistrictId = id || ALL_DISTRICTS;
     setUsingDeviceLocation(false);
     setSelectedDistrictId(nextDistrictId);
@@ -812,6 +1393,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
   };
 
   const applyManualBlock = (id: string) => {
+    bumpLocationEpoch();
     setUsingDeviceLocation(false);
     setSelectedBlockId(id);
     const block = geoBlocks.find(b => b._id === id);
@@ -828,9 +1410,11 @@ export default function ProvidersListScreen({navigation, route}: any) {
     }
     const state = geoStates.find(s => s._id === stateKey);
     const district = geoDistricts.find(d => d._id === districtKey);
-    const label = [block?.name, district?.name, state?.name]
-      .filter(Boolean)
-      .join(', ');
+    const label = dedupePlaceParts([
+      block?.name,
+      district?.name,
+      state?.name,
+    ]).join(', ');
     void saveManualSearchLocation({
       stateId: stateKey,
       districtId: districtKey,
@@ -921,8 +1505,341 @@ export default function ProvidersListScreen({navigation, route}: any) {
   // A full-screen loader was collapsing State→District→Block mid-selection.
 
   const crystalServiceBg = isDarkMode
-    ? 'rgba(255,255,255,0.1)'
-    : 'rgba(255,255,255,0.55)';
+    ? 'rgba(255,255,255,0.12)'
+    : '#FFFFFF';
+
+  const listRef = useRef<FlatList<ProviderWithStatus>>(null);
+  const pinnedServiceAnim = useRef(new Animated.Value(0)).current;
+  const pinnedServiceVisibleRef = useRef(false);
+  const lastScrollYRef = useRef(0);
+  const accumDownRef = useRef(0);
+  const accumUpRef = useRef(0);
+  const providerCountRef = useRef(0);
+  const [pinnedServiceVisible, setPinnedServiceVisible] = useState(false);
+  providerCountRef.current = filteredProviders.length;
+
+  const setPinnedServiceBar = useCallback(
+    (visible: boolean) => {
+      if (pinnedServiceVisibleRef.current === visible) return;
+      pinnedServiceVisibleRef.current = visible;
+      setPinnedServiceVisible(visible);
+      Animated.timing(pinnedServiceAnim, {
+        toValue: visible ? 1 : 0,
+        duration: SERVICE_PIN_ANIM_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    },
+    [pinnedServiceAnim],
+  );
+
+  useEffect(() => {
+    listRef.current?.scrollToOffset({offset: 0, animated: false});
+    lastScrollYRef.current = 0;
+    accumDownRef.current = 0;
+    accumUpRef.current = 0;
+    setPinnedServiceBar(false);
+  }, [selectedProfession, setPinnedServiceBar]);
+
+  const onProviderListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = Math.max(0, event.nativeEvent.contentOffset.y);
+      const dy = y - lastScrollYRef.current;
+      lastScrollYRef.current = y;
+
+      // Near top: in-list service block is visible — hide overlay duplicate.
+      if (y < SERVICE_PIN_MIN_Y || providerCountRef.current === 0) {
+        accumDownRef.current = 0;
+        accumUpRef.current = 0;
+        setPinnedServiceBar(false);
+        return;
+      }
+
+      if (dy > 2) {
+        accumDownRef.current += dy;
+        accumUpRef.current = 0;
+        if (accumDownRef.current >= SERVICE_PIN_HIDE_PX) {
+          setPinnedServiceBar(false);
+          accumDownRef.current = 0;
+        }
+      } else if (dy < -2) {
+        accumUpRef.current += -dy;
+        accumDownRef.current = 0;
+        if (accumUpRef.current >= SERVICE_PIN_SHOW_PX) {
+          setPinnedServiceBar(true);
+          accumUpRef.current = 0;
+        }
+      }
+    },
+    [setPinnedServiceBar],
+  );
+
+  const renderServiceSelector = useCallback(
+    () => (
+      <View style={styles.discoveryChromeInner}>
+        <View style={styles.serviceTriggerWrap}>
+          <Text style={[styles.serviceTriggerLabel, {color: theme.text}]}>
+            {t('browse.selectProfession')}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.serviceTrigger,
+              {
+                backgroundColor: crystalServiceBg,
+                borderColor: theme.border,
+              },
+            ]}
+            onPress={() => setCatalogOpen(true)}
+            accessibilityRole="button">
+            <Icon name="search" size={18} color={theme.textSecondary} />
+            <Text
+              style={[
+                styles.serviceTriggerValue,
+                {
+                  color:
+                    selectedProfession === ALL_PROFESSIONS
+                      ? theme.textSecondary
+                      : theme.text,
+                },
+              ]}
+              numberOfLines={1}>
+              {selectedProfession === ALL_PROFESSIONS
+                ? t('browse.searchPlaceholder')
+                : localizedServiceName(selectedProfession)}
+            </Text>
+            {selectedProfession !== ALL_PROFESSIONS ? (
+              <TouchableOpacity
+                onPress={() => setSelectedProfession(ALL_PROFESSIONS)}
+                hitSlop={8}
+                accessibilityLabel={String(t('common.clear'))}>
+                <Icon name="close" size={16} color={theme.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+            <Icon name="expand-more" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        <PopularServices
+          theme={theme}
+          services={catalogServices.length > 0 ? catalogServices : undefined}
+          selectedApiName={
+            selectedProfession === ALL_PROFESSIONS ? '' : selectedProfession
+          }
+          onSelect={name =>
+            setSelectedProfession(name ? name : ALL_PROFESSIONS)
+          }
+        />
+
+        {isGuest ? (
+          <Text style={[styles.guestNote, {color: theme.textSecondary}]}>
+            {String(
+              t('browse.guestNote') ||
+                'Browse freely. Sign in to request a service.',
+            )}{' '}
+            <Text
+              style={{color: theme.primary, fontWeight: '600'}}
+              onPress={goLogin}>
+              {t('auth.login') || t('actions.signIn')}
+            </Text>
+          </Text>
+        ) : null}
+      </View>
+    ),
+    [
+      theme,
+      t,
+      crystalServiceBg,
+      selectedProfession,
+      catalogServices,
+      isGuest,
+      goLogin,
+    ],
+  );
+
+  const renderResultsMeta = useCallback(
+    () => (
+      <View
+        style={[
+          styles.resultsMeta,
+          {backgroundColor: theme.background},
+        ]}>
+        {!loading ? (
+          <View style={styles.resultsHead}>
+            <Text
+              style={[styles.listTitle, {color: theme.text}]}
+              numberOfLines={2}>
+              {resultsHeading}
+            </Text>
+          </View>
+        ) : null}
+
+        {providers.length > 0 || searchQuery.trim() ? (
+          <View style={styles.providerSearchWrap}>
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={String(
+                t('browse.searchByNamePlaceholder') ||
+                  t('browse.searchProviders') ||
+                  t('providers.searchProviders'),
+              )}
+            />
+          </View>
+        ) : null}
+
+        {connectionFailed && filteredProviders.length > 0 ? (
+          <ConnectionNotice
+            kind="refresh"
+            onRetry={() => void handleRefresh()}
+          />
+        ) : null}
+      </View>
+    ),
+    [
+      loading,
+      theme,
+      resultsHeading,
+      t,
+      providers.length,
+      searchQuery,
+      connectionFailed,
+      filteredProviders.length,
+      handleRefresh,
+    ],
+  );
+
+  const listHeader = useMemo(
+    () => (
+      <View>
+        <View
+          style={[
+            styles.discoveryChrome,
+            {
+              backgroundColor: theme.card,
+              borderBottomColor: theme.border,
+            },
+          ]}>
+          {renderServiceSelector()}
+        </View>
+        {renderResultsMeta()}
+      </View>
+    ),
+    [theme.card, theme.border, renderServiceSelector, renderResultsMeta],
+  );
+
+  const renderListEmpty = useCallback(() => {
+    if (loading) {
+      return (
+        <View style={styles.resultsLoading}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={{marginTop: 8, color: theme.textSecondary}}>
+            {t('browse.loading') || t('providers.loading')}
+          </Text>
+        </View>
+      );
+    }
+    if (connectionFailed) {
+      return (
+        <ConnectionNotice
+          kind="load"
+          emptyTitle={String(t('browse.loadFailedTitle') || emptyTitle)}
+          onRetry={() => void loadOnlineProviders()}
+        />
+      );
+    }
+
+    const state = geoStates.find(s => s._id === selectedStateId);
+    const district = geoDistricts.find(d => d._id === selectedDistrictId);
+    const hasBlock = Boolean(selectedBlockId);
+    const hasDistrict =
+      Boolean(selectedDistrictId) && selectedDistrictId !== ALL_DISTRICTS;
+    const hasState =
+      Boolean(selectedStateId) && selectedStateId !== ALL_STATES;
+    // Name filter empty ≠ place filter empty — only offer widen when no providers at all.
+    const showWidenActions = providers.length === 0;
+
+    return (
+      <View style={styles.emptyWrap}>
+        <EmptyState
+          icon="search-outline"
+          title={emptyTitle}
+          message={String(t('browse.emptyHint'))}
+        />
+        <Pressable
+          onPress={openLocationPicker}
+          style={({pressed}) => [
+            styles.emptyPrimaryBtn,
+            {
+              backgroundColor: theme.primary,
+              opacity: pressed ? 0.88 : 1,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={String(
+            t('browse.changeLocationCta') || 'Change location',
+          )}>
+          <Text style={styles.emptyPrimaryBtnText}>
+            {String(t('browse.changeLocationCta') || 'Change location')}
+          </Text>
+        </Pressable>
+        {showWidenActions && hasBlock && district?.name ? (
+          <TouchableOpacity
+            onPress={() => applyManualDistrict(selectedDistrictId)}
+            style={styles.emptyAction}
+            accessibilityRole="button">
+            <Text style={[styles.emptyActionText, {color: theme.primary}]}>
+              {t('browse.widenToDistrict', {district: district.name})}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {showWidenActions && hasDistrict && state?.name ? (
+          <TouchableOpacity
+            onPress={() => applyManualState(selectedStateId)}
+            style={styles.emptyAction}
+            accessibilityRole="button">
+            <Text style={[styles.emptyActionText, {color: theme.primary}]}>
+              {t('browse.widenToState', {state: state.name})}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {showWidenActions && (hasState || hasDistrict || hasBlock) ? (
+          <TouchableOpacity
+            onPress={() => applyManualState('')}
+            style={styles.emptyAction}
+            accessibilityRole="button">
+            <Text style={[styles.emptyActionText, {color: theme.textSecondary}]}>
+              {t('browse.clearPlaceFilter')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }, [
+    loading,
+    theme.primary,
+    theme.textSecondary,
+    t,
+    connectionFailed,
+    emptyTitle,
+    loadOnlineProviders,
+    geoStates,
+    selectedStateId,
+    geoDistricts,
+    selectedDistrictId,
+    selectedBlockId,
+    applyManualDistrict,
+    applyManualState,
+    providers.length,
+    openLocationPicker,
+  ]);
+
+  const renderBrowseRow = useCallback(
+    ({item}: {item: ProviderWithStatus}) =>
+      isGuest
+        ? renderGuestProvider({item})
+        : renderProvider({item}),
+    [isGuest, renderGuestProvider, renderProvider],
+  );
 
   return (
     <SafeAreaView
@@ -933,41 +1850,6 @@ export default function ProvidersListScreen({navigation, route}: any) {
         backgroundColor={theme.background}
       />
 
-      <View style={styles.discovery}>
-      <View style={styles.serviceTriggerWrap}>
-        <Text style={[styles.serviceTriggerLabel, {color: theme.text}]}>
-          {t('browse.selectProfession')}
-        </Text>
-        <TouchableOpacity
-          style={[styles.serviceTrigger, {backgroundColor: crystalServiceBg}]}
-          onPress={() => setCatalogOpen(true)}
-          accessibilityRole="button">
-          <Text
-            style={[
-              styles.serviceTriggerValue,
-              {
-                color:
-                  selectedProfession === ALL_PROFESSIONS
-                    ? theme.textSecondary
-                    : theme.text,
-              },
-            ]}
-            numberOfLines={1}>
-            {selectedProfession === ALL_PROFESSIONS
-              ? t('browse.searchPlaceholder')
-              : localizedServiceName(selectedProfession)}
-          </Text>
-          {selectedProfession !== ALL_PROFESSIONS ? (
-            <TouchableOpacity
-              onPress={() => setSelectedProfession(ALL_PROFESSIONS)}
-              hitSlop={8}
-              accessibilityLabel={String(t('common.clear'))}>
-              <Icon name="close" size={16} color={theme.textSecondary} />
-            </TouchableOpacity>
-          ) : null}
-          <Icon name="expand-more" size={20} color={theme.textSecondary} />
-        </TouchableOpacity>
-      </View>
       <ServiceCatalogOverlay
         theme={theme}
         open={catalogOpen}
@@ -981,18 +1863,10 @@ export default function ProvidersListScreen({navigation, route}: any) {
         }
       />
 
-      <PopularServices
+      <BrowseLocationPickerModal
         theme={theme}
-        selectedApiName={
-          selectedProfession === ALL_PROFESSIONS ? '' : selectedProfession
-        }
-        onSelect={name =>
-          setSelectedProfession(name ? name : ALL_PROFESSIONS)
-        }
-      />
-
-      <BrowseLocationSection
-        theme={theme}
+        visible={locationPickerOpen}
+        onClose={() => setLocationPickerOpen(false)}
         states={geoStates}
         districts={geoDistricts}
         blocks={geoBlocks}
@@ -1001,129 +1875,58 @@ export default function ProvidersListScreen({navigation, route}: any) {
           selectedDistrictId === ALL_DISTRICTS ? '' : selectedDistrictId
         }
         blockId={selectedBlockId}
-        blockName={activeBlockName}
-        locationLabel={locationLabel}
         locating={locating}
         usingDeviceLocation={usingDeviceLocation}
-        pickerOpen={locationPickerOpen}
-        onPickerOpenChange={setLocationPickerOpen}
+        hasLocation={browseHasLocation}
         onUseMyLocation={() => void handleUseMyLocation()}
         onStateChange={applyManualState}
         onDistrictChange={applyManualDistrict}
         onBlockChange={applyManualBlock}
       />
 
-      {selectedProfession !== ALL_PROFESSIONS ? (
-        <View style={styles.activeFilters}>
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {backgroundColor: 'rgba(49, 130, 206, 0.12)'},
-            ]}
-            onPress={() => setSelectedProfession(ALL_PROFESSIONS)}
-            accessibilityLabel={String(t('browse.activeFilters'))}>
-            <Text style={[styles.filterChipText, {color: theme.text}]}>
-              {localizedServiceName(selectedProfession)}
-            </Text>
-            <Icon name="close" size={16} color={theme.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      <View style={styles.providerList}>
+        {/* Pinned service controls — native-driver fade/slide on upward scroll */}
+        <Animated.View
+          pointerEvents={pinnedServiceVisible ? 'auto' : 'none'}
+          style={[
+            styles.pinnedServiceBar,
+            {
+              backgroundColor: theme.card,
+              borderBottomColor: theme.border,
+              opacity: pinnedServiceAnim,
+              transform: [
+                {
+                  translateY: pinnedServiceAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}>
+          {renderServiceSelector()}
+        </Animated.View>
 
-      </View>
-
-      {isGuest ? (
-        <Text style={[styles.guestNote, {color: theme.textSecondary}]}>
-          {t('browse.guestNote')}{' '}
-          <Text style={{color: theme.primary, fontWeight: '600'}} onPress={goLogin}>
-            {t('auth.login')}
-          </Text>
-        </Text>
-      ) : null}
-
-      <View style={{marginHorizontal: 14, marginBottom: 12}}>
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={String(t('browse.searchProviders') || t('providers.searchProviders'))}
-        />
-      </View>
-
-      {filteredProviders.length > 0 ? (
-        <View style={styles.resultsHead}>
-          <View style={styles.resultsHeadLead}>
-            <Text style={[styles.listTitle, {color: theme.text}]}>
-              {resultsHeading}
-            </Text>
-            <TouchableOpacity
-              onPress={handleRefresh}
-              disabled={refreshing}
-              style={[
-                styles.refreshBtn,
-                {backgroundColor: 'rgba(49, 130, 206, 0.10)'},
-              ]}
-              accessibilityLabel={String(t('browse.refresh'))}>
-              <HsIcon name="refresh" size={20} color={theme.primary} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ShareContactRecommendation')}>
-            <Text
-              style={{
-                color: theme.primary,
-                fontWeight: '600',
-                fontSize: 13,
-              }}>
-              {t('browse.suggestCta')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {connectionFailed && filteredProviders.length > 0 ? (
-        <ConnectionNotice
-          kind="refresh"
-          onRetry={() => void handleRefresh()}
-        />
-      ) : null}
-
-      {loading && filteredProviders.length === 0 ? (
-        <View style={styles.resultsLoading}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={{marginTop: 10, color: theme.textSecondary}}>
-            {t('browse.loading') || t('providers.loading')}
-          </Text>
-        </View>
-      ) : connectionFailed && filteredProviders.length === 0 ? (
-        <ConnectionNotice
-          kind="load"
-          emptyTitle={String(t('browse.loadFailedTitle') || emptyTitle)}
-          onRetry={() => void loadOnlineProviders()}
-        />
-      ) : filteredProviders.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <EmptyState icon="search-outline" title={emptyTitle} />
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ShareContactRecommendation')}
-            style={styles.emptyAction}>
-            <Text style={[styles.emptyActionText, {color: theme.primary}]}>
-              {t('browse.suggestCta')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
         <FlatList
+          ref={listRef}
+          style={styles.providerListFlex}
           data={filteredProviders}
-          renderItem={isGuest ? renderGuestProvider : renderProvider}
+          renderItem={renderBrowseRow}
           keyExtractor={item => item.id}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={renderListEmpty}
           ListFooterComponent={isGuest ? null : <AdSlot size="banner" />}
-          contentContainerStyle={{paddingHorizontal: 14, paddingBottom: 24}}
-          ItemSeparatorComponent={() => <View style={{height: 14}} />}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={ProviderListSeparator}
+          keyboardShouldPersistTaps="handled"
+          onScroll={onProviderListScroll}
+          scrollEventThrottle={16}
+          initialNumToRender={10}
+          maxToRenderPerBatch={12}
+          windowSize={9}
+          removeClippedSubviews={false}
         />
-      )}
+      </View>
 
       <ProviderRequestModal
         visible={!!requestProvider}
@@ -1179,33 +1982,87 @@ export default function ProvidersListScreen({navigation, route}: any) {
 // -----------------------------
 const styles = StyleSheet.create({
   container: {flex: 1},
-  discovery: {
-    gap: 16,
-    marginBottom: 18,
+  listContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 110,
+    flexGrow: 1,
   },
-  serviceTriggerWrap: {marginHorizontal: 14},
+  providerList: {
+    flex: 1,
+    position: 'relative',
+  },
+  providerListFlex: {
+    flex: 1,
+  },
+  pinnedServiceBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 6,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  listSeparator: {height: 8},
+  discoveryChrome: {
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  discoveryChromeInner: {
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  discoveryTop: {
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  stickyChips: {
+    paddingTop: 4,
+    paddingBottom: 6,
+    zIndex: 2,
+  },
+  resultsMeta: {
+    gap: 6,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  discovery: {
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  serviceTriggerWrap: {marginHorizontal: 0},
   serviceTriggerLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
-    lineHeight: 19.5,
-    marginBottom: 8,
+    lineHeight: 17,
+    marginBottom: 4,
   },
   serviceTrigger: {
-    minHeight: 46,
-    borderRadius: 16,
-    borderWidth: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    shadowColor: 'rgba(30, 60, 90, 0.05)',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 1,
   },
-  serviceTriggerValue: {flex: 1, fontSize: 15, fontWeight: '600'},
+  serviceTriggerValue: {flex: 1, fontSize: 14, fontWeight: '600'},
+  providerSearchWrap: {marginBottom: 2, marginTop: 2},
+  nameSearchHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  suggestLink: {fontWeight: '600', fontSize: 12},
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   geoFilterRow: {
     flexDirection: 'row',
@@ -1215,27 +2072,37 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   guestNote: {
-    marginHorizontal: 14,
-    marginBottom: 12,
-    fontSize: 13,
-    lineHeight: 18.85,
+    fontSize: 12,
+    lineHeight: 17,
   },
   resultsLoading: {
-    paddingHorizontal: 14,
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingTop: 20,
+    paddingBottom: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyWrap: {
-    paddingHorizontal: 14,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingTop: 8,
+    paddingBottom: 16,
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
+  },
+  emptyPrimaryBtn: {
+    marginTop: 4,
+    minHeight: 44,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   emptyAction: {
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 12,
   },
   emptyActionText: {
@@ -1244,24 +2111,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   resultsHead: {
-    gap: 8,
-    marginHorizontal: 14,
-    marginTop: 4,
-    marginBottom: 14,
+    gap: 2,
+    marginBottom: 2,
   },
-  resultsHeadLead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  listTitle: {flex: 1, fontSize: 16, fontWeight: '700', lineHeight: 21.6},
-  refreshBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  listTitle: {flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 18},
   browseFilterChip: {
     minHeight: 32,
     paddingVertical: 0,

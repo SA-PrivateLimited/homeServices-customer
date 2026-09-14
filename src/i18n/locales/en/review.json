@@ -54,5 +54,10 @@
     "customer": "Customer",
     "provider": "Provider",
     "admin": "Admin"
-  }
+  },
+  "customerReviews": "Customer reviews",
+  "showReviews": "Show reviews",
+  "hideReviews": "Hide reviews",
+  "showMoreReviews": "Show more reviews",
+  "noReviewsYet": "No reviews yet"
 }

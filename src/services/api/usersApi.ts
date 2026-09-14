@@ -127,6 +127,18 @@ export async function updateFcmToken(userId: string, fcmToken: string): Promise<
   await apiPut(`/users/${userId}/fcmToken`, {fcmToken});
 }
 
+/** Unlink device token from this user (logout / switch account). */
+export async function clearFcmToken(
+  userId: string,
+  fcmToken?: string,
+): Promise<void> {
+  await apiDelete(
+    `/users/${userId}/fcmToken${
+      fcmToken ? `?fcmToken=${encodeURIComponent(fcmToken)}` : ''
+    }`,
+  );
+}
+
 /** Permanently delete the signed-in customer account. */
 export async function deleteMe(): Promise<void> {
   await apiDelete('/users/me');
@@ -151,6 +163,7 @@ export const usersApi = {
   updateMe,
   uploadMyProfileImage,
   updateFcmToken,
+  clearFcmToken,
   deleteMe,
   getById: getUserById,
 };

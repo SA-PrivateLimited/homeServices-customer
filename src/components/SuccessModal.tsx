@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Animated,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useStore} from '../store';
@@ -33,12 +33,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
   amount,
   icon = 'checkmark-circle',
   iconColor,
-  buttonText = 'OK',
+  buttonText = 'Done',
   onClose,
 }) => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
-  const defaultIconColor = iconColor || theme.primary;
+  const accent = iconColor || theme.success || theme.primary;
 
   return (
     <Modal
@@ -48,20 +48,21 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={[styles.modalContainer, {backgroundColor: theme.card}]}>
-          {/* Success Icon */}
-          <View style={[styles.iconContainer, {backgroundColor: defaultIconColor + '15'}]}>
-            <Icon name={icon} size={64} color={defaultIconColor} />
+          <View style={[styles.iconContainer, {backgroundColor: `${accent}18`}]}>
+            <Icon name={icon} size={28} color={accent} />
           </View>
 
-          {/* Title */}
           <Text style={[styles.title, {color: theme.text}]}>{title}</Text>
 
-          {/* Message */}
-          <Text style={[styles.message, {color: theme.textSecondary}]}>{message}</Text>
+          {message ? (
+            <Text style={[styles.message, {color: theme.textSecondary}]}>
+              {message}
+            </Text>
+          ) : null}
 
-          {/* Amount Breakdown */}
-          {amount && (
-            <View style={[styles.amountCard, {backgroundColor: theme.background}]}>
+          {amount ? (
+            <View
+              style={[styles.amountCard, {backgroundColor: theme.background}]}>
               <View style={styles.amountRow}>
                 <Text style={[styles.amountLabel, {color: theme.textSecondary}]}>
                   Consultation Fee:
@@ -83,18 +84,19 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
                 <Text style={[styles.totalLabel, {color: theme.text}]}>
                   Total Amount:
                 </Text>
-                <Text style={[styles.totalValue, {color: defaultIconColor}]}>
+                <Text style={[styles.totalValue, {color: accent}]}>
                   ₹{amount.total.toFixed(2)}
                 </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
-          {/* Action Button */}
           <TouchableOpacity
-            style={[styles.button, {backgroundColor: defaultIconColor}]}
+            style={[styles.button, {backgroundColor: accent}]}
             onPress={onClose}
-            activeOpacity={0.8}>
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={buttonText}>
             <Text style={styles.buttonText}>{buttonText}</Text>
           </TouchableOpacity>
         </View>
@@ -103,94 +105,95 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
   );
 };
 
+const {width} = Dimensions.get('window');
+const modalWidth = Math.min(width * 0.86, 360);
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
   },
   modalContainer: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 24,
-    padding: 24,
+    width: modalWidth,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 8},
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
     elevation: 10,
   },
   iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
+    lineHeight: 24,
   },
   message: {
-    fontSize: 16,
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   amountCard: {
     width: '100%',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    padding: 12,
+    marginBottom: 16,
   },
   amountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   amountLabel: {
-    fontSize: 14,
+    fontSize: 13,
   },
   amountValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   divider: {
     height: 1,
-    marginVertical: 8,
+    marginVertical: 6,
   },
   totalLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   totalValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
   },
   button: {
     width: '100%',
-    paddingVertical: 16,
+    minHeight: 44,
+    paddingVertical: 11,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    justifyContent: 'center',
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 
 export default SuccessModal;
-

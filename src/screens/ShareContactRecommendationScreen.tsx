@@ -1,6 +1,6 @@
 /**
  * Share Contact Recommendation Screen
- * Customer app - Share contact of plumber, electrician, etc.
+ * Customer app — recommend a trusted local professional (UI only; same API payload).
  */
 
 import React, {useState, useEffect} from 'react';
@@ -12,6 +12,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {Select, bilingualProfessionLine} from 'sapvt-ltd-app-packages';
@@ -25,6 +28,14 @@ import PhoneNumberInput from '../components/PhoneNumberInput';
 import {ContactPickModal} from '../components/ContactPickModal';
 import {localTenDigits, toE164} from '../utils/phone';
 import {getGeographyMeta} from '../services/api/geographyApi';
+import {readSearchLocation} from '../utils/browseLocationMemory';
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface ShareContactRecommendationScreenProps {
   navigation: any;
@@ -33,7 +44,7 @@ interface ShareContactRecommendationScreenProps {
 export default function ShareContactRecommendationScreen({
   navigation,
 }: ShareContactRecommendationScreenProps) {
-  const {isDarkMode, currentUser, language} = useStore();
+  const {isDarkMode, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
 
@@ -50,6 +61,7 @@ export default function ShareContactRecommendationScreen({
   const [geoDistricts, setGeoDistricts] = useState<
     {value: string; label: string; stateId: string}[]
   >([]);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [pickOpen, setPickOpen] = useState(false);
@@ -66,7 +78,7 @@ export default function ShareContactRecommendationScreen({
   });
 
   useEffect(() => {
-    loadServiceCategories();
+    void loadServiceCategories();
     void getGeographyMeta()
       .then(meta => {
         setGeoStates(
@@ -84,6 +96,11 @@ export default function ShareContactRecommendationScreen({
         setGeoStates([]);
         setGeoDistricts([]);
       });
+    void readSearchLocation().then(saved => {
+      if (!saved) return;
+      if (saved.stateId) setStateId(saved.stateId);
+      if (saved.districtId) setDistrictId(saved.districtId);
+    });
   }, []);
 
   const districtOptions = geoDistricts.filter(
@@ -117,10 +134,6 @@ export default function ShareContactRecommendationScreen({
     }
   };
 
-  const handleSelectServiceType = (categoryName: string) => {
-    setSelectedServiceType(categoryName);
-  };
-
   const serviceTypeOptions = serviceCategories.map(cat => ({
     value: cat.name,
     label: bilingualProfessionLine(cat.name, {nameHi: cat.nameHi}),
@@ -134,8 +147,11 @@ export default function ShareContactRecommendationScreen({
     if (!selectedServiceType) {
       setAlertModal({
         visible: true,
-        title: String(t('common.serviceTypeRequired')),
-        message: String(t('common.serviceTypeRequiredMessage')),
+        title: String(t('common.error')),
+        message: String(
+          t('shareContact.serviceRequired') ||
+            t('recommendations.selectServiceType'),
+        ),
         type: 'warning',
       });
       return;
@@ -155,7 +171,9 @@ export default function ShareContactRecommendationScreen({
       setAlertModal({
         visible: true,
         title: String(t('common.error')),
-        message: String(t('recommendations.invalidPhone')),
+        message: String(
+          t('shareContact.phoneRequired') || t('recommendations.invalidPhone'),
+        ),
         type: 'warning',
       });
       return;
@@ -166,7 +184,8 @@ export default function ShareContactRecommendationScreen({
       await contactRecommendationsApi.create(
         {
           recommendedProviderName:
-            providerName.trim() || String(t('providers.title') || 'Service Provider'),
+            providerName.trim() ||
+            String(t('providers.title') || 'Service Provider'),
           recommendedProviderPhone: toE164(providerPhone),
           serviceType: selectedServiceType,
           address: buildAddress(),
@@ -176,23 +195,24 @@ export default function ShareContactRecommendationScreen({
 
       setAlertModal({
         visible: true,
-        title: String(t('common.success')),
-        message: String(t('recommendations.successMessage')),
+        title: String(t('shareContact.successTitle') || t('common.success')),
+        message: String(
+          t('shareContact.successBody') || t('recommendations.successMessage'),
+        ),
         type: 'success',
       });
 
-      // Reset form
       setProviderName('');
       setProviderPhone('');
       setNotes('');
       setStateId('');
       setDistrictId('');
       setSelectedServiceType('');
+      setMoreOpen(false);
 
-      // Navigate back after a delay
       setTimeout(() => {
         navigation.goBack();
-      }, 2000);
+      }, 1800);
     } catch (error: any) {
       console.error('Error submitting recommendation:', error);
       setAlertModal({
@@ -206,70 +226,76 @@ export default function ShareContactRecommendationScreen({
     }
   };
 
+  const toggleMore = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMoreOpen(open => !open);
+  };
+
+  const crystalColors = {
+    card: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.55)',
+  };
+
   return (
     <View style={[styles.container, {backgroundColor: theme.background}]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Icon name="person-add" size={48} color={theme.primary} />
-          <Text style={[styles.headerTitle, {color: theme.text}]}>
+        <View style={styles.intro}>
+          <Text style={[styles.introTitle, {color: theme.text}]}>
             {t('recommendations.shareContact')}
           </Text>
-          <Text style={[styles.headerSubtitle, {color: theme.textSecondary}]}>
+          <Text style={[styles.introSub, {color: theme.textSecondary}]}>
             {t('recommendations.shareContactSubtitle')}
           </Text>
         </View>
 
-        {/* Form */}
-        <View style={[styles.form, {backgroundColor: theme.card}]}>
-          {/* Service Type */}
-          <View style={styles.formGroup}>
+        <View style={styles.form}>
+          <View style={styles.field}>
             <Select
               variant="crystal"
-              label={`${t('recommendations.serviceType')} *`}
+              label={String(t('recommendations.serviceType'))}
               options={serviceTypeOptions}
               value={selectedServiceType}
-              onChange={handleSelectServiceType}
+              onChange={setSelectedServiceType}
               placeholder={String(t('recommendations.selectServiceType'))}
-              title={String(t('services.selectServiceType'))}
+              title={String(t('recommendations.selectServiceType'))}
               disabled={loadingCategories}
-              colors={{
-                card: isDarkMode
-                  ? 'rgba(255,255,255,0.1)'
-                  : 'rgba(255,255,255,0.55)',
-              }}
+              colors={crystalColors}
             />
           </View>
 
-          {/* Provider Name */}
-          <View style={styles.formGroup}>
+          <View style={styles.field}>
             <Text style={[styles.label, {color: theme.text}]}>
-              {t('recommendations.providerName')} *
+              {t('recommendations.nameOptional') ||
+                t('shareContact.nameOptional') ||
+                t('recommendations.providerName')}
             </Text>
             <TextInput
-              style={[styles.input, {borderColor: theme.border, color: theme.text}]}
-              placeholder={t('recommendations.providerNamePlaceholder')}
+              style={[
+                styles.input,
+                {
+                  borderColor: theme.border,
+                  color: theme.text,
+                  backgroundColor: theme.card,
+                },
+              ]}
+              placeholder={String(t('recommendations.providerNamePlaceholder'))}
               placeholderTextColor={theme.textSecondary}
               value={providerName}
               onChangeText={setProviderName}
             />
           </View>
 
-          {/* Provider Phone */}
-          <View style={styles.formGroup}>
+          <View style={styles.field}>
             <Text style={[styles.label, {color: theme.text}]}>
-              {t('recommendations.providerPhone')} *
+              {t('recommendations.providerPhone')}
             </Text>
             <PhoneNumberInput
               value={providerPhone}
               onChangeText={setProviderPhone}
-              placeholder={String(
-                t('recommendations.providerPhonePlaceholder') ||
-                  '10-digit mobile',
-              )}
+              placeholder={String(t('recommendations.providerPhonePlaceholder'))}
               borderColor={theme.border}
               backgroundColor={theme.card}
               prefixBackgroundColor={isDarkMode ? theme.border : '#F5F5F5'}
@@ -278,96 +304,173 @@ export default function ShareContactRecommendationScreen({
             />
             <TouchableOpacity
               onPress={() => setPickOpen(true)}
-              style={{marginTop: 8}}>
-              <Text style={{color: theme.primary, fontWeight: '600', fontSize: 13}}>
-                {String(t('recommendations.pickContact') || 'Choose from contacts')}
+              style={[
+                styles.pickContacts,
+                {borderColor: `${theme.primary}55`},
+              ]}
+              accessibilityRole="button">
+              <Icon name="contacts" size={18} color={theme.primary} />
+              <Text style={[styles.pickContactsText, {color: theme.primary}]}>
+                {String(
+                  t('shareContact.pickContact') ||
+                    t('recommendations.pickContact'),
+                )}
               </Text>
             </TouchableOpacity>
           </View>
 
           {geoStates.length ? (
-            <View style={styles.formGroup}>
-              <Select
-                variant="crystal"
-                label={`${t('browse.state') || t('common.state') || 'State'} (${t('common.optional')})`}
-                options={[{value: '', label: '—'}, ...geoStates]}
-                value={stateId}
-                onChange={value => {
-                  setStateId(value);
-                  setDistrictId('');
-                }}
-                placeholder={String(t('browse.state') || 'State')}
-                title={String(t('browse.state') || 'State')}
-                colors={{
-                  card: isDarkMode
-                    ? 'rgba(255,255,255,0.1)'
-                    : 'rgba(255,255,255,0.55)',
-                }}
+            <View style={styles.moreBlock}>
+              <TouchableOpacity
+                onPress={toggleMore}
+                style={styles.moreToggle}
+                accessibilityRole="button"
+                accessibilityState={{expanded: moreOpen}}>
+                <Text style={[styles.moreToggleText, {color: theme.text}]}>
+                  {t('recommendations.moreDetails')}
+                </Text>
+                <Icon
+                  name={moreOpen ? 'expand-less' : 'expand-more'}
+                  size={22}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {moreOpen ? (
+                <View style={styles.moreBody}>
+                  <View style={styles.field}>
+                    <Select
+                      variant="crystal"
+                      label={String(
+                        t('shareContact.stateOptional') || 'State (optional)',
+                      )}
+                      options={[{value: '', label: '—'}, ...geoStates]}
+                      value={stateId}
+                      onChange={value => {
+                        setStateId(value);
+                        setDistrictId('');
+                      }}
+                      placeholder={String(
+                        t('browse.selectState') || 'Select state',
+                      )}
+                      title={String(t('browse.selectState') || 'State')}
+                      colors={crystalColors}
+                      showSearch
+                      searchPlaceholder={String(
+                        t('browse.searchStatePlaceholder') ||
+                          'Search state...',
+                      )}
+                      emptySearchText={String(
+                        t('browse.noStatesFound') ||
+                          'No states found\nTry a different name.',
+                      )}
+                    />
+                  </View>
+                  {districtOptions.length ? (
+                    <View style={styles.field}>
+                      <Select
+                        variant="crystal"
+                        label={String(
+                          t('shareContact.districtOptional') ||
+                            'District (optional)',
+                        )}
+                        options={[{value: '', label: '—'}, ...districtOptions]}
+                        value={districtId}
+                        onChange={setDistrictId}
+                        placeholder={String(
+                          t('browse.selectDistrict') || 'Select district',
+                        )}
+                        title={String(t('browse.selectDistrict') || 'District')}
+                        colors={crystalColors}
+                        showSearch
+                        searchPlaceholder={String(
+                          t('browse.searchDistrictPlaceholder') ||
+                            'Search district...',
+                        )}
+                        emptySearchText={String(
+                          t('browse.noDistrictsFound') ||
+                            'No districts found\nTry a different name.',
+                        )}
+                      />
+                    </View>
+                  ) : null}
+                  <View style={styles.field}>
+                    <Text style={[styles.label, {color: theme.text}]}>
+                      {t('shareContact.notesOptional') ||
+                        t('recommendations.address')}
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        styles.textArea,
+                        {
+                          borderColor: theme.border,
+                          color: theme.text,
+                          backgroundColor: theme.card,
+                        },
+                      ]}
+                      placeholder={String(
+                        t('shareContact.notesPlaceholder') ||
+                          t('recommendations.addressPlaceholder'),
+                      )}
+                      placeholderTextColor={theme.textSecondary}
+                      value={notes}
+                      onChangeText={setNotes}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.field}>
+              <Text style={[styles.label, {color: theme.text}]}>
+                {t('shareContact.notesOptional') ||
+                  t('recommendations.address')}
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.textArea,
+                  {
+                    borderColor: theme.border,
+                    color: theme.text,
+                    backgroundColor: theme.card,
+                  },
+                ]}
+                placeholder={String(t('recommendations.addressPlaceholder'))}
+                placeholderTextColor={theme.textSecondary}
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
               />
             </View>
-          ) : null}
+          )}
 
-          {districtOptions.length ? (
-            <View style={styles.formGroup}>
-              <Select
-                variant="crystal"
-                label={`${t('browse.district') || 'District'} (${t('common.optional')})`}
-                options={[{value: '', label: '—'}, ...districtOptions]}
-                value={districtId}
-                onChange={setDistrictId}
-                placeholder={String(t('browse.district') || 'District')}
-                title={String(t('browse.district') || 'District')}
-                colors={{
-                  card: isDarkMode
-                    ? 'rgba(255,255,255,0.1)'
-                    : 'rgba(255,255,255,0.55)',
-                }}
-              />
-            </View>
-          ) : null}
+          <Text style={[styles.privacy, {color: theme.textSecondary}]}>
+            {String(
+              t('shareContact.privacy') || t('recommendations.infoMessage'),
+            )}
+          </Text>
 
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, {color: theme.text}]}>
-              {t('collab.notesLabel') || t('recommendations.address')} ({t('common.optional')})
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                styles.textArea,
-                {borderColor: theme.border, color: theme.text},
-              ]}
-              placeholder={t('recommendations.addressPlaceholder')}
-              placeholderTextColor={theme.textSecondary}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Info Box */}
-          <View style={[styles.infoBox, {backgroundColor: theme.primary + '15', borderColor: theme.primary + '30'}]}>
-            <Icon name="info" size={20} color={theme.primary} />
-            <Text style={[styles.infoText, {color: theme.text}]}>
-              {t('recommendations.infoMessage')}
-            </Text>
-          </View>
-
-          {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.submitButton, {backgroundColor: theme.primary}]}
-            onPress={handleSubmit}
-            disabled={loading}>
+            style={[
+              styles.submitButton,
+              {backgroundColor: theme.primary, opacity: loading ? 0.7 : 1},
+            ]}
+            onPress={() => void handleSubmit()}
+            disabled={loading}
+            accessibilityRole="button">
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <>
-                <Icon name="send" size={20} color="#fff" />
-                <Text style={styles.submitButtonText}>
-                  {t('recommendations.submit')}
-                </Text>
-              </>
+              <Text style={styles.submitButtonText}>
+                {t('recommendations.submit')}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -380,10 +483,12 @@ export default function ShareContactRecommendationScreen({
           if (name) setProviderName(name);
           if (phone) setProviderPhone(phone);
         }}
-        title={String(t('recommendations.pickContact') || 'Choose from contacts')}
+        title={String(
+          t('shareContact.pickContact') || t('recommendations.pickContact'),
+        )}
         emptyLabel={String(
-          t('recommendations.pickerUnavailable') ||
-            'Could not open contacts. Enter the mobile number.',
+          t('shareContact.pickerUnavailable') ||
+            t('recommendations.pickerUnavailable'),
         )}
         cancelLabel={String(t('common.cancel') || 'Cancel')}
         backgroundColor={theme.background}
@@ -391,7 +496,6 @@ export default function ShareContactRecommendationScreen({
         mutedColor={theme.textSecondary}
       />
 
-      {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -404,136 +508,85 @@ export default function ShareContactRecommendationScreen({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
+  container: {flex: 1},
+  scrollView: {flex: 1},
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 20,
+  intro: {marginBottom: 16},
+  introTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  headerSubtitle: {
+  introSub: {
+    marginTop: 6,
     fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 20,
+    lineHeight: 20,
   },
-  form: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
+  form: {gap: 4},
+  field: {marginBottom: 14},
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
     borderRadius: 12,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
-  },
-  selectInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  selectInputText: {
-    fontSize: 16,
-    flex: 1,
+    minHeight: 48,
   },
   textArea: {
-    minHeight: 80,
-    paddingTop: 14,
+    minHeight: 84,
+    paddingTop: 12,
   },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 16,
+  pickContacts: {
+    marginTop: 10,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 20,
-    gap: 12,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  submitButton: {
+    borderStyle: 'dashed',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
     gap: 8,
+    paddingHorizontal: 12,
+  },
+  pickContactsText: {fontSize: 14, fontWeight: '700'},
+  moreBlock: {
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  moreToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingVertical: 4,
+  },
+  moreToggleText: {fontSize: 14, fontWeight: '700'},
+  moreBody: {paddingTop: 4},
+  privacy: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 14,
+  },
+  submitButton: {
+    minHeight: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    gap: 12,
-  },
-  categoryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryText: {
-    flex: 1,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

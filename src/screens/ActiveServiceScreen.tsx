@@ -48,10 +48,156 @@ import {
   activePhaseSubtitle,
 } from '../utils/activeServiceStatus';
 import {localizedServiceName} from '../utils/serviceDisplay';
-import {formatFullAddressLine} from '../utils/addressDisplay';
-import {formatRequestTimeLabel} from '../utils/serviceRequestCard';
+import {
+  formatAddressDisplayLines,
+  formatFullAddressLine,
+} from '../utils/addressDisplay';
+import {formatJobDateTime} from '../utils/dateDisplay';
 import {contactHintMessage} from '../utils/providerContact';
 import {toSafeMaterialIcon} from '../utils/serviceIcons';
+
+type ThemeColors = typeof lightTheme;
+
+function RequestStatusSteps({
+  status,
+  theme,
+  labels,
+}: {
+  status: string;
+  theme: ThemeColors;
+  labels: {
+    sent: string;
+    accepted: string;
+    inProgress: string;
+    done: string;
+    title: string;
+  };
+}) {
+  const ns = String(status || '')
+    .toLowerCase()
+    .trim();
+  if (
+    ns === 'cancelled' ||
+    ns === 'canceled' ||
+    ns === 'rejected' ||
+    ns === 'declined'
+  ) {
+    return null;
+  }
+
+  const acceptedDone = [
+    'accepted',
+    'confirmed',
+    'assigned',
+    'in-progress',
+    'in progress',
+    'inprogress',
+    'in_progress',
+    'completed',
+    'done',
+    'finished',
+  ].includes(ns);
+  const inProgressDone = [
+    'in-progress',
+    'in progress',
+    'inprogress',
+    'in_progress',
+    'completed',
+    'done',
+    'finished',
+  ].includes(ns);
+  const doneDone = ['completed', 'done', 'finished'].includes(ns);
+  const inProgressCurrent =
+    ns === 'in-progress' ||
+    ns === 'in progress' ||
+    ns === 'inprogress' ||
+    ns === 'in_progress';
+
+  // Always show the real customer path (no invented backend states).
+  const steps = [
+    {key: 'sent', label: labels.sent, done: true, current: false},
+    {
+      key: 'accepted',
+      label: labels.accepted,
+      done: acceptedDone,
+      current: acceptedDone && !inProgressDone,
+    },
+    {
+      key: 'progress',
+      label: labels.inProgress,
+      done: inProgressDone,
+      current: inProgressCurrent,
+    },
+    {key: 'done', label: labels.done, done: doneDone, current: false},
+  ];
+
+  return (
+    <View style={styles.statusStepsWrap}>
+      <Text style={[styles.statusStepsTitle, {color: theme.textSecondary}]}>
+        {labels.title}
+      </Text>
+      <View style={styles.statusStepsRow}>
+        {steps.map((step, index) => (
+          <React.Fragment key={step.key}>
+            {index > 0 ? (
+              <View
+                style={[
+                  styles.statusStepLine,
+                  {
+                    backgroundColor: step.done ? theme.success : theme.border,
+                  },
+                ]}
+              />
+            ) : null}
+            <View style={styles.statusStepItem}>
+              <View
+                style={[
+                  styles.statusStepDot,
+                  {
+                    backgroundColor: step.done
+                      ? theme.success
+                      : step.current
+                        ? `${theme.primary}22`
+                        : theme.card,
+                    borderColor: step.done
+                      ? theme.success
+                      : step.current
+                        ? theme.primary
+                        : theme.border,
+                  },
+                ]}>
+                {step.done ? (
+                  <Icon name="check" size={12} color="#fff" />
+                ) : step.current ? (
+                  <View
+                    style={[
+                      styles.statusStepCurrentInner,
+                      {backgroundColor: theme.primary},
+                    ]}
+                  />
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.statusStepLabel,
+                  {
+                    color:
+                      step.done || step.current
+                        ? theme.text
+                        : theme.textSecondary,
+                    fontWeight: step.done || step.current ? '700' : '500',
+                  },
+                ]}
+                numberOfLines={1}>
+                {step.label}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 interface ActiveServiceScreenProps {
   navigation?: any;
@@ -1355,10 +1501,16 @@ export default function ActiveServiceScreen({
   const waiting = phase === 'finding' || phase === 'waiting-accept';
   const canEdit = status === 'pending';
   const taskPin = jobCard?.taskPIN || (serviceRequest as any)?.taskPIN || null;
-  const serviceAddressLine = formatFullAddressLine(
-    customerAddress as any,
+  const addressLines = formatAddressDisplayLines(customerAddress as any);
+  const serviceAddressLine =
+    addressLines.length > 0
+      ? addressLines.join('\n')
+      : formatFullAddressLine(customerAddress as any);
+  const requestedDisplay = formatJobDateTime(
+    requestedAt,
+    undefined,
+    '',
   );
-  const requestedLabel = formatRequestTimeLabel(status, requestedAt);
   const contactHint = canCall
     ? null
     : contactHintMessage(
@@ -1368,8 +1520,27 @@ export default function ActiveServiceScreen({
       );
   const providerLocLabel = (() => {
     const loc = providerProfile?.location || {};
-    return [loc.district, loc.city].filter(Boolean).join(', ');
+    const parts = [loc.district || loc.city, loc.state]
+      .map((p: unknown) => String(p || '').trim())
+      .filter(Boolean)
+      .filter(
+        (part: string, index: number, all: string[]) =>
+          index === 0 || part.toLowerCase() !== all[index - 1].toLowerCase(),
+      );
+    return parts.join(', ');
   })();
+  const providerDisplayName =
+    assignedProviderName ||
+    String(t('active.partnerFallback') || 'Someone');
+  const providerFirstName = String(providerDisplayName)
+    .trim()
+    .split(/\s+/)[0];
+  const callActionLabel = providerFirstName
+    ? String(
+        t('providers.callNamed', {name: providerFirstName}) ||
+          t('active.callNamed', {name: providerFirstName}),
+      )
+    : String(t('contact.callProvider') || t('activeService.callProvider'));
   const showRefresh = !['completed', 'cancelled', 'canceled', 'rejected'].includes(
     String(status || '').toLowerCase(),
   );
@@ -1420,6 +1591,25 @@ export default function ActiveServiceScreen({
               {heroSub}
             </Text>
           ) : null}
+          {serviceLabel &&
+          (phase === 'accepted' ||
+            phase === 'in-progress' ||
+            phase === 'waiting-accept') ? (
+            <Text style={[styles.heroService, {color: theme.text}]}>
+              {serviceLabel}
+            </Text>
+          ) : null}
+          <RequestStatusSteps
+            status={status}
+            theme={theme}
+            labels={{
+              title: String(t('active.requestStatus') || 'Request status'),
+              sent: String(t('active.stepSent') || 'Sent'),
+              accepted: String(t('active.stepAccepted') || 'Accepted'),
+              inProgress: String(t('active.stepInProgress') || 'In progress'),
+              done: String(t('active.stepDone') || 'Done'),
+            }}
+          />
           {distance &&
           (status === 'accepted' || status === 'in-progress') &&
           isImmediateService ? (
@@ -1516,11 +1706,13 @@ export default function ActiveServiceScreen({
             primary={theme.primary}
             card={theme.card}
             isDark={isDark}
-            radius={18}
+            radius={16}
             style={styles.detailCard}
             contentStyle={styles.detailCardInner}>
             <Text style={[styles.cardTitle, {color: theme.text}]}>
-              {serviceLabel}
+              {String(
+                t('active.yourProfessional') || 'Your professional',
+              )}
             </Text>
             <View style={styles.providerInfo}>
               <Avatar
@@ -1529,10 +1721,7 @@ export default function ActiveServiceScreen({
                   serviceRequest?.providerImage ||
                   null
                 }
-                name={
-                  assignedProviderName ||
-                  String(t('active.partnerFallback') || 'Someone')
-                }
+                name={providerDisplayName}
                 size={48}
                 colors={{primary: theme.primary}}
               />
@@ -1541,22 +1730,19 @@ export default function ActiveServiceScreen({
                   style={[styles.providerName, {color: theme.text}]}
                   numberOfLines={1}
                   ellipsizeMode="tail">
-                  {assignedProviderName ||
-                    String(t('active.partnerFallback') || 'Someone')}
+                  {providerDisplayName}
                 </Text>
                 <Text
                   style={[styles.serviceType, {color: theme.textSecondary}]}
                   numberOfLines={2}
                   ellipsizeMode="tail">
-                  {[serviceLabel, providerLocLabel].filter(Boolean).join(' · ')}
+                  {serviceLabel}
                 </Text>
-                {providerProfile?.isOnline === true ? (
-                  <Text style={[styles.presenceText, {color: theme.success}]}>
-                    ●  {t('common.online') || t('activeService.online')}
-                  </Text>
-                ) : providerProfile?.isOnline === false ? (
-                  <Text style={[styles.presenceText, {color: theme.textSecondary}]}>
-                    ●  {t('common.offline') || t('activeService.offline')}
+                {providerLocLabel ? (
+                  <Text
+                    style={[styles.providerLoc, {color: theme.textSecondary}]}
+                    numberOfLines={1}>
+                    {providerLocLabel}
                   </Text>
                 ) : null}
                 {providerRating > 0 ? (
@@ -1567,26 +1753,27 @@ export default function ActiveServiceScreen({
                     </Text>
                   </View>
                 ) : null}
+                {providerProfile?.isOnline === true ? (
+                  <Text style={[styles.presenceText, {color: theme.success}]}>
+                    ●  {String(
+                      t('active.currentlyOnline') ||
+                        t('common.online') ||
+                        'Currently online',
+                    )}
+                  </Text>
+                ) : providerProfile?.isOnline === false ? (
+                  <Text
+                    style={[styles.presenceText, {color: theme.textSecondary}]}>
+                    ●  {String(
+                      t('active.currentlyOffline') ||
+                        'Currently offline',
+                    )}
+                  </Text>
+                ) : null}
               </View>
             </View>
 
-            {canCall ? (
-              <Button
-                title={String(
-                  t('contact.callProvider') || t('activeService.callProvider'),
-                )}
-                variant="secondary"
-                block
-                onPress={handleCallProvider}
-                colors={{
-                  primary: theme.primary,
-                  card: theme.card,
-                  text: theme.primary,
-                  border: theme.primary,
-                }}
-                textStyle={{color: theme.primary}}
-              />
-            ) : contactHint ? (
+            {!canCall && contactHint ? (
               <Text style={[styles.contactHint, {color: theme.textSecondary}]}>
                 {contactHint}
               </Text>
@@ -1594,31 +1781,31 @@ export default function ActiveServiceScreen({
           </CrystalSurface>
         ) : null}
 
-        {/* Service Details — web `.active-detail-card` */}
+        {/* Your request */}
         <CrystalSurface
           primary={theme.primary}
           card={theme.card}
           isDark={isDark}
-          radius={18}
+          radius={16}
           style={styles.detailCard}
           contentStyle={styles.detailCardInner}>
           <Text style={[styles.cardTitle, {color: theme.text}]}>
-            {String(t('active.serviceDetails') || t('jobCard.serviceDetails'))}
+            {String(t('active.serviceDetails') || 'Your request')}
           </Text>
-          <View style={styles.detailGridRow}>
+          <View style={styles.detailBlock}>
             <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-              {String(t('active.serviceType') || t('services.serviceType'))}
+              {String(t('active.serviceType') || t('services.serviceType') || 'Service')}
             </Text>
-            <Text style={[styles.detailValue, {color: theme.text}]}>
+            <Text style={[styles.detailValueStack, {color: theme.text}]}>
               {serviceLabel}
             </Text>
           </View>
           {(serviceRequest?.problem || jobCard?.problem) ? (
-            <View style={styles.detailGridRow}>
+            <View style={styles.detailBlock}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                {String(t('active.problem') || t('services.problem'))}
+                {String(t('active.problem') || 'What you need')}
               </Text>
-              <Text style={[styles.detailValue, {color: theme.text}]}>
+              <Text style={[styles.detailValueStack, {color: theme.text}]}>
                 {serviceRequest?.problem || jobCard?.problem || ''}
               </Text>
             </View>
@@ -1626,28 +1813,43 @@ export default function ActiveServiceScreen({
           {serviceAddressLine ? (
             <View style={styles.detailBlock}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
-                {String(t('active.address') || t('services.address'))}
+                {String(t('active.address') || t('services.address') || 'Address')}
               </Text>
-              <Text style={[styles.detailAddress, {color: theme.text}]}>
-                {serviceAddressLine}
-              </Text>
+              {addressLines.length > 0 ? (
+                addressLines.map(line => (
+                  <Text
+                    key={line}
+                    style={[styles.detailAddress, {color: theme.text}]}>
+                    {line}
+                  </Text>
+                ))
+              ) : (
+                <Text style={[styles.detailAddress, {color: theme.text}]}>
+                  {serviceAddressLine}
+                </Text>
+              )}
             </View>
           ) : null}
           {status === 'cancelled' &&
           String(serviceRequest?.cancellationReason || '').trim() ? (
-            <View style={styles.detailGridRow}>
+            <View style={styles.detailBlock}>
               <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
                 {String(t('active.cancelReason') || 'Reason')}
               </Text>
-              <Text style={[styles.detailValue, {color: theme.error}]}>
+              <Text style={[styles.detailValueStack, {color: theme.error}]}>
                 {String(serviceRequest.cancellationReason).trim()}
               </Text>
             </View>
           ) : null}
-          {requestedLabel ? (
-            <Text style={[styles.detailTime, {color: theme.textSecondary}]}>
-              {requestedLabel}
-            </Text>
+          {requestedDisplay ? (
+            <View style={styles.detailBlock}>
+              <Text style={[styles.detailLabel, {color: theme.textSecondary}]}>
+                {String(t('active.requested') || 'Requested')}
+              </Text>
+              <Text style={[styles.detailValueStack, {color: theme.text}]}>
+                {requestedDisplay}
+              </Text>
+            </View>
           ) : null}
         </CrystalSurface>
 
@@ -1675,12 +1877,18 @@ export default function ActiveServiceScreen({
                 status === 'in-progress' ||
                 status === 'completed'
               }
-              title={String(t('jobCard.comments') || 'Comments')}
-              placeholder={String(
-                t('jobCard.commentPlaceholder') || 'Write a comment…',
+              title={String(
+                t('active.updatesMessages') ||
+                  t('jobCard.comments') ||
+                  'Updates & messages',
               )}
-              emptyText={String(t('jobCard.noComments') || 'No comments yet')}
-              postLabel={String(t('jobCard.postComment') || 'Post')}
+              placeholder={String(
+                t('jobCard.commentPlaceholder') || 'Write a message…',
+              )}
+              emptyText={String(
+                t('jobCard.noComments') || 'No updates yet',
+              )}
+              postLabel={String(t('jobCard.postComment') || 'Send')}
               onSubmit={async text => {
                 const updated = await jobCardsApi.addComment(jobCardId, text);
                 setJobCard((prev: any) => ({
@@ -1718,11 +1926,17 @@ export default function ActiveServiceScreen({
             />
             {canCall ? (
               <Button
-                title={String(t('contact.callProvider') || t('activeService.callProvider'))}
-                variant="primary"
+                title={callActionLabel}
+                variant="secondary"
                 block
                 onPress={handleCallProvider}
-                colors={{primary: theme.primary, card: theme.card, text: '#fff', border: theme.primary}}
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: theme.primary,
+                  border: theme.primary,
+                }}
+                textStyle={{color: theme.primary}}
               />
             ) : null}
           </>
@@ -1792,7 +2006,7 @@ export default function ActiveServiceScreen({
           <>
             {canCall ? (
               <Button
-                title={String(t('contact.callProvider') || t('activeService.callProvider'))}
+                title={callActionLabel}
                 variant="primary"
                 block
                 onPress={handleCallProvider}
@@ -1800,7 +2014,9 @@ export default function ActiveServiceScreen({
               />
             ) : null}
             <Button
-              title={String(t('activeService.cancelService'))}
+              title={String(
+                t('active.cancelService') || t('activeService.cancelService'),
+              )}
               variant="secondary"
               block
               onPress={handleCancelService}
@@ -2142,15 +2358,15 @@ const styles = StyleSheet.create({
   },
   pageContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-    gap: 14,
+    paddingTop: 10,
+    paddingBottom: 28,
+    gap: 12,
   },
   heroCard: {
     marginHorizontal: 0,
   },
   heroInner: {
-    padding: 14,
+    padding: 12,
     gap: 8,
   },
   heroTitleRow: {
@@ -2185,6 +2401,59 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginLeft: 44,
   },
+  heroService: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginLeft: 44,
+  },
+  statusStepsWrap: {
+    marginLeft: 44,
+    marginTop: 4,
+    gap: 8,
+  },
+  statusStepsTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  statusStepsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  statusStepItem: {
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 52,
+  },
+  statusStepDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusStepCurrentInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusStepLine: {
+    height: 2,
+    flex: 1,
+    minWidth: 12,
+    marginHorizontal: 2,
+    marginBottom: 16,
+    borderRadius: 1,
+  },
+  statusStepLabel: {
+    fontSize: 11,
+    maxWidth: 72,
+    textAlign: 'center',
+  },
   heroReassure: {
     fontSize: 12,
     lineHeight: 17,
@@ -2216,7 +2485,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
   },
   detailCardInner: {
-    padding: 14,
+    padding: 12,
     gap: 10,
   },
   contactHint: {
@@ -2234,6 +2503,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   detailAddress: {
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  detailValueStack: {
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
@@ -2257,16 +2531,16 @@ const styles = StyleSheet.create({
     shadowRadius: 2.22,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.2,
   },
   providerInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 4,
+    marginBottom: 0,
   },
   providerAvatar: {
     width: 60,
@@ -2286,14 +2560,18 @@ const styles = StyleSheet.create({
     minWidth: 0, // Allow flex children to shrink
   },
   providerName: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     flexShrink: 1,
   },
   serviceType: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 2,
     flexShrink: 1,
+  },
+  providerLoc: {
+    fontSize: 12,
+    marginTop: 2,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -2302,8 +2580,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rating: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
   },
   reviewsCount: {
     fontSize: 12,

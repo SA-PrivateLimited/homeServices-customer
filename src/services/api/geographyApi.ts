@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {apiGet} from './apiClient';
+import {ApiRequestError, apiGet} from './apiClient';
 
 export interface GeographyState {
   _id: string;
@@ -197,14 +197,23 @@ export async function resolveGeographyFromCoordinates(
       {skipAuth: true},
     );
   } catch (err: unknown) {
+    const apiErr = err instanceof ApiRequestError ? err : null;
     const message = err instanceof Error ? err.message : '';
-    const code = message.includes('404')
-      ? 'nomatch'
-      : message.includes('502')
-        ? 'geocode'
-        : message.includes('400')
-          ? 'invalid'
-          : 'unavailable';
+    const code =
+      apiErr?.code ||
+      (apiErr?.status === 404
+        ? 'nomatch'
+        : apiErr?.status === 502
+          ? 'geocode'
+          : apiErr?.status === 400
+            ? 'invalid'
+            : message.includes('404')
+              ? 'nomatch'
+              : message.includes('502')
+                ? 'geocode'
+                : message.includes('400')
+                  ? 'invalid'
+                  : 'unavailable');
     throw Object.assign(new Error(code), {code});
   }
 }

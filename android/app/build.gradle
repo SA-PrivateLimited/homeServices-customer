@@ -19,11 +19,11 @@ android {
     namespace "com.homeservices.customer"
 
     defaultConfig {
-        applicationId "com.homeservices.customer"
+        applicationId "com.akansho.customer"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
-        versionName "1.0.3"
+        versionCode 3
+        versionName "1.0.0"
     }
 
     signingConfigs {
@@ -98,6 +98,9 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+
+    // Location settings resolution (SettingsClient) — same stack as geolocation-service
+    implementation("com.google.android.gms:play-services-location:18.0.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

@@ -88,15 +88,64 @@ export function formatFullAddressLine(addr?: AreaPinInput | null): string {
   const state = String(addr.state || '').trim();
   const pin = normalizePincode(addr.pincode);
 
-  const head = [street, landmark, block, place, state].filter(Boolean);
+  const head = dedupePlaceParts([street, landmark, block, place, state]);
   if (head.length && pin) return `${head.join(', ')} — ${pin}`;
   if (head.length) return head.join(', ');
   return pin;
 }
 
 /**
+ * Multi-line address for detail screens (street / landmark / place — pin).
+ * Presentation only — does not change stored address data.
+ */
+export function formatAddressDisplayLines(
+  addr?: AreaPinInput | null,
+): string[] {
+  if (!addr || typeof addr !== 'object') return [];
+
+  const street = String(addr.address || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const landmark = String(addr.landmark || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const place = String(addr.district || addr.city || '').trim();
+  const block = String(addr.block || '').trim();
+  const state = String(addr.state || '').trim();
+  const pin = normalizePincode(addr.pincode);
+
+  const lines: string[] = [];
+  if (street) lines.push(street);
+  if (landmark) lines.push(landmark);
+
+  const placeParts = dedupePlaceParts([block, place, state]);
+  if (placeParts.length && pin) {
+    lines.push(`${placeParts.join(', ')} — ${pin}`);
+  } else if (placeParts.length) {
+    lines.push(placeParts.join(', '));
+  } else if (pin) {
+    lines.push(pin);
+  }
+
+  return lines;
+}
+
+export function dedupePlaceParts(parts: Array<string | undefined | null>): string[] {
+  const out: string[] = [];
+  for (const raw of parts) {
+    const part = String(raw || '').trim();
+    if (!part) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev.toLowerCase() === part.toLowerCase()) continue;
+    out.push(part);
+  }
+  return out;
+}
+
+/**
  * Customer-facing service area (block + district/city + state + PIN) — no street.
  * Avoids implying the partner's home address when only area is known.
+ * Dedupes cases like "Kota, Kota, Rajasthan".
  */
 export function formatServiceAreaLine(addr?: AreaPinInput | null): string {
   if (!addr || typeof addr !== 'object') return '';
@@ -106,8 +155,8 @@ export function formatServiceAreaLine(addr?: AreaPinInput | null): string {
   const state = String(addr.state || '').trim();
   const pin = normalizePincode(addr.pincode);
 
-  const head = [block, place, state].filter(Boolean);
-  if (head.length && pin) return `${head.join(', ')} — ${pin}`;
+  const head = dedupePlaceParts([block, place, state]);
+  if (head.length && pin) return `${head.join(', ')} · ${pin}`;
   if (head.length) return head.join(', ');
   return pin;
 }
@@ -134,18 +183,27 @@ export function mergeProviderAddressFields(
   };
 }
 
-/** Compact browse-card location — block, district, state when available. */
+/** Compact browse-card location — locality + area + PIN when available. */
 export function formatProviderLocationLine(
   source: ProviderAddressSource,
 ): string {
   const addr = mergeProviderAddressFields(source);
-  return [addr.block, addr.district || addr.city, addr.state]
-    .map((part) => String(part || '').trim())
-    .filter(Boolean)
-    .filter((part, index, all) =>
-      index === 0 ? true : part.toLowerCase() !== all[index - 1].toLowerCase(),
-    )
-    .join(', ');
+  const pin = normalizePincode(addr.pincode);
+  // Prefer landmark ("Near Bus Stand") when shared; else short street line.
+  const localityRaw = String(addr.landmark || addr.address || '').trim();
+  const locality = shortStreet(localityRaw, 28);
+  const areaParts = dedupePlaceParts([
+    addr.block,
+    addr.district || addr.city,
+    addr.state,
+  ]);
+  const head = locality
+    ? dedupePlaceParts([locality, ...areaParts])
+    : areaParts;
+
+  if (head.length && pin) return `${head.join(', ')} · ${pin}`;
+  if (head.length) return head.join(', ');
+  return pin;
 }
 
 /** Full shared profile address for provider detail — street when partner shared it. */

@@ -30,6 +30,8 @@ export type ProviderCardProps = {
   showcasePhotos?: string[];
   onRequest?: () => void;
   onContact?: () => void;
+  /** Browse list — tighter card (~30% less vertical space) */
+  compact?: boolean;
 };
 
 export function ProviderCard({
@@ -55,6 +57,7 @@ export function ProviderCard({
   onCall,
   onRequest,
   onContact,
+  compact = false,
 }: ProviderCardProps) {
   const {t} = useTranslation();
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -75,15 +78,18 @@ export function ProviderCard({
     .slice(0, 3);
   const showcaseExtra = Math.max(0, showcase.length - 1);
 
+  const avatarSize = compact ? 40 : 48;
+  const cardRadius = compact ? 14 : 18;
+
   return (
     <CrystalSurface
       primary={theme.primary}
       card={theme.card}
       isDark={isDark}
       accent
-      radius={18}
+      radius={cardRadius}
       style={styles.card}
-      contentStyle={styles.cardInner}>
+      contentStyle={compact ? styles.cardInnerCompact : styles.cardInner}>
       <Pressable
         style={styles.main}
         onPress={onPress}
@@ -94,7 +100,7 @@ export function ProviderCard({
             <Avatar
               src={image}
               name={name}
-              size={48}
+              size={avatarSize}
               colors={{primary: theme.primary}}
               style={{
                 borderWidth: 2,
@@ -112,18 +118,27 @@ export function ProviderCard({
           </View>
         )}
         <View style={styles.copy}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, {color: theme.text}]}>{name}</Text>
+          <View style={[styles.nameRow, compact ? styles.nameRowCompact : null]}>
+            <Text
+              style={[
+                compact ? styles.nameCompact : styles.name,
+                {color: theme.text},
+              ]}>
+              {name}
+            </Text>
             {isOnline ? (
               <View
-                style={[styles.onlineBadge, {backgroundColor: theme.success}]}>
+                style={[
+                  compact ? styles.onlineBadgeCompact : styles.onlineBadge,
+                  {backgroundColor: theme.success},
+                ]}>
                 <Text style={styles.badgeText}>{resolvedOnline}</Text>
               </View>
             ) : (
               <View
                 style={[
-                  styles.onlineBadge,
-                  {backgroundColor: theme.textSecondary},
+                  compact ? styles.onlineBadgeCompact : styles.onlineBadge,
+                  {backgroundColor: `${theme.textSecondary}99`},
                 ]}>
                 <Text style={styles.badgeText}>
                   {String(t('providers.offline') || 'Offline')}
@@ -131,64 +146,113 @@ export function ProviderCard({
               </View>
             )}
           </View>
-          <View style={styles.professionRow}>
-            <Icon name="work" size={14} color={theme.primary} />
-            <Text style={[styles.profession, {color: theme.text}]}>
+          <View
+            style={[
+              styles.professionRow,
+              compact ? styles.professionRowCompact : null,
+            ]}>
+            <Icon name="work" size={compact ? 13 : 14} color={theme.primary} />
+            <Text
+              style={[
+                compact ? styles.professionCompact : styles.profession,
+                {color: theme.text},
+              ]}>
               {profession}
             </Text>
           </View>
           {alsoServices.length > 0 && alsoLead ? (
-            <View style={styles.also}>
-              {alsoLead ? (
-                <Text style={[styles.alsoLead, {color: theme.textSecondary}]}>
-                  {alsoLead}
-                </Text>
-              ) : null}
-              <View style={styles.alsoList}>
-                {alsoServices.map(svc => (
-                  <View
-                    key={svc}
-                    style={[
-                      styles.alsoChip,
-                      {backgroundColor: 'rgba(255,255,255,0.7)'},
-                    ]}>
-                    <Text style={[styles.alsoChipText, {color: theme.text}]}>
-                      {svc}
-                    </Text>
-                  </View>
-                ))}
+            compact ? (
+              <Text
+                style={[styles.alsoInline, {color: theme.textSecondary}]}
+                numberOfLines={2}>
+                {alsoLead} {alsoServices.join(' · ')}
+              </Text>
+            ) : (
+              <View style={styles.also}>
+                {alsoLead ? (
+                  <Text
+                    style={[styles.alsoLead, {color: theme.textSecondary}]}>
+                    {alsoLead}
+                  </Text>
+                ) : null}
+                <View style={styles.alsoList}>
+                  {alsoServices.map(svc => (
+                    <View
+                      key={svc}
+                      style={[
+                        styles.alsoChip,
+                        {backgroundColor: 'rgba(255,255,255,0.7)'},
+                      ]}>
+                      <Text style={[styles.alsoChipText, {color: theme.text}]}>
+                        {svc}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
+            )
           ) : null}
-          {location ? (
-            <View style={styles.metaRow}>
-              <Icon name="place" size={14} color={theme.primary} />
-              <Text style={[styles.meta, {color: theme.textSecondary}]}>
-                {location}
-              </Text>
-            </View>
-          ) : null}
-          {experienceLabel ? (
-            <View style={styles.metaRow}>
-              <Icon name="verified-user" size={14} color={theme.primary} />
-              <Text style={[styles.meta, {color: theme.textSecondary}]}>
-                {experienceLabel}
-              </Text>
-            </View>
-          ) : null}
-          {typeof rating === 'number' && rating > 0 ? (
-            <View style={styles.metaRow}>
-              <Icon name="star" size={14} color="#FFD700" />
-              <Text style={[styles.ratingValue, {color: theme.text}]}>
-                {rating.toFixed(1)}
-              </Text>
-              {reviewsLabel ? (
-                <Text style={[styles.reviews, {color: theme.textSecondary}]}>
-                  {reviewsLabel}
-                </Text>
+          {compact && (location || typeof rating === 'number') ? (
+            <View style={styles.metaRowCompact}>
+              {location ? (
+                <>
+                  <Icon name="place" size={13} color={theme.primary} />
+                  <Text
+                    style={[styles.metaCompact, {color: theme.textSecondary}]}
+                    numberOfLines={1}>
+                    {location}
+                  </Text>
+                </>
+              ) : null}
+              {typeof rating === 'number' && rating > 0 ? (
+                <>
+                  <Icon name="star" size={13} color="#FFD700" />
+                  <Text style={[styles.ratingValueCompact, {color: theme.text}]}>
+                    {rating.toFixed(1)}
+                  </Text>
+                  {reviewsLabel ? (
+                    <Text
+                      style={[styles.reviewsCompact, {color: theme.textSecondary}]}
+                      numberOfLines={1}>
+                      {reviewsLabel}
+                    </Text>
+                  ) : null}
+                </>
               ) : null}
             </View>
-          ) : null}
+          ) : (
+            <>
+              {location ? (
+                <View style={styles.metaRow}>
+                  <Icon name="place" size={14} color={theme.primary} />
+                  <Text style={[styles.meta, {color: theme.textSecondary}]}>
+                    {location}
+                  </Text>
+                </View>
+              ) : null}
+              {experienceLabel ? (
+                <View style={styles.metaRow}>
+                  <Icon name="verified-user" size={14} color={theme.primary} />
+                  <Text style={[styles.meta, {color: theme.textSecondary}]}>
+                    {experienceLabel}
+                  </Text>
+                </View>
+              ) : null}
+              {typeof rating === 'number' && rating > 0 ? (
+                <View style={styles.metaRow}>
+                  <Icon name="star" size={14} color="#FFD700" />
+                  <Text style={[styles.ratingValue, {color: theme.text}]}>
+                    {rating.toFixed(1)}
+                  </Text>
+                  {reviewsLabel ? (
+                    <Text style={[styles.reviews, {color: theme.textSecondary}]}>
+                      {reviewsLabel}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
+          )}
           {showcase.length > 0 ? (
             <View style={styles.showcase}>
               <Pressable
@@ -231,7 +295,7 @@ export function ProviderCard({
       {hasActions ? (
         <View
           style={[
-            styles.actions,
+            compact ? styles.actionsCompact : styles.actions,
             callOnly ? styles.actionsCallOnly : null,
             {borderTopColor: 'rgba(226, 232, 240, 0.55)'},
           ]}>
@@ -312,6 +376,9 @@ const styles = StyleSheet.create({
   cardInner: {
     padding: 16,
   },
+  cardInnerCompact: {
+    padding: 10,
+  },
   main: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -339,11 +406,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   name: {fontSize: 15, fontWeight: '700', lineHeight: 18.75, flexShrink: 1},
+  nameCompact: {fontSize: 14, fontWeight: '700', lineHeight: 17, flexShrink: 1},
+  nameRowCompact: {marginBottom: 2},
   onlineBadge: {
     flexShrink: 0,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+  },
+  onlineBadgeCompact: {
+    flexShrink: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
   },
   badgeText: {
     color: '#fff',
@@ -357,7 +432,21 @@ const styles = StyleSheet.create({
     gap: 5,
     marginBottom: 4,
   },
+  professionRowCompact: {marginBottom: 2},
   profession: {fontSize: 13, fontWeight: '700', flexShrink: 1},
+  professionCompact: {fontSize: 12, fontWeight: '700', flexShrink: 1},
+  alsoInline: {fontSize: 11, lineHeight: 15, marginBottom: 4, paddingLeft: 2},
+  metaRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  metaCompact: {fontSize: 11, flexShrink: 1, minWidth: 0, maxWidth: '78%'},
+  ratingValueCompact: {fontSize: 11, fontWeight: '700'},
+  reviewsCompact: {fontSize: 11, flexShrink: 1},
   also: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -413,6 +502,16 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 8,
     marginTop: 8,
+    borderTopWidth: 1,
+  },
+  actionsCompact: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    paddingTop: 6,
+    marginTop: 6,
     borderTopWidth: 1,
   },
   actionsCallOnly: {

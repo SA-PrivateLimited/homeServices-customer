@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   CUSTOMER_WEB,
@@ -29,7 +29,6 @@ import LegalDocumentScreen from '../screens/LegalDocumentScreen';
 import ServiceRequestScreen from '../screens/ServiceRequestScreen';
 import ServiceHistoryScreen from '../screens/ServiceHistoryScreen';
 import ActiveServiceScreen from '../screens/ActiveServiceScreen';
-import PublicHomeScreen from '../screens/PublicHomeScreen';
 import ProvidersListScreen from '../screens/ProvidersListScreen';
 import ProviderDetailsScreen from '../screens/ProviderDetailsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -135,13 +134,13 @@ const ServicesStack = () => {
       <Stack.Screen
         name="ActiveService"
         component={ActiveServiceScreen}
-        options={({navigation}) =>
-          headerWithChrome(
-            navigation,
-            theme,
-            String(t('services.activeService')),
-          )
-        }
+        options={{
+          ...stackHeaderOptions(theme),
+          title: String(
+            t('services.activeService') || t('active.title') || 'Active Service',
+          ),
+          headerBackTitleVisible: false,
+        }}
       />
       <Stack.Screen
         name="Notifications"
@@ -176,13 +175,11 @@ const ProvidersStack = () => {
       <Stack.Screen
         name="ProviderDetails"
         component={ProviderDetailsScreen}
-        options={({navigation}) =>
-          headerWithChrome(
-            navigation,
-            theme,
-            String(t('providers.providerDetails')),
-          )
-        }
+        options={{
+          ...stackHeaderOptions(theme),
+          title: String(t('providers.providerDetails')),
+          headerBackTitleVisible: false,
+        }}
       />
       <Stack.Screen
         name="ShareContactRecommendation"
@@ -340,7 +337,11 @@ const GuestBrowseStack = () => {
       <Stack.Screen
         name="ProviderDetails"
         component={ProviderDetailsScreen}
-        options={{title: t('providers.providerDetails')}}
+        options={{
+          ...stackHeaderOptions(theme),
+          title: String(t('providers.providerDetails')),
+          headerBackTitleVisible: false,
+        }}
       />
       <Stack.Screen
         name="ShareContactRecommendation"
@@ -351,116 +352,67 @@ const GuestBrowseStack = () => {
   );
 };
 
-/** Guest: Home + Browse tabs, matching web AppShell. */
+/** Guest: Find Services only (no website-style marketing home). */
 const GuestTabs = () => {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
   const insets = useSafeAreaInsets();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <View style={{flex: 1}}>
-      <Tab.Navigator
-        initialRouteName="GuestHome"
-        screenOptions={({route}) => ({
-          headerShown: false,
-          tabBarIcon: ({focused, color}) => {
-            const iconName =
-              route.name === 'GuestBrowse'
-                ? focused
-                  ? 'people'
-                  : 'people-outline'
-                : focused
-                  ? 'home'
-                  : 'home-outline';
-            return (
-              <Icon
-                name={iconName}
-                size={CUSTOMER_WEB.tabIcon}
-                color={color}
-              />
-            );
-          },
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: theme.textSecondary,
-          tabBarStyle: webTabBarStyle({
-            height: CUSTOMER_WEB.tabBarH,
-            padTop: CUSTOMER_WEB.tabBarPadTop,
-            safeBottom: insets.bottom,
-            borderTopColor: CUSTOMER_WEB.border50,
-          }),
-          tabBarItemStyle: {
-            borderWidth: 0,
-            borderRightWidth: 0,
-            borderLeftWidth: 0,
-          },
-          tabBarButton: props => (
-            <TouchableOpacity
-              {...props}
-              style={[
-                props.style,
-                {
-                  borderWidth: 0,
-                  borderRightWidth: 0,
-                  borderLeftWidth: 0,
-                  borderColor: 'transparent',
-                },
-              ]}
-            />
-          ),
-          tabBarShowLabel: true,
-          tabBarLabelStyle: webTabLabelStyle(
-            CUSTOMER_WEB.tabLabelSize,
-            CUSTOMER_WEB.tabLabelWeight,
-          ),
-        })}>
-        <Tab.Screen
-          name="GuestHome"
-          component={PublicHomeScreen}
-          options={{title: String(t('nav.home') || t('common.home'))}}
-        />
-        <Tab.Screen
-          name="GuestBrowse"
-          component={GuestBrowseStack}
-          options={{title: String(t('nav.browse') || t('common.browse'))}}
-        />
-      </Tab.Navigator>
+      <GuestBrowseStack />
       <AkansoSupportChip
         hidden={helpOpen}
-        onOpenHelp={() => setHelpOpen(true)}
+        onOpenHelp={() => {
+          setFeedbackOpen(false);
+          setHelpOpen(true);
+        }}
       />
       <Modal
         visible={helpOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setHelpOpen(false)}>
-        <View
-          style={[
-            helpStyles.root,
-            {backgroundColor: theme.background, paddingTop: insets.top},
-          ]}>
-          <View
-            style={[
-              helpStyles.bar,
-              {
-                backgroundColor: theme.card,
-                borderBottomColor: theme.border,
-              },
-            ]}>
-            <Text style={[helpStyles.title, {color: theme.text}]}>
-              {String(t('help.title') || 'Help & Support')}
-            </Text>
-            <Pressable
-              onPress={() => setHelpOpen(false)}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={String(t('common.close') || 'Close')}>
-              <Icon name="close" size={24} color={theme.text} />
-            </Pressable>
-          </View>
-          <HelpSupportPanel surfaceOverride="login" />
-        </View>
+        onRequestClose={() => {
+          setFeedbackOpen(false);
+          setHelpOpen(false);
+        }}>
+        <SafeAreaView
+          edges={['top']}
+          style={[helpStyles.root, {backgroundColor: theme.background}]}>
+          {!feedbackOpen ? (
+            <View
+              style={[
+                helpStyles.bar,
+                {
+                  backgroundColor: theme.card,
+                  borderBottomColor: theme.border,
+                },
+              ]}>
+              <Text style={[helpStyles.title, {color: theme.text}]}>
+                {String(
+                  t('help.title') || t('helpSupport.title') || 'Help & Support',
+                )}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setFeedbackOpen(false);
+                  setHelpOpen(false);
+                }}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={String(t('common.close') || 'Close')}>
+                <Icon name="close" size={22} color={theme.text} />
+              </Pressable>
+            </View>
+          ) : null}
+          <HelpSupportPanel
+            surfaceOverride="login"
+            onFeedbackOpenChange={setFeedbackOpen}
+          />
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -478,6 +430,7 @@ const MainTabs = () => {
   const insets = useSafeAreaInsets();
   const isGuest = !currentUser?.id && !currentUser?._id;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [navFocus, setNavFocus] = useState<TabNavState>({
     tab: 'Providers',
     leaf: 'ProvidersList',
@@ -486,11 +439,15 @@ const MainTabs = () => {
   const hideHelpChip = useMemo(() => {
     const tab = navFocus.tab;
     const leaf = navFocus.leaf;
-    // Web: hidden on Settings and Request
+    // Web: hidden on Settings and Request; detail screens need sticky CTAs clear
     if (tab === 'Settings') return true;
     if (tab === 'Services' && leaf === 'ServiceRequest') return true;
+    if (leaf === 'ProviderDetails' || leaf === 'ActiveService') return true;
     return false;
   }, [navFocus]);
+
+  const hideTabBar =
+    navFocus.leaf === 'ProviderDetails' || navFocus.leaf === 'ActiveService';
 
   const helpSurface: HelpSurface = useMemo(() => {
     if (navFocus.tab === 'History') return 'history';
@@ -554,12 +511,14 @@ const MainTabs = () => {
               },
               tabBarActiveTintColor: theme.primary,
               tabBarInactiveTintColor: theme.textSecondary,
-              tabBarStyle: webTabBarStyle({
-                height: CUSTOMER_WEB.tabBarH,
-                padTop: CUSTOMER_WEB.tabBarPadTop,
-                safeBottom: insets.bottom,
-                borderTopColor: CUSTOMER_WEB.border50,
-              }),
+              tabBarStyle: hideTabBar
+                ? {display: 'none', height: 0}
+                : webTabBarStyle({
+                    height: CUSTOMER_WEB.tabBarH,
+                    padTop: CUSTOMER_WEB.tabBarPadTop,
+                    safeBottom: insets.bottom,
+                    borderTopColor: CUSTOMER_WEB.border50,
+                  }),
               tabBarItemStyle: {
                 borderWidth: 0,
                 borderRightWidth: 0,
@@ -620,44 +579,58 @@ const MainTabs = () => {
           </Tab.Navigator>
 
           <AkansoSupportChip
-            hidden={hideHelpChip}
-            onOpenHelp={() => setHelpOpen(true)}
+            hidden={hideHelpChip || helpOpen}
+            onOpenHelp={() => {
+              setFeedbackOpen(false);
+              setHelpOpen(true);
+            }}
           />
 
           <Modal
             visible={helpOpen}
             animationType="slide"
             presentationStyle="pageSheet"
-            onRequestClose={() => setHelpOpen(false)}>
-            <View
-              style={[
-                helpStyles.root,
-                {backgroundColor: theme.background, paddingTop: insets.top},
-              ]}>
-              <View
-                style={[
-                  helpStyles.bar,
-                  {
-                    backgroundColor: theme.card,
-                    borderBottomColor: theme.border,
-                  },
-                ]}>
-                <Text style={[helpStyles.title, {color: theme.text}]}>
-                  {String(t('help.title') || 'Help & Support')}
-                </Text>
-                <Pressable
-                  onPress={() => setHelpOpen(false)}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel={String(t('common.close') || 'Close')}>
-                  <Icon name="close" size={24} color={theme.text} />
-                </Pressable>
-              </View>
+            onRequestClose={() => {
+              setFeedbackOpen(false);
+              setHelpOpen(false);
+            }}>
+            <SafeAreaView
+              edges={['top']}
+              style={[helpStyles.root, {backgroundColor: theme.background}]}>
+              {!feedbackOpen ? (
+                <View
+                  style={[
+                    helpStyles.bar,
+                    {
+                      backgroundColor: theme.card,
+                      borderBottomColor: theme.border,
+                    },
+                  ]}>
+                  <Text style={[helpStyles.title, {color: theme.text}]}>
+                    {String(
+                      t('help.title') ||
+                        t('helpSupport.title') ||
+                        'Help & Support',
+                    )}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setFeedbackOpen(false);
+                      setHelpOpen(false);
+                    }}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={String(t('common.close') || 'Close')}>
+                    <Icon name="close" size={22} color={theme.text} />
+                  </Pressable>
+                </View>
+              ) : null}
               <HelpSupportPanel
                 surfaceOverride={helpSurface}
                 onHistory={navFocus.tab === 'History'}
+                onFeedbackOpenChange={setFeedbackOpen}
               />
-            </View>
+            </SafeAreaView>
           </Modal>
 
           <ProfileCompletionPrompt />
@@ -674,11 +647,12 @@ const helpStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: {fontSize: 17, fontWeight: '700'},
+  title: {fontSize: 17, fontWeight: '700', flex: 1, paddingRight: 8},
 });
 
 export default MainTabs;

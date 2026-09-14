@@ -1,0 +1,42 @@
+{
+  "status": {
+    "accepted": "अनुरोध स्वीकार हो गया",
+    "inProgress": "सेवा चल रही है",
+    "completed": "सेवा पूरी हो गई",
+    "cancelled": "अनुरोध रद्द हो गया",
+    "finding": "पेशेवर खोजा जा रहा है",
+    "waitingAccept": "स्वीकृति का इंतज़ार",
+    "waitingAcceptNamed": "{{name}} का इंतज़ार",
+    "rejected": "अनुरोध अस्वीकार",
+    "rejectedNamed": "{{name}} ने अस्वीकार किया"
+  },
+  "sub": {
+    "accepted": "{{name}} ने आपका अनुरोध स्वीकार किया",
+    "acceptedGeneric": "एक पेशेवर ने आपका अनुरोध स्वीकार किया",
+    "inProgress": "काम चल रहा है",
+    "inProgressNamed": "{{name}} आपके अनुरोध पर काम कर रहे हैं",
+    "completed": "{{brand}} के साथ सब कुछ अच्छा रहा हो",
+    "finding": "{{type}} के लिए किसी को खोजा जा रहा है",
+    "waitingAccept": "पास के पेशेवर आपका {{type}} अनुरोध स्वीकार कर सकते हैं",
+    "waitingAcceptNamed": "{{name}} आपके {{type}} अनुरोध को स्वीकार करने का इंतज़ार",
+    "cancelled": "यह {{type}} अनुरोध रद्द हो गया",
+    "cancelledNamed": "{{name}} वाला आपका अनुरोध रद्द हो गया",
+    "rejected": "किसी ने यह {{type}} अनुरोध स्वीकार नहीं किया",
+    "rejectedNamed": "{{name}} ने आपका {{type}} अनुरोध अस्वीकार किया"
+  },
+  "serviceDetails": "आपका अनुरोध",
+  "serviceType": "सेवा",
+  "problem": "आपको क्या चाहिए",
+  "address": "पता",
+  "yourProfessional": "आपके पेशेवर",
+  "requestStatus": "अनुरोध की स्थिति",
+  "updatesMessages": "अपडेट और संदेश",
+  "currentlyOffline": "अभी ऑफ़लाइन",
+  "currentlyOnline": "अभी ऑनलाइन",
+  "requested": "अनुरोध किया",
+  "stepSent": "भेजा",
+  "stepAccepted": "स्वीकार",
+  "stepInProgress": "चल रहा",
+  "stepDone": "पूरा",
+  "callNamed": "{{name}} को कॉल करें"
+}

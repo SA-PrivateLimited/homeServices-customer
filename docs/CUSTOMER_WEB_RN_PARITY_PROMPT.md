@@ -17,7 +17,7 @@ You are implementing **full UX/UI/behavior parity** between:
 | **Shared web UI** | `packages/saPvtLtdWebPackages` | Reference only for Customer RN |
 
 Workspace root: `home-services` (multi-repo).  
-Customer Android id: **`com.homeservices.customer`** — never change.
+Customer Android id: **`com.akansho.customer`** — never change.
 
 ---
 

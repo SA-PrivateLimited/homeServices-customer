@@ -20,11 +20,12 @@ if (typeof window !== 'undefined') {
 }
 
 import React, {useEffect, useState, useMemo} from 'react';
-import {StatusBar, Platform, PermissionsAndroid} from 'react-native';
+import {StatusBar, Platform, InteractionManager} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {AppThemeProvider} from 'sapvt-ltd-app-packages';
 import {HelpRequestProvider} from './src/components/help/helpRequestContext';
 import {GreetingOverlay} from './src/components/GreetingOverlay';
+import {LocationPermissionExplanationHost} from './src/components/LocationPermissionExplanationHost';
 import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
@@ -89,34 +90,6 @@ const App = () => {
       global.addEventListener('unhandledrejection', rejectionHandler);
     }
 
-    // Request location permission (similar to notification permission)
-    const requestLocationPermission = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          // Check current permission status first
-          const currentStatus = await GeolocationService.checkLocationPermission();
-
-          if (currentStatus !== 'granted') {
-            // Request permission using GeolocationService
-            const requestResult = await GeolocationService.requestLocationPermission();
-
-            if (requestResult === 'granted') {
-            } else if (requestResult === 'never_ask_again') {
-            } else {
-            }
-          } else {
-          }
-        } else {
-          // iOS - permissions are requested automatically when needed
-        }
-      } catch (error) {
-        console.error('Error requesting location permission:', error);
-      }
-    };
-
-    // Request location permission
-    requestLocationPermission();
-
     // Hydrate store + remote themeColors as colorPalette before first UI paint
     (async () => {
       try {
@@ -144,6 +117,38 @@ const App = () => {
       });
   }, [currentUser]);
 
+  // One-time location permission when the app opens (Android).
+  // Ask only if not already granted — do not spam after deny / never_ask_again.
+  useEffect(() => {
+    if (!bootReady || Platform.OS !== 'android') {
+      return;
+    }
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          const status = await GeolocationService.checkLocationPermission();
+          if (cancelled || status === 'granted') {
+            return;
+          }
+          // Slight delay so the first screen is mounted before the system dialog.
+          await new Promise(resolve => setTimeout(resolve, 600));
+          if (cancelled) {
+            return;
+          }
+          await GeolocationService.requestLocationPermission();
+        } catch (error) {
+          if (__DEV__) {
+            console.error('Boot location permission request failed:', error);
+          }
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      task.cancel?.();
+    };
+  }, [bootReady]);
 
   if (!bootReady) {
     return null;
@@ -159,6 +164,7 @@ const App = () => {
         <HelpRequestProvider>
           <AppNavigator />
           <GreetingOverlay />
+          <LocationPermissionExplanationHost />
         </HelpRequestProvider>
       </AppThemeProvider>
     </SafeAreaProvider>

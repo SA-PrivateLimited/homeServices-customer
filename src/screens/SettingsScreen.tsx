@@ -19,7 +19,7 @@ import {customerDisplayName, isCustomerProfileIncomplete} from 'sapvt-ltd-app-pa
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
-import {logoutCustomer} from '../services/session';
+import {getStoredJwt, logoutCustomer} from '../services/session';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
@@ -270,9 +270,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const openPlayStoreUpdate = () => {
-    const market = 'market://details?id=com.homeservices.customer';
+    const market = 'market://details?id=com.akansho.customer';
     const web =
-      'https://play.google.com/store/apps/details?id=com.homeservices.customer';
+      'https://play.google.com/store/apps/details?id=com.akansho.customer';
     void Linking.openURL(market).catch(() => Linking.openURL(web));
     setShowAppUpdateModal(false);
   };
@@ -305,6 +305,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
                 await deleteMe();
                 await logoutCustomer();
                 await setCurrentUser(null);
+                navigation.reset({index: 0, routes: [{name: 'Login'}]});
               } catch (error: any) {
                 setAlertModal({
                   visible: true,
@@ -331,14 +332,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     try {
       await logoutCustomer();
       await setCurrentUser(null);
-      navigation.reset({index: 0, routes: [{name: 'Main'}]});
+      navigation.reset({index: 0, routes: [{name: 'Login'}]});
     } catch {
       try {
         await setCurrentUser(null);
       } catch {
         // ignore
       }
-      navigation.reset({index: 0, routes: [{name: 'Main'}]});
+      navigation.reset({index: 0, routes: [{name: 'Login'}]});
     } finally {
       setLoggingOut(false);
     }
@@ -746,7 +747,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               t('settings.deleteAccountHint') ||
               'Permanently remove your data from this app'
             }
-            variant="logout"
+            variant="danger"
             onAction={handleDeleteAccount}
           />
         ) : null}
@@ -950,8 +951,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
       />
       <SuccessModal
         visible={showSuccessModal}
-        title={String(t('common.success'))}
+        title={String(t('profile.profileUpdatedTitle') || 'Profile updated')}
         message={successMessage}
+        buttonText={String(t('common.done') || 'Done')}
         onClose={() => setShowSuccessModal(false)}
       />
     </View>

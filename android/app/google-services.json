@@ -8,34 +8,26 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:425944993130:android:81c6e20b28299c95d52913",
+        "mobilesdk_app_id": "1:425944993130:android:034dc0d72a029800d52913",
         "android_client_info": {
-          "package_name": "com.homeservices.customer"
+          "package_name": "com.akansho.customer"
         }
       },
       "oauth_client": [
         {
-          "client_id": "425944993130-a9sdgrmv9mfbitg4cc4n2hho762l2ma4.apps.googleusercontent.com",
+          "client_id": "425944993130-9s2j3cmpstoufrt32if3judm7qahk51k.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.homeservices.customer",
+            "package_name": "com.akansho.customer",
             "certificate_hash": "f1512e11065ff826b4eed6b1a29b73e94d6c68ae"
           }
         },
         {
-          "client_id": "425944993130-f8stosi4ks5fumqoikrmpar4uihvmu5e.apps.googleusercontent.com",
+          "client_id": "425944993130-r37j2d8h1ectl60qadbdi1rcc3r1rqvq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.homeservices.customer",
+            "package_name": "com.akansho.customer",
             "certificate_hash": "3fb539ad690adca1e59c07785778ddb770e9344e"
-          }
-        },
-        {
-          "client_id": "425944993130-ruetrbb4rhtqh59ri5fev5k4t7qhtvtc.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.homeservices.customer",
-            "certificate_hash": "44f39ca308f51813b8e444a172f7dee65d61921a"
           }
         },
         {
@@ -61,34 +53,26 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:425944993130:android:dc1f2ef3c2309c06d52913",
+        "mobilesdk_app_id": "1:425944993130:android:985059b987b184ddd52913",
         "android_client_info": {
-          "package_name": "com.homeservices.provider"
+          "package_name": "com.akansho.partner"
         }
       },
       "oauth_client": [
         {
-          "client_id": "425944993130-l4phfc3c59go4q1evm0rng9l4ptu33ji.apps.googleusercontent.com",
+          "client_id": "425944993130-edjvpf2aj6mk29ef7o31v8smketch3pm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.homeservices.provider",
-            "certificate_hash": "3fb539ad690adca1e59c07785778ddb770e9344e"
-          }
-        },
-        {
-          "client_id": "425944993130-ul087e3h208dim2sl54qqtn0peq89pln.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.homeservices.provider",
-            "certificate_hash": "44f39ca308f51813b8e444a172f7dee65d61921a"
-          }
-        },
-        {
-          "client_id": "425944993130-v4uc6lqou5ia7frlols0q7fthig9vjbl.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.homeservices.provider",
+            "package_name": "com.akansho.partner",
             "certificate_hash": "f1512e11065ff826b4eed6b1a29b73e94d6c68ae"
+          }
+        },
+        {
+          "client_id": "425944993130-sbqmdkk7cbde2cflledkh1utgaojv0bs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.akansho.partner",
+            "certificate_hash": "3fb539ad690adca1e59c07785778ddb770e9344e"
           }
         },
         {
