@@ -1,6 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,8 @@ import {
   SUPPORT_PHONE_TEL,
   WHATSAPP_SUPPORT_URL,
 } from '../../config/support';
+import AlertModal from '../AlertModal';
+import {openExternalUrl} from '../../utils/openExternalUrl';
 import {dispatchHelpAction} from './helpActions';
 import {
   useHelpRequestCandidates,
@@ -64,6 +65,11 @@ export function HelpSupportPanel({
   const [view, setView] = useState<ViewState>({level: 'home'});
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [pickingRequest, setPickingRequest] = useState(false);
+  const [linkAlert, setLinkAlert] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+  }>({visible: false, title: '', message: ''});
 
   const setFeedback = (open: boolean) => {
     setFeedbackOpen(open);
@@ -98,10 +104,49 @@ export function HelpSupportPanel({
     ? t('shell.hoursHi')
     : t('shell.hoursEn');
 
+  const showLinkError = (title: string, message: string) => {
+    setLinkAlert({visible: true, title, message});
+  };
+
   const openWhatsApp = (prefill?: string) => {
     const text = prefill ? `?text=${encodeURIComponent(prefill)}` : '';
-    void Linking.openURL(`${WHATSAPP_SUPPORT_URL}${text}`);
+    void openExternalUrl(`${WHATSAPP_SUPPORT_URL}${text}`).then(ok => {
+      if (!ok) {
+        showLinkError(
+          String(t('help.chatWhatsApp')),
+          String(
+            t('help.unableToOpenWhatsApp') ||
+              "WhatsApp isn't available on this device.",
+          ),
+        );
+      }
+    });
   };
+
+  const openSupportCall = () => {
+    void openExternalUrl(SUPPORT_PHONE_TEL).then(ok => {
+      if (!ok) {
+        showLinkError(
+          String(t('help.callSupport')),
+          String(
+            t('help.unableToMakeCall') ||
+              t('settings.unableToMakeCall') ||
+              "Calling isn't available on this device.",
+          ),
+        );
+      }
+    });
+  };
+
+  const linkAlertModal = (
+    <AlertModal
+      visible={linkAlert.visible}
+      title={linkAlert.title}
+      message={linkAlert.message}
+      type="warning"
+      onClose={() => setLinkAlert({visible: false, title: '', message: ''})}
+    />
+  );
 
   const buildWaPrefill = (topicLabel: string) => {
     const parts = [topicLabel, String(t('help.whatsappPrefill'))];
@@ -142,7 +187,7 @@ export function HelpSupportPanel({
       <Button
         variant="secondary"
         block
-        onPress={() => void Linking.openURL(SUPPORT_PHONE_TEL)}>
+        onPress={openSupportCall}>
         {t('help.callSupport')}
       </Button>
     </View>
@@ -210,6 +255,7 @@ export function HelpSupportPanel({
     const {group, sub} = view;
     const tips = splitTips(String(t(sub.tipsKey)));
     return (
+      <>
       <ScrollView contentContainerStyle={styles.pad}>
         <Pressable
           style={styles.back}
@@ -235,6 +281,8 @@ export function HelpSupportPanel({
           contactButtons(String(t(sub.titleKey)))
         )}
       </ScrollView>
+      {linkAlertModal}
+    </>
     );
   }
 
@@ -242,6 +290,7 @@ export function HelpSupportPanel({
     const {group} = view;
     const subs = group.subtopics || [];
     return (
+      <>
       <ScrollView contentContainerStyle={styles.pad}>
         <Pressable style={styles.back} onPress={() => setView({level: 'home'})}>
           <Icon name="arrow_back" size={18} />
@@ -305,10 +354,13 @@ export function HelpSupportPanel({
           </>
         ) : null}
       </ScrollView>
+      {linkAlertModal}
+    </>
     );
   }
 
   return (
+    <>
     <ScrollView contentContainerStyle={styles.pad}>
       <Text style={styles.lead}>{t('help.panelLead')}</Text>
 
@@ -374,9 +426,7 @@ export function HelpSupportPanel({
           </View>
           <Icon name="chevron_right" size={18} />
         </Pressable>
-        <Pressable
-          style={styles.row}
-          onPress={() => void Linking.openURL(SUPPORT_PHONE_TEL)}>
+        <Pressable style={styles.row} onPress={openSupportCall}>
           <Icon name="call" size={20} color="#3182CE" />
           <View style={styles.copy}>
             <Text style={styles.strong}>{t('help.callSupport')}</Text>
@@ -395,6 +445,8 @@ export function HelpSupportPanel({
         </Text>
       </Pressable>
     </ScrollView>
+    {linkAlertModal}
+    </>
   );
 }
 

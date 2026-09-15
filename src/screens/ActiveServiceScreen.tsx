@@ -1252,7 +1252,13 @@ export default function ActiveServiceScreen({
           cancelled = true;
         } catch (error: any) {
           const msg = String(error?.message || error || '');
-          if (!/not found|404/i.test(msg)) {
+          const code = String((error as {code?: string})?.code || '');
+          if (
+            code === 'JOB_CARD_NOT_FOUND' ||
+            /not found|404/i.test(msg)
+          ) {
+            // Expected when only a service request exists — cancel SR below.
+          } else {
             console.warn('Error cancelling job card:', msg);
           }
           // Continue — still cancel the service request below

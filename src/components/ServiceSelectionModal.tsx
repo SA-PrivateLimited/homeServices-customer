@@ -8,6 +8,8 @@ import {
   Dimensions,
   FlatList,
   Modal,
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -68,26 +70,42 @@ function ServicePickCard({
   });
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onSelect}
-      activeOpacity={0.85}
       accessibilityRole="button"
       accessibilityState={{selected}}
-      style={styles.pickWrap}>
+      android_ripple={{
+        color: 'rgba(49, 130, 206, 0.28)',
+        borderless: false,
+        foreground: true, // draw above CrystalSurface (not a sharp underlay)
+      }}
+      style={({pressed}) => [
+        styles.pickWrap,
+        selected
+          ? {
+              borderColor: `${theme.primary}55`,
+              backgroundColor: `${theme.primary}14`,
+            }
+          : {
+              borderColor: 'transparent',
+              backgroundColor: 'transparent',
+            },
+        Platform.OS !== 'android' && pressed ? {opacity: 0.88} : null,
+      ]}>
       <CrystalSurface
         primary={theme.primary}
         card={theme.card}
         isDark={isDark}
         accent
-        radius={18}
+        radius={16}
         style={[
           styles.pickCard,
           selected
             ? {
                 shadowColor: theme.primary,
-                shadowOpacity: 0.22,
-                shadowRadius: 10,
-                elevation: 4,
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 3,
               }
             : null,
         ]}
@@ -120,7 +138,7 @@ function ServicePickCard({
           ) : null}
         </View>
       </CrystalSurface>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -364,6 +382,9 @@ const styles = StyleSheet.create({
     width: '48%',
     flexGrow: 1,
     maxWidth: '48.5%',
+    borderRadius: 18,
+    overflow: 'hidden', // clip Android ripple — no sharp white underlay
+    borderWidth: 2,
   },
   pickCard: {
     minHeight: 108,

@@ -28,6 +28,7 @@
   "serviceType": "सेवा",
   "problem": "आपको क्या चाहिए",
   "address": "पता",
+  "cancelReason": "कारण",
   "yourProfessional": "आपके पेशेवर",
   "requestStatus": "अनुरोध की स्थिति",
   "updatesMessages": "अपडेट और संदेश",

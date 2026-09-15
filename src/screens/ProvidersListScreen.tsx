@@ -20,7 +20,6 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
-  Alert,
   AppState,
   Platform,
   Pressable,
@@ -33,7 +32,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {SearchBar, canCallThisProvider, canRequestThisProvider} from 'sapvt-ltd-app-packages';
+import {SearchBar, canCallThisProvider, canRequestThisProvider, ConfirmDialog} from 'sapvt-ltd-app-packages';
 import {PopularServices, ServiceCatalogOverlay} from '../components/PopularServices/PopularServices';
 import {ActiveRequestConflictBanner} from '../components/ActiveRequestConflictBanner';
 import {getActiveServiceRequest} from '../services/api/serviceRequestsApi';
@@ -218,6 +217,57 @@ export default function ProvidersListScreen({navigation, route}: any) {
     message: '',
     type: 'info',
   });
+
+  /** Themed two-action dialog — replaces native Alert.alert for location / call. */
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    type: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    cancelText: '',
+    type: 'warning',
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
+
+  const openConfirmDialog = useCallback(
+    (opts: {
+      title: string;
+      message: string;
+      confirmText: string;
+      cancelText: string;
+      type?: 'danger' | 'warning' | 'info' | 'success';
+      onConfirm: () => void;
+      onCancel?: () => void;
+    }) => {
+      setConfirmDialog({
+        visible: true,
+        title: opts.title,
+        message: opts.message,
+        confirmText: opts.confirmText,
+        cancelText: opts.cancelText,
+        type: opts.type || 'warning',
+        onConfirm: () => {
+          setConfirmDialog(prev => ({...prev, visible: false}));
+          opts.onConfirm();
+        },
+        onCancel: () => {
+          setConfirmDialog(prev => ({...prev, visible: false}));
+          opts.onCancel?.();
+        },
+      });
+    },
+    [],
+  );
 
   const [providers, setProviders] = useState<ProviderWithStatus[]>([]);
   const [filteredProviders, setFilteredProviders] = useState<ProviderWithStatus[]>([]);
@@ -415,18 +465,83 @@ export default function ProvidersListScreen({navigation, route}: any) {
         return;
       }
 
-      // No ACTIVE location — promote fresh GPS cache if present.
-      const freshDevice = await readFreshDeviceLocation();
-      if (freshDevice) {
-        applyActiveLocationToState(freshDevice, 'device', epoch);
-        await saveDeviceLocationCache(freshDevice, {promoteToActive: true});
+      // No ACTIVE location — prefer any stored GPS place (even stale) so the chip
+      // is not empty on first paint, then refresh when permission already allows.
+      // Web parity: first visit auto-uses device location; never force the picker.
+      const storedDevice =
+        (await readFreshDeviceLocation()) ||
+        (device &&
+        (device.stateId || device.districtId || device.blockId || device.label)
+          ? device
+          : null);
+      if (storedDevice) {
+        applyActiveLocationToState(storedDevice, 'device', epoch);
+        await saveDeviceLocationCache(storedDevice, {promoteToActive: true});
         setLocationReady(true);
+        if (!isDeviceLocationFresh(storedDevice)) {
+          void (async () => {
+            const started = locationEpochRef.current;
+            try {
+              const perm =
+                await GeolocationService.checkLocationPermission();
+              if (perm !== 'granted') return;
+              if (!(await GeolocationService.isDeviceLocationEnabled())) {
+                return;
+              }
+              setLocating(true);
+              const loc = await GeolocationService.getCurrentLocation();
+              if (started !== locationEpochRef.current) return;
+              const resolved = await resolveGeographyFromCoordinates(
+                loc.latitude,
+                loc.longitude,
+              );
+              if (started !== locationEpochRef.current) return;
+              const label =
+                resolved.label ||
+                [resolved.blockName, resolved.districtName, resolved.stateName]
+                  .filter(Boolean)
+                  .join(', ') ||
+                '';
+              const applied = applyActiveLocationToState(
+                {
+                  stateId: resolved.stateId,
+                  districtId: resolved.districtId,
+                  blockId: resolved.blockId,
+                  blockName: resolved.blockName,
+                  label,
+                },
+                'device',
+                started,
+              );
+              if (!applied) return;
+              await saveDeviceAsSearchLocation({
+                stateId: resolved.stateId || '',
+                districtId: resolved.districtId || '',
+                blockId: resolved.blockId || undefined,
+                stateName: resolved.stateName,
+                districtName: resolved.districtName,
+                blockName: resolved.blockName,
+                label,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+              });
+            } catch {
+              // Keep promoted place; fail soft.
+            } finally {
+              setLocating(false);
+            }
+          })();
+        }
         return;
       }
 
-      // Auto-init current location only when permission + device Location already OK.
-      // Do not force consent/settings loops on every Browse open.
+      // Auto-init GPS only when permission + device Location already OK.
+      // Do not force consent/settings loops on every Browse open (web: skip denied).
       try {
+        if (memory?.permission === 'denied') {
+          setLocationReady(true);
+          return;
+        }
         const perm = await GeolocationService.checkLocationPermission();
         const servicesOn = await GeolocationService.isDeviceLocationEnabled();
         if (perm !== 'granted' || !servicesOn) {
@@ -546,20 +661,14 @@ export default function ProvidersListScreen({navigation, route}: any) {
         }
         // cancelled
         locationResumeRef.current = null;
-        Alert.alert(
-          String(t('ecosystem.turnOnLocationTitle')),
-          String(t('ecosystem.turnOnLocationMessage')),
-          [
-            {
-              text: String(t('ecosystem.chooseAreaManually')),
-              onPress: keepManualPicker,
-            },
-            {
-              text: String(t('common.cancel') || 'Cancel'),
-              style: 'cancel',
-            },
-          ],
-        );
+        openConfirmDialog({
+          title: String(t('ecosystem.turnOnLocationTitle')),
+          message: String(t('ecosystem.turnOnLocationMessage')),
+          cancelText: String(t('common.cancel') || 'Cancel'),
+          confirmText: String(t('ecosystem.chooseAreaManually')),
+          type: 'warning',
+          onConfirm: keepManualPicker,
+        });
       } catch {
         locationResumeRef.current = null;
         await GeolocationService.openDeviceLocationSettings();
@@ -574,63 +683,48 @@ export default function ProvidersListScreen({navigation, route}: any) {
 
     const showLocationFlowError = (code: string) => {
       if (code === 'services_off') {
-        Alert.alert(
-          String(t('ecosystem.turnOnLocationTitle')),
-          String(t('ecosystem.turnOnLocationMessage')),
-          [
-            {
-              text: String(t('ecosystem.chooseAreaManually')),
-              onPress: keepManualPicker,
-            },
-            {
-              text: String(t('ecosystem.turnOnLocationAction')),
-              onPress: () => {
-                void enableDeviceLocationAndRetry();
-              },
-            },
-          ],
-        );
+        openConfirmDialog({
+          title: String(t('ecosystem.turnOnLocationTitle')),
+          message: String(t('ecosystem.turnOnLocationMessage')),
+          cancelText: String(t('ecosystem.chooseAreaManually')),
+          confirmText: String(t('ecosystem.turnOnLocationAction')),
+          type: 'warning',
+          onCancel: keepManualPicker,
+          onConfirm: () => {
+            void enableDeviceLocationAndRetry();
+          },
+        });
         return;
       }
 
       if (code === 'never_ask_again') {
-        Alert.alert(
-          String(t('ecosystem.allowLocationTitle')),
-          String(t('ecosystem.locationNeverAskAgain')),
-          [
-            {
-              text: String(t('ecosystem.chooseAreaManually')),
-              onPress: keepManualPicker,
-            },
-            {
-              text: String(t('ecosystem.openAppSettings')),
-              onPress: () => {
-                void openAppSettingsAndResume();
-              },
-            },
-          ],
-        );
+        openConfirmDialog({
+          title: String(t('ecosystem.allowLocationTitle')),
+          message: String(t('ecosystem.locationNeverAskAgain')),
+          cancelText: String(t('ecosystem.chooseAreaManually')),
+          confirmText: String(t('ecosystem.openAppSettings')),
+          type: 'warning',
+          onCancel: keepManualPicker,
+          onConfirm: () => {
+            void openAppSettingsAndResume();
+          },
+        });
         return;
       }
 
       if (code === 'denied') {
-        Alert.alert(
-          String(t('ecosystem.allowLocationTitle')),
-          String(t('ecosystem.locationDenied')),
-          [
-            {
-              text: String(t('ecosystem.chooseAreaManually')),
-              onPress: keepManualPicker,
-            },
-            {
-              text: String(t('ecosystem.tryAgainLocation')),
-              onPress: () => {
-                locationFlowBusyRef.current = false;
-                void handleUseMyLocation();
-              },
-            },
-          ],
-        );
+        openConfirmDialog({
+          title: String(t('ecosystem.allowLocationTitle')),
+          message: String(t('ecosystem.locationDenied')),
+          cancelText: String(t('ecosystem.chooseAreaManually')),
+          confirmText: String(t('ecosystem.tryAgainLocation')),
+          type: 'warning',
+          onCancel: keepManualPicker,
+          onConfirm: () => {
+            locationFlowBusyRef.current = false;
+            void handleUseMyLocation();
+          },
+        });
         return;
       }
 
@@ -645,42 +739,42 @@ export default function ProvidersListScreen({navigation, route}: any) {
                 ? 'ecosystem.locationNoMatch'
                 : 'ecosystem.locationUnavailable';
 
-      Alert.alert(
-        String(t('common.error') || "Couldn't get your location"),
-        String(
+      openConfirmDialog({
+        title: String(t('common.error') || "Couldn't get your location"),
+        message: String(
           t(messageKey, {
             defaultValue:
               "Couldn't get your location. Please try again or choose your area manually.",
           }),
         ),
-        [
-          {
-            text: String(t('ecosystem.chooseAreaManually')),
-            onPress: keepManualPicker,
-          },
-          {
-            text: String(t('ecosystem.tryAgainLocation')),
-            onPress: () => {
-              locationFlowBusyRef.current = false;
-              void handleUseMyLocation();
-            },
-          },
-        ],
-      );
+        cancelText: String(t('ecosystem.chooseAreaManually')),
+        confirmText: String(t('ecosystem.tryAgainLocation')),
+        type: code === 'nomatch' ? 'info' : 'warning',
+        onCancel: keepManualPicker,
+        onConfirm: () => {
+          locationFlowBusyRef.current = false;
+          void handleUseMyLocation();
+        },
+      });
     };
 
     try {
       // Explicit customer intent: switch ACTIVE location to current GPS.
       const startedEpoch = bumpLocationEpoch();
 
-      // Android often hides the system permission dialog while another RN Modal
-      // is open (Select Address). Close it first so the prompt can appear.
-      setLocationPickerOpen(false);
-      await new Promise<void>(resolve => {
-        InteractionManager.runAfterInteractions(() => {
-          setTimeout(resolve, 280);
+      // Android often hides the system permission dialog under an RN Modal.
+      // Close the picker only when we still need a system prompt; if permission
+      // is already granted, keep it open with locating state (web parity), then
+      // close once — do not reopen for a tick.
+      const permBefore = await GeolocationService.checkLocationPermission();
+      if (permBefore !== 'granted') {
+        setLocationPickerOpen(false);
+        await new Promise<void>(resolve => {
+          InteractionManager.runAfterInteractions(() => {
+            setTimeout(resolve, 280);
+          });
         });
-      });
+      }
 
       setLocating(true);
       const loc = await GeolocationService.getLocationWithPrompt();
@@ -718,8 +812,8 @@ export default function ProvidersListScreen({navigation, route}: any) {
       if (!applied) {
         return;
       }
-      // Re-open picker so the customer sees the selected (ticked) current location.
-      setLocationPickerOpen(true);
+      // Applied on the chip — close picker and stay closed (no second tap).
+      setLocationPickerOpen(false);
       locationResumeRef.current = null;
       void saveDeviceAsSearchLocation({
         stateId: nextStateId === ALL_STATES ? '' : nextStateId,
@@ -764,7 +858,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
       setLocating(false);
       locationFlowBusyRef.current = false;
     }
-  }, [t, bumpLocationEpoch, applyActiveLocationToState]);
+  }, [t, bumpLocationEpoch, applyActiveLocationToState, openConfirmDialog]);
 
   useEffect(() => {
     const onAppState = (next: AppStateStatus) => {
@@ -794,34 +888,29 @@ export default function ProvidersListScreen({navigation, route}: any) {
             await handleUseMyLocation();
             return;
           }
-          Alert.alert(
-            String(t('ecosystem.turnOnLocationTitle')),
-            String(t('ecosystem.turnOnLocationMessage')),
-            [
-              {
-                text: String(t('ecosystem.chooseAreaManually')),
-                onPress: () => setLocationPickerOpen(true),
-              },
-              {
-                text: String(t('ecosystem.turnOnLocationAction')),
-                onPress: () => {
-                  locationResumeRef.current = 'device_location';
-                  void GeolocationService.promptEnableDeviceLocation().then(
-                    result => {
-                      if (result === 'enabled') {
-                        locationResumeRef.current = null;
-                        void handleUseMyLocation();
-                      } else if (result === 'opened_settings') {
-                        locationResumeRef.current = 'device_location';
-                      } else {
-                        locationResumeRef.current = null;
-                      }
-                    },
-                  );
+          openConfirmDialog({
+            title: String(t('ecosystem.turnOnLocationTitle')),
+            message: String(t('ecosystem.turnOnLocationMessage')),
+            cancelText: String(t('ecosystem.chooseAreaManually')),
+            confirmText: String(t('ecosystem.turnOnLocationAction')),
+            type: 'warning',
+            onCancel: () => setLocationPickerOpen(true),
+            onConfirm: () => {
+              locationResumeRef.current = 'device_location';
+              void GeolocationService.promptEnableDeviceLocation().then(
+                result => {
+                  if (result === 'enabled') {
+                    locationResumeRef.current = null;
+                    void handleUseMyLocation();
+                  } else if (result === 'opened_settings') {
+                    locationResumeRef.current = 'device_location';
+                  } else {
+                    locationResumeRef.current = null;
+                  }
                 },
-              },
-            ],
-          );
+              );
+            },
+          });
           return;
         }
 
@@ -830,29 +919,24 @@ export default function ProvidersListScreen({navigation, route}: any) {
           await handleUseMyLocation();
           return;
         }
-        Alert.alert(
-          String(t('ecosystem.allowLocationTitle')),
-          String(t('ecosystem.locationNeverAskAgain')),
-          [
-            {
-              text: String(t('ecosystem.chooseAreaManually')),
-              onPress: () => setLocationPickerOpen(true),
-            },
-            {
-              text: String(t('ecosystem.openAppSettings')),
-              onPress: () => {
-                locationResumeRef.current = 'app_permission';
-                void GeolocationService.openAppPermissionSettings();
-              },
-            },
-          ],
-        );
+        openConfirmDialog({
+          title: String(t('ecosystem.allowLocationTitle')),
+          message: String(t('ecosystem.locationNeverAskAgain')),
+          cancelText: String(t('ecosystem.chooseAreaManually')),
+          confirmText: String(t('ecosystem.openAppSettings')),
+          type: 'warning',
+          onCancel: () => setLocationPickerOpen(true),
+          onConfirm: () => {
+            locationResumeRef.current = 'app_permission';
+            void GeolocationService.openAppPermissionSettings();
+          },
+        });
       })();
     };
 
     const sub = AppState.addEventListener('change', onAppState);
     return () => sub.remove();
-  }, [handleUseMyLocation, t]);
+  }, [handleUseMyLocation, openConfirmDialog, t]);
 
   // -----------------------------
   // Load Providers
@@ -1069,20 +1153,17 @@ export default function ProvidersListScreen({navigation, route}: any) {
     };
     // Guest (and anyone leaving the app): confirm before jumping to Phone.
     if (isGuest || route?.name === 'GuestProviders') {
-      Alert.alert(
-        String(t('browse.call') || t('providers.call') || 'Call'),
-        String(
+      openConfirmDialog({
+        title: String(t('browse.call') || t('providers.call') || 'Call'),
+        message: String(
           t('browse.callLeavesAppHint') ||
             'This opens your Phone app to call the provider.',
         ),
-        [
-          {text: String(t('common.cancel') || 'Cancel'), style: 'cancel'},
-          {
-            text: String(t('browse.call') || 'Call'),
-            onPress: dial,
-          },
-        ],
-      );
+        cancelText: String(t('common.cancel') || 'Cancel'),
+        confirmText: String(t('browse.call') || 'Call'),
+        type: 'info',
+        onConfirm: dial,
+      });
       return;
     }
     dial();
@@ -1972,6 +2053,21 @@ export default function ProvidersListScreen({navigation, route}: any) {
         onClose={() =>
           setAlertModal({visible: false, title: '', message: '', type: 'info'})
         }
+      />
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        type={confirmDialog.type}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={confirmDialog.onCancel}
+        colors={{
+          ...theme,
+          danger: theme.error,
+        }}
       />
     </SafeAreaView>
   );

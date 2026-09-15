@@ -15,8 +15,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {MobilePhotoPicker} from 'sapvt-ltd-app-packages';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import ServiceAddressPicker, {
   emptyAddressSelection,
   type ServiceAddressSelection,
@@ -36,7 +39,6 @@ import {
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
-import {launchImageLibrary} from 'react-native-image-picker';
 import {uploadRequestPhotos} from '../utils/uploadRequestPhotos';
 
 export type RequestableProvider = {
@@ -155,6 +157,47 @@ export default function ProviderRequestModal({
       .catch(() => setQuestionnaire([]))
       .finally(() => setLoadingQuestions(false));
   }, [visible, provider]);
+
+  const ensureCameraPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const pickPhotoFromCamera = async (): Promise<string | null> => {
+    const ok = await ensureCameraPermission();
+    if (!ok) return null;
+    const result = await launchCamera({
+      mediaType: 'photo',
+      quality: 0.8,
+      saveToPhotos: false,
+    });
+    if (result.didCancel || result.errorCode) return null;
+    return result.assets?.[0]?.uri || null;
+  };
+
+  const pickPhotoFromGallery = async (): Promise<string[] | null> => {
+    const remaining = 3 - photos.length;
+    if (remaining <= 0) return null;
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      selectionLimit: remaining,
+    });
+    if (result.didCancel || result.errorCode) return null;
+    const uris = (result.assets || [])
+      .map(a => a.uri)
+      .filter((u): u is string => Boolean(u));
+    return uris.length > 0 ? uris : null;
+  };
+
+  const onPhotosPicked = (uris: string[]) => {
+    const clean = uris.map(u => String(u || '').trim()).filter(Boolean);
+    if (clean.length === 0) return;
+    setPhotos(prev => [...prev, ...clean].slice(0, 3));
+  };
 
   const onSubmit = async () => {
     if (!provider) return;
@@ -370,7 +413,7 @@ export default function ProviderRequestModal({
               </View>
             )}
 
-            <Text style={[styles.label, {color: theme.text, marginTop: 16}]}>
+            <Text style={[styles.label, {color: theme.text, marginTop: 4}]}>
               {t('services.describeProblem')}
               {questionnaire.length === 0 ? ' *' : ` (${t('common.optional')})`}
             </Text>
@@ -391,29 +434,51 @@ export default function ProviderRequestModal({
               value={problem}
               onChangeText={setProblem}
             />
-            <TouchableOpacity
-              style={{marginTop: 12}}
-              onPress={() => {
-                if (photos.length >= 3) return;
-                void launchImageLibrary({
-                  mediaType: 'photo',
-                  quality: 0.8,
-                  selectionLimit: 3 - photos.length,
-                }).then(result => {
-                  const uris = (result.assets || [])
-                    .map(a => a.uri)
-                    .filter(Boolean) as string[];
-                  setPhotos(prev => [...prev, ...uris].slice(0, 3));
-                });
-              }}>
-              <Text style={{color: theme.primary, fontWeight: '700'}}>
-                {t('services.addPhotos') || 'Add photos'}
+            <View style={styles.photosBlock}>
+              <Text style={[styles.photosTitle, {color: theme.text}]}>
+                {String(t('request.photosOptional'))}
               </Text>
-            </TouchableOpacity>
-            <View style={{flexDirection: 'row', gap: 8, marginTop: 8}}>
-              {photos.map(uri => (
-                <Image key={uri} source={{uri}} style={{width: 56, height: 56, borderRadius: 8}} />
-              ))}
+              <Text style={[styles.photosHint, {color: theme.textSecondary}]}>
+                {String(t('request.photosHint', {max: 3}))}
+              </Text>
+              {photos.length > 0 ? (
+                <View style={styles.photosRow}>
+                  {photos.map((uri, index) => (
+                    <View key={uri} style={styles.photoWrap}>
+                      <Image source={{uri}} style={styles.photoThumb} />
+                      <TouchableOpacity
+                        style={styles.photoRemove}
+                        onPress={() =>
+                          setPhotos(prev => prev.filter((_, i) => i !== index))
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={String(t('common.remove') || 'Remove')}>
+                        <Icon name="close" size={14} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {photos.length < 3 ? (
+                <MobilePhotoPicker
+                  layout="stack"
+                  cameraLabel={String(t('photo.takePhoto') || 'Take photo')}
+                  galleryLabel={String(
+                    t('photo.chooseGallery') || 'Choose from gallery',
+                  )}
+                  onPickCamera={pickPhotoFromCamera}
+                  onPickGallery={pickPhotoFromGallery}
+                  onChange={onPhotosPicked}
+                  colors={{
+                    primary: theme.primary,
+                    card: theme.card,
+                    text: theme.text,
+                    textSecondary: theme.textSecondary,
+                    border: theme.border,
+                    background: theme.background,
+                  }}
+                />
+              ) : null}
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -500,6 +565,44 @@ const styles = StyleSheet.create({
     color: '#E53E3E',
     marginTop: 12,
     fontSize: 13,
+  },
+  photosBlock: {
+    marginTop: 16,
+  },
+  photosTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  photosHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  photosRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  photoWrap: {
+    position: 'relative',
+  },
+  photoThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footer: {
     flexDirection: 'row',

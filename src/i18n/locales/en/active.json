@@ -28,6 +28,7 @@
   "serviceType": "Service",
   "problem": "What you need",
   "address": "Address",
+  "cancelReason": "Reason",
   "yourProfessional": "Your professional",
   "requestStatus": "Request status",
   "updatesMessages": "Updates & messages",

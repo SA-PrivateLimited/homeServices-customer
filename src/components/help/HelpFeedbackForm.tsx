@@ -6,7 +6,6 @@
 import React, {useMemo, useState} from 'react';
 import {
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -21,10 +20,12 @@ import {useTranslation} from 'react-i18next';
 import {submitFeedback} from '../../services/api/feedbackApi';
 import {WHATSAPP_SUPPORT_URL} from '../../config/support';
 import {getUserFacingErrorMessage} from '../../utils/userFacingError';
+import {openExternalUrl} from '../../utils/openExternalUrl';
 import {useStore} from '../../store';
 import {localTenDigits} from '../../utils/phone';
 import PhoneNumberInput from '../PhoneNumberInput';
 import {lightTheme, darkTheme} from '../../utils/theme';
+import AlertModal from '../AlertModal';
 
 const MESSAGE_MAX = 500;
 const MESSAGE_MIN = 5;
@@ -61,6 +62,7 @@ export function HelpFeedbackForm({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [waAlertVisible, setWaAlertVisible] = useState(false);
 
   const trimmed = message.trim();
   const canSubmit = trimmed.length >= MESSAGE_MIN && !sending;
@@ -103,9 +105,11 @@ export function HelpFeedbackForm({
     const body = trimmed
       ? `${String(t('login.feedbackWaPrefix') || 'Hi Akansho,')}\n\n${trimmed}`
       : String(t('login.feedbackWaPrefix') || 'Hi Akansho,');
-    void Linking.openURL(
+    void openExternalUrl(
       `${WHATSAPP_SUPPORT_URL}?text=${encodeURIComponent(body)}`,
-    );
+    ).then(ok => {
+      if (!ok) setWaAlertVisible(true);
+    });
   };
 
   const handleBack = () => {
@@ -295,6 +299,16 @@ export function HelpFeedbackForm({
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <AlertModal
+        visible={waAlertVisible}
+        title={String(t('help.feedbackWhatsApp') || 'WhatsApp')}
+        message={String(
+          t('help.unableToOpenWhatsApp') ||
+            "WhatsApp isn't available on this device.",
+        )}
+        type="warning"
+        onClose={() => setWaAlertVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

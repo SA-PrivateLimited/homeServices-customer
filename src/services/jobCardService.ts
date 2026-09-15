@@ -37,6 +37,7 @@ export interface JobCard {
   taskPIN?: string;
   pinGeneratedAt?: Date;
   scheduledTime?: Date;
+  cancellationReason?: string;
   jobCardPdfUrl?: string;
   serviceAmount?: number;
   materialsUsed?: Array<{
@@ -113,8 +114,16 @@ export const cancelTaskWithReason = async (
 
     await jobCardsApi.cancel(jobCardId, cancellationReason);
   } catch (error: any) {
-    console.error('Error cancelling task:', error);
-    throw new Error(error.message || 'Failed to cancel task');
+    const msg = String(error?.message || error || '');
+    // Pending / never-accepted requests often have no job card — callers fall
+    // back to cancelling the service request. Don't LogBox this as a hard error.
+    if (/not found|404/i.test(msg)) {
+      const soft = new Error(msg || 'Job card not found');
+      (soft as Error & {code?: string}).code = 'JOB_CARD_NOT_FOUND';
+      throw soft;
+    }
+    console.warn('Error cancelling task:', msg);
+    throw new Error(msg || 'Failed to cancel task');
   }
 };
 

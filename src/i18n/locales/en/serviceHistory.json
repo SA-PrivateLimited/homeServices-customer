@@ -21,6 +21,7 @@
   "intro": "Your service requests — tap a card to open details.",
   "location": "Location",
   "requestedOn": "Requested On",
+  "cancelledOn": "Cancelled on",
   "phone": "Phone",
   "emptyPending": "You have no services waiting for a provider.",
   "emptyAccepted": "Accepted requests will show up here.",

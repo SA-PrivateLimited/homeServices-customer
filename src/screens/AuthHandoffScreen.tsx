@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {ActivityIndicator, Linking, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
 import {Button} from 'sapvt-ltd-app-packages';
 import {exchangeContextHandoff} from '../services/partnerHandoff';
 import {setSession} from '../services/session';
@@ -7,6 +7,7 @@ import NotificationService from '../services/notificationService';
 import {useStore} from '../store';
 import useTranslation from '../hooks/useTranslation';
 import {SUPPORT_PHONE_TEL} from '../config/support';
+import {openExternalUrl} from '../utils/openExternalUrl';
 
 function codeFromUrl(url: string | null): string {
   if (!url) return '';
@@ -100,7 +101,7 @@ export default function AuthHandoffScreen({navigation, route}: any) {
       </Button>
       <Button
         variant="secondary"
-        onPress={() => void Linking.openURL(SUPPORT_PHONE_TEL)}>
+        onPress={() => void openExternalUrl(SUPPORT_PHONE_TEL)}>
         {t('handoff.getHelp')}
       </Button>
     </View>

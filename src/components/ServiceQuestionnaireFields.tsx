@@ -92,7 +92,12 @@ export default function ServiceQuestionnaireFields({
         </Text>
       ) : null}
       {questions.map((question, index) => (
-        <View key={question.id} style={styles.question}>
+        <View
+          key={question.id}
+          style={[
+            styles.question,
+            index === questions.length - 1 && styles.questionLast,
+          ]}>
           <Text style={[styles.questionText, {color: theme.text}]}>
             {index + 1}. {questionText(question, language)}
             {question.required ? (
@@ -238,6 +243,7 @@ const styles = StyleSheet.create({
   title: {fontSize: 16, fontWeight: '700', marginBottom: 4},
   subtitle: {fontSize: 13, marginBottom: 12},
   question: {marginBottom: 14},
+  questionLast: {marginBottom: 0},
   questionText: {fontSize: 14, fontWeight: '600', marginBottom: 8},
   required: {color: '#E53E3E'},
   input: {

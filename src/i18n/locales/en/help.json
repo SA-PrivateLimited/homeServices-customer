@@ -10,5 +10,7 @@
   "feedbackSend": "Send feedback",
   "feedbackWhatsApp": "Send feedback on WhatsApp",
   "feedbackThanksTitle": "Thank you for your feedback",
-  "feedbackThanksBody": "Your feedback helps us improve Akansho."
+  "feedbackThanksBody": "Your feedback helps us improve Akansho.",
+  "unableToOpenWhatsApp": "WhatsApp isn't available on this device. Install WhatsApp, or call Akansho Support.",
+  "unableToMakeCall": "Calling isn't available on this device. Try from a phone, or use Chat with Akansho Support."
 }

@@ -23,7 +23,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {getCustomerJobCards, JobCard} from '../services/jobCardService';
-import {getJobCardReview, getProviderReviews, Review} from '../services/reviewService';
+import {getJobCardReview} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
 import AdSlot from '../components/AdSlot';
 import {ServiceRequestCard} from '../components/ServiceRequestCard';
@@ -82,12 +82,6 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
   const [showCompletedServiceModal, setShowCompletedServiceModal] = useState(false);
   const [selectedCompletedService, setSelectedCompletedService] = useState<JobCard | null>(null);
-  const [providerDetails, setProviderDetails] = useState<{
-    phone?: string;
-    address?: any;
-  } | null>(null);
-  const [providerReview, setProviderReview] = useState<Review | null>(null);
-  const [loadingProviderDetails, setLoadingProviderDetails] = useState(false);
   const [providerPhones, setProviderPhones] = useState<Record<string, string>>({});
   const [providerImages, setProviderImages] = useState<Record<string, string>>({});
   const [alertModal, setAlertModal] = useState<{
@@ -147,6 +141,9 @@ export default function ServiceHistoryScreen({navigation}: any) {
       consultationId: id,
       bookingId: id,
       status: req.status || 'pending',
+      cancellationReason: req.cancellationReason
+        ? String(req.cancellationReason)
+        : undefined,
       scheduledTime: req.scheduledTime ? new Date(req.scheduledTime) : undefined,
       createdAt: req.createdAt ? new Date(req.createdAt) : new Date(),
       updatedAt: req.updatedAt ? new Date(req.updatedAt) : new Date(),
@@ -186,6 +183,23 @@ export default function ServiceHistoryScreen({navigation}: any) {
         if (card.id) linkedIds.add(String(card.id));
       });
 
+      // Prefer cancellationReason from the linked service request when the
+      // job card payload omits it (common for older cancelled rows).
+      const reasonByRequestId = new Map<string, string>();
+      (serviceRequests || []).forEach((req: any) => {
+        const id = String(req._id || req.id || '');
+        const reason = String(req.cancellationReason || '').trim();
+        if (id && reason) reasonByRequestId.set(id, reason);
+      });
+      const cardsWithReason = cards.map(card => {
+        if (String(card.cancellationReason || '').trim()) return card;
+        const fromReq =
+          reasonByRequestId.get(String(card.consultationId || '')) ||
+          reasonByRequestId.get(String(card.bookingId || '')) ||
+          reasonByRequestId.get(String(card.id || ''));
+        return fromReq ? {...card, cancellationReason: fromReq} : card;
+      });
+
       // Include service requests that do not yet have a job card (e.g. pending)
       const orphanRequests = (serviceRequests || [])
         .filter(req => {
@@ -195,7 +209,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         })
         .map(serviceRequestToCard);
 
-      const allCards = [...cards, ...orphanRequests];
+      const allCards = [...cardsWithReason, ...orphanRequests];
       allCards.sort((a, b) => {
         const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
         const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
@@ -254,33 +268,6 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const onRefresh = () => {
     setRefreshing(true);
     void loadHistory();
-  };
-
-  const loadProviderDetailsAndReview = async (jobCard: JobCard) => {
-    if (!jobCard.providerId) return;
-    
-    setLoadingProviderDetails(true);
-    try {
-      // Fetch provider details from API
-      const provider = await providersApi.getById(jobCard.providerId);
-      
-      if (provider) {
-        setProviderDetails({
-          phone: provider.phoneNumber || (provider as any).phone || (provider as any).primaryPhone,
-          address: provider.location || (provider as any).address || (provider as any).homeAddress || (provider as any).officeAddress,
-        });
-      }
-
-      // Fetch review for this job card
-      if (jobCard.id) {
-        const review = await getJobCardReview(jobCard.id);
-        setProviderReview(review);
-      }
-    } catch (error) {
-      console.error('Error loading provider details:', error);
-    } finally {
-      setLoadingProviderDetails(false);
-    }
   };
 
   const handleCallProvider = (phoneNumber?: string) => {
@@ -585,7 +572,10 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const getDateFilterLabel = () => String(t(dateFilterLabelKey(dateFilter)));
 
   const openServiceDetails = (jobCard: JobCard) => {
-    if (jobCard.status === 'completed') {
+    const ns = normalizeStatus(jobCard.status);
+    // Cancelled/rejected: compact outcome sheet on top (little left to do).
+    // Completed and live statuses: full ActiveService screen (web History → /active).
+    if (ns === 'cancelled' || ns === 'rejected') {
       setSelectedCompletedService(jobCard);
       setShowCompletedServiceModal(true);
       return;
@@ -614,6 +604,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       .join(', ');
     const phone =
       assigned && jobCard.providerId ? providerPhones[jobCard.providerId] : undefined;
+    const cancelReason = String(jobCard.cancellationReason || '').trim();
     const facts = [
       addressLine
         ? {
@@ -625,6 +616,15 @@ export default function ServiceHistoryScreen({navigation}: any) {
         icon: 'schedule',
         value: formatDate(jobCard.scheduledTime || jobCard.createdAt),
       },
+      (ns === 'cancelled' || ns === 'rejected') && cancelReason
+        ? {
+            icon: 'info',
+            value: String(
+              t('history.cancelReason', {reason: cancelReason}) ||
+                `Reason: ${cancelReason}`,
+            ),
+          }
+        : null,
     ].filter(Boolean) as {icon: string; value: string}[];
 
     return (
@@ -655,7 +655,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         onPress={() => openServiceDetails(jobCard)}
         onCall={phone ? () => handleCallProvider(phone) : undefined}
         leadingAction={
-          jobCard.status === 'completed' ? (
+          ns === 'completed' ? (
             <TouchableOpacity
               style={styles.reviewButton}
               onPress={() => handleReview(jobCard)}>
@@ -972,7 +972,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         onClose={() => setAlertModal({...alertModal, visible: false})}
       />
 
-      {/* Completed Service Details Modal — compact outcome sheet */}
+      {/* Cancelled / rejected — compact outcome sheet (completed opens ActiveService) */}
       <Modal
         visible={showCompletedServiceModal}
         transparent
@@ -996,19 +996,29 @@ export default function ServiceHistoryScreen({navigation}: any) {
                 <View
                   style={[
                     styles.completedSuccessIcon,
-                    {backgroundColor: `${theme.success || theme.primary}18`},
+                    {
+                      backgroundColor: `${
+                        theme.error || theme.textSecondary
+                      }18`,
+                    },
                   ]}>
                   <Icon
-                    name="check-circle"
+                    name="cancel"
                     size={26}
-                    color={theme.success || theme.primary}
+                    color={theme.error || theme.textSecondary}
                   />
                 </View>
                 <Text style={[styles.completedModalTitle, {color: theme.text}]}>
                   {String(
-                    t('activeService.serviceCompleted') ||
-                      t('services.serviceCompleted') ||
-                      'Service completed',
+                    normalizeStatus(selectedCompletedService?.status || '') ===
+                      'rejected'
+                      ? t('active.status.rejected') ||
+                          t('services.rejected') ||
+                          'Request declined'
+                      : t('services.serviceCancelled') ||
+                          t('active.serviceCancelled') ||
+                          t('active.status.cancelled') ||
+                          'Request cancelled',
                   )}
                 </Text>
                 <TouchableOpacity
@@ -1030,162 +1040,174 @@ export default function ServiceHistoryScreen({navigation}: any) {
                     style={[styles.completedLeadService, {color: theme.text}]}>
                     {selectedCompletedService.serviceType}
                   </Text>
-                  <Text
-                    style={[
-                      styles.completedLeadProvider,
-                      {color: theme.textSecondary},
-                    ]}>
-                    {selectedCompletedService.providerName}
-                  </Text>
-
-                  {selectedCompletedService.createdAt ? (
+                  {selectedCompletedService.providerName ? (
                     <Text
                       style={[
-                        styles.completedMetaLine,
+                        styles.completedLeadProvider,
                         {color: theme.textSecondary},
                       ]}>
-                      {new Date(
-                        selectedCompletedService.createdAt,
-                      ).toLocaleDateString(undefined, {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {String(t('services.provider') || 'Provider')}:{' '}
+                      {selectedCompletedService.providerName}
                     </Text>
-                  ) : null}
-
-                  {selectedCompletedService.problem ? (
+                  ) : (
                     <Text
                       style={[
-                        styles.completedMetaLine,
+                        styles.completedLeadProvider,
                         {color: theme.textSecondary},
                       ]}>
-                      {selectedCompletedService.problem}
+                      {String(
+                        t('serviceHistory.waitingForProvider') ||
+                          'No provider assigned',
+                      )}
                     </Text>
-                  ) : null}
+                  )}
 
-                  {selectedCompletedService.customerAddress ? (
-                    <Text
-                      style={[
-                        styles.completedMetaLine,
-                        {color: theme.textSecondary},
-                      ]}>
-                      {typeof selectedCompletedService.customerAddress ===
+                  {(() => {
+                    const reason = String(
+                      selectedCompletedService.cancellationReason || '',
+                    ).trim();
+                    const addressParts = [
+                      typeof selectedCompletedService.customerAddress ===
                       'string'
                         ? selectedCompletedService.customerAddress
-                        : selectedCompletedService.customerAddress.address || ''}
-                    </Text>
-                  ) : null}
+                        : [
+                            selectedCompletedService.customerAddress?.address,
+                            selectedCompletedService.customerAddress?.city,
+                            selectedCompletedService.customerAddress?.state,
+                            selectedCompletedService.customerAddress?.pincode,
+                          ]
+                            .filter(Boolean)
+                            .join(', '),
+                    ].filter(Boolean);
+                    const addressLine = addressParts.join(', ');
+                    const requestedAt =
+                      selectedCompletedService.scheduledTime ||
+                      selectedCompletedService.createdAt;
+                    const cancelledAt = selectedCompletedService.updatedAt;
+                    const problem = String(
+                      selectedCompletedService.problem || '',
+                    ).trim();
+                    const statusLabel = String(
+                      getStatusText(selectedCompletedService.status) ||
+                        t('services.cancelled') ||
+                        'Cancelled',
+                    );
 
-                  {providerDetails?.phone ? (
-                    <View style={styles.providerContactRow}>
-                      <Icon name="phone" size={16} color={theme.primary} />
-                      <Text
+                    const rows: {label: string; value: string; emphasize?: boolean}[] =
+                      [
+                        {
+                          label: String(t('services.status') || 'Status'),
+                          value: statusLabel,
+                        },
+                        reason
+                          ? {
+                              label: String(
+                                t('active.cancelReason') ||
+                                  t('common.cancellationReason') ||
+                                  'Reason',
+                              ),
+                              value: reason,
+                              emphasize: true,
+                            }
+                          : null,
+                        problem
+                          ? {
+                              label: String(
+                                t('active.problem') ||
+                                  t('serviceRequest.problem') ||
+                                  'Problem',
+                              ),
+                              value: problem,
+                            }
+                          : null,
+                        addressLine
+                          ? {
+                              label: String(
+                                t('active.address') ||
+                                  t('common.address') ||
+                                  'Address',
+                              ),
+                              value: addressLine,
+                            }
+                          : null,
+                        requestedAt
+                          ? {
+                              label: String(
+                                t('serviceHistory.requestedOn') ||
+                                  t('activeService.requestedOn') ||
+                                  'Requested',
+                              ),
+                              value: new Date(requestedAt).toLocaleString(
+                                undefined,
+                                {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                },
+                              ),
+                            }
+                          : null,
+                        cancelledAt
+                          ? {
+                              label: String(
+                                t('serviceHistory.cancelledOn') ||
+                                  'Cancelled on',
+                              ),
+                              value: new Date(cancelledAt).toLocaleString(
+                                undefined,
+                                {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                },
+                              ),
+                            }
+                          : null,
+                      ].filter(Boolean) as {
+                      label: string;
+                      value: string;
+                      emphasize?: boolean;
+                    }[];
+
+                    return rows.map(row => (
+                      <View
+                        key={row.label}
                         style={[
-                          styles.providerPhoneText,
-                          {color: theme.textSecondary},
+                          styles.cancelledDetailRow,
+                          row.emphasize
+                            ? {
+                                backgroundColor: `${theme.error || '#E53E3E'}12`,
+                                borderColor: `${theme.error || '#E53E3E'}33`,
+                              }
+                            : {borderColor: theme.border},
                         ]}>
-                        {providerDetails.phone}
-                      </Text>
-                      <TouchableOpacity
-                        style={[
-                          styles.modalCallButton,
-                          {backgroundColor: theme.primary},
-                        ]}
-                        onPress={() =>
-                          handleCallProvider(providerDetails.phone)
-                        }>
-                        <Text style={styles.modalCallButtonText}>
-                          {String(t('browse.call') || 'Call')}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-
-                  {providerReview ? (
-                    <View
-                      style={[
-                        styles.completedInlineCard,
-                        {backgroundColor: theme.background},
-                      ]}>
-                      <View style={styles.reviewRatingRow}>
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <Icon
-                            key={star}
-                            name={
-                              star <= providerReview.rating
-                                ? 'star'
-                                : 'star-border'
-                            }
-                            size={18}
-                            color={
-                              star <= providerReview.rating
-                                ? '#FFD700'
-                                : theme.textSecondary
-                            }
-                          />
-                        ))}
                         <Text
                           style={[
-                            styles.reviewRatingText,
+                            styles.cancelledDetailLabel,
                             {color: theme.textSecondary},
                           ]}>
-                          {providerReview.rating}/5
+                          {row.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.cancelledDetailValue,
+                            {
+                              color: row.emphasize
+                                ? theme.error || theme.text
+                                : theme.text,
+                            },
+                          ]}>
+                          {row.value}
                         </Text>
                       </View>
-                      {providerReview.comment ? (
-                        <Text
-                          style={[
-                            styles.reviewComment,
-                            {color: theme.textSecondary},
-                          ]}>
-                          "{providerReview.comment}"
-                        </Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  {(selectedCompletedService as any).totalAmount ||
-                  (selectedCompletedService as any).serviceAmount ? (
-                    <Text
-                      style={[
-                        styles.completedAmountLine,
-                        {color: theme.primary},
-                      ]}>
-                      ₹
-                      {(selectedCompletedService as any).totalAmount ||
-                        (selectedCompletedService as any).serviceAmount ||
-                        0}
-                    </Text>
-                  ) : null}
-
-                  {(selectedCompletedService as any).jobCardPdfUrl ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.pdfButton,
-                        {backgroundColor: theme.primary},
-                      ]}
-                      onPress={() => {
-                        Linking.openURL(
-                          (selectedCompletedService as any).jobCardPdfUrl,
-                        ).catch(() => {
-                          setAlertModal({
-                            visible: true,
-                            title: String(t('common.error')),
-                            message: String(
-                              t('serviceHistory.failedToOpenPDF'),
-                            ),
-                            type: 'error',
-                          });
-                        });
-                      }}>
-                      <Icon name="picture-as-pdf" size={18} color="#fff" />
-                      <Text style={styles.pdfButtonText}>
-                        {String(t('serviceHistory.viewJobCard'))}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
+                    ));
+                  })()}
                 </ScrollView>
               ) : null}
 
@@ -1607,6 +1629,24 @@ const styles = StyleSheet.create({
   completedLeadProvider: {
     fontSize: 14,
     marginBottom: 10,
+  },
+  cancelledDetailRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    gap: 4,
+  },
+  cancelledDetailLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  cancelledDetailValue: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
   },
   completedMetaLine: {
     fontSize: 13,
