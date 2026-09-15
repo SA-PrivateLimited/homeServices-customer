@@ -23,8 +23,13 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {getCustomerJobCards, JobCard} from '../services/jobCardService';
-import {getJobCardReview} from '../services/reviewService';
+import {
+  getCustomerReviews,
+  getJobCardReview,
+  type Review,
+} from '../services/reviewService';
 import ReviewModal from '../components/ReviewModal';
+import YourJobReview from '../components/YourJobReview';
 import AdSlot from '../components/AdSlot';
 import {ServiceRequestCard} from '../components/ServiceRequestCard';
 import {CrystalFilterMenu} from '../components/CrystalFilterMenu';
@@ -84,6 +89,9 @@ export default function ServiceHistoryScreen({navigation}: any) {
   const [selectedCompletedService, setSelectedCompletedService] = useState<JobCard | null>(null);
   const [providerPhones, setProviderPhones] = useState<Record<string, string>>({});
   const [providerImages, setProviderImages] = useState<Record<string, string>>({});
+  const [reviewsByJobCardId, setReviewsByJobCardId] = useState<
+    Record<string, Review>
+  >({});
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
     title: string;
@@ -157,6 +165,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       const userId = currentUser?.id || currentUser?._id;
       if (!userId) {
         setJobCards([]);
+        setReviewsByJobCardId({});
         setLoading(false);
         setRefreshing(false);
         return;
@@ -164,7 +173,8 @@ export default function ServiceHistoryScreen({navigation}: any) {
 
       setLoading(true);
 
-      const [cardsByCustomerId, serviceRequests] = await Promise.all([
+      const [cardsByCustomerId, serviceRequests, customerReviews] =
+        await Promise.all([
         getCustomerJobCards(userId).catch((e) => {
           console.warn('Job cards load failed:', e);
           return [] as JobCard[];
@@ -173,7 +183,18 @@ export default function ServiceHistoryScreen({navigation}: any) {
           console.warn('Service requests load failed:', e);
           return [] as any[];
         }),
+        getCustomerReviews(userId).catch((e) => {
+          console.warn('Customer reviews load failed:', e);
+          return [] as Review[];
+        }),
       ]);
+
+      const reviewMap: Record<string, Review> = {};
+      (customerReviews || []).forEach(review => {
+        const key = String(review.jobCardId || '').trim();
+        if (key) reviewMap[key] = review;
+      });
+      setReviewsByJobCardId(reviewMap);
 
       const cards = cardsByCustomerId || [];
       const linkedIds = new Set<string>();
@@ -258,6 +279,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
         type: 'error',
       });
       setJobCards([]);
+      setReviewsByJobCardId({});
       setHelpCandidates([]);
     } finally {
       setLoading(false);
@@ -309,15 +331,13 @@ export default function ServiceHistoryScreen({navigation}: any) {
   };
 
   const handleReview = async (jobCard: JobCard) => {
-    // Check if review exists
-    const existingReview = await getJobCardReview(jobCard.id || '');
+    const id = String(jobCard.id || '');
+    const existingReview =
+      (id && reviewsByJobCardId[id]) ||
+      (await getJobCardReview(jobCard.id || ''));
     if (existingReview) {
-      setAlertModal({
-        visible: true,
-        title: t('serviceHistory.alreadyReviewed'),
-        message: t('serviceHistory.alreadyReviewedMessage'),
-        type: 'info',
-      });
+      // Already rated — open details where the full review is shown.
+      openServiceDetails(jobCard);
       return;
     }
 
@@ -333,7 +353,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
       case 'in-progress':
         return theme.warning;
       case 'accepted':
-        return theme.success;
+        return theme.primary;
       case 'cancelled':
         return theme.error;
       case 'rejected':
@@ -655,15 +675,32 @@ export default function ServiceHistoryScreen({navigation}: any) {
         onPress={() => openServiceDetails(jobCard)}
         onCall={phone ? () => handleCallProvider(phone) : undefined}
         leadingAction={
-          ns === 'completed' ? (
+          ns === 'completed' &&
+          !String(jobCard.id || '').startsWith('sr_') &&
+          !reviewsByJobCardId[String(jobCard.id || '')] ? (
             <TouchableOpacity
               style={styles.reviewButton}
               onPress={() => handleReview(jobCard)}>
-              <Icon name="star" size={16} color="#FFD700" />
-              <Text style={styles.reviewButtonText}>{t('jobCard.review')}</Text>
+              <Icon name="star-border" size={16} color="#F5A623" />
+              <Text style={styles.reviewButtonText}>
+                {String(
+                  t('review.ratePartner') ||
+                    t('jobCard.review') ||
+                    'Rate',
+                )}
+              </Text>
             </TouchableOpacity>
           ) : undefined
         }>
+        {ns === 'completed' &&
+        reviewsByJobCardId[String(jobCard.id || '')] ? (
+          <YourJobReview
+            compact
+            review={reviewsByJobCardId[String(jobCard.id || '')]}
+            theme={theme}
+            title={String(t('serviceHistory.yourReview') || 'Your review')}
+          />
+        ) : null}
         {ns === 'in-progress' && (jobCard as any).taskPIN ? (
           <View
             style={[
@@ -1049,18 +1086,7 @@ export default function ServiceHistoryScreen({navigation}: any) {
                       {String(t('services.provider') || 'Provider')}:{' '}
                       {selectedCompletedService.providerName}
                     </Text>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.completedLeadProvider,
-                        {color: theme.textSecondary},
-                      ]}>
-                      {String(
-                        t('serviceHistory.waitingForProvider') ||
-                          'No provider assigned',
-                      )}
-                    </Text>
-                  )}
+                  ) : null}
 
                   {(() => {
                     const reason = String(
@@ -1440,7 +1466,7 @@ const styles = StyleSheet.create({
   reviewButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#FFD700',
+    color: '#F5A623',
   },
   viewButton: {
     flexDirection: 'row',

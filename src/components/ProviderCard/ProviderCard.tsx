@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Platform, Pressable, StyleSheet, Text, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {Avatar, Button, ImageViewer} from 'sapvt-ltd-app-packages';
 import type {Theme} from '../../utils/theme';
@@ -91,10 +91,26 @@ export function ProviderCard({
       style={styles.card}
       contentStyle={compact ? styles.cardInnerCompact : styles.cardInner}>
       <Pressable
-        style={styles.main}
+        style={({pressed}) => [
+          styles.main,
+          Platform.OS !== 'android' && pressed && onPress
+            ? {opacity: 0.94}
+            : null,
+        ]}
         onPress={onPress}
         disabled={!onPress}
-        accessibilityRole={onPress ? 'button' : undefined}>
+        accessibilityRole={onPress ? 'button' : undefined}
+        android_ripple={
+          onPress
+            ? {
+                color: isDark
+                  ? 'rgba(255, 255, 255, 0.06)'
+                  : 'rgba(49, 130, 206, 0.12)',
+                borderless: false,
+                foreground: true,
+              }
+            : undefined
+        }>
         {hidePhoto ? null : (
           <View style={styles.avatarWrap}>
             <Avatar
@@ -297,7 +313,7 @@ export function ProviderCard({
           style={[
             compact ? styles.actionsCompact : styles.actions,
             callOnly ? styles.actionsCallOnly : null,
-            {borderTopColor: 'rgba(226, 232, 240, 0.55)'},
+            {borderTopColor: theme.border},
           ]}>
           {/* Web: digits only when phone exists without Call CTA — never dump number next to Call */}
           {showPhone && !onCall ? (
@@ -383,6 +399,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    overflow: 'hidden',
+    borderRadius: 12,
   },
   avatarWrap: {
     position: 'relative',

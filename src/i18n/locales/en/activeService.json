@@ -29,7 +29,7 @@
   "callProvider": "Call Provider",
   "reRequestService": "Re-Request Service",
   "cancelService": "Cancel Service",
-  "viewHistory": "View History",
+  "viewHistory": "View My Requests",
   "verifyTaskCompleted": "Verify Task Completed",
   "verifyTaskCompletionTitle": "Verify Task Completion",
   "verifyTaskCompletionMessage": "Have you verified that the service has been completed to your satisfaction?",

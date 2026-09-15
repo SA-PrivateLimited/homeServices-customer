@@ -34,7 +34,11 @@ import ReviewModal from '../components/ReviewModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import Toast from '../components/Toast';
-import {canCustomerReview, getJobCardReview} from '../services/reviewService';
+import {canCustomerReview, getJobCardReview, type Review} from '../services/reviewService';
+import YourJobReview from '../components/YourJobReview';
+import ProviderRequestModal, {
+  type RequestableProvider,
+} from '../components/ProviderRequestModal';
 import {providersApi, Provider} from '../services/api/providersApi';
 import {AvailableProviders} from '../components/AvailableProviders';
 import RequestPhotoGallery from '../components/RequestPhotoGallery';
@@ -233,6 +237,7 @@ export default function ActiveServiceScreen({
   const [isImmediateService, setIsImmediateService] = useState<boolean>(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewDismissed, setReviewDismissed] = useState(false);
+  const [submittedReview, setSubmittedReview] = useState<Review | null>(null);
   const [distance, setDistance] = useState<string>('');
   const [eta, setEta] = useState<number>(0);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean>(false);
@@ -240,6 +245,10 @@ export default function ActiveServiceScreen({
   const [requestCreatedAt, setRequestCreatedAt] = useState<Date | null>(null);
   const [canReRequest, setCanReRequest] = useState<boolean>(false);
   const [showReRequestModal, setShowReRequestModal] = useState(false);
+  const [showRepeatPartnerConfirm, setShowRepeatPartnerConfirm] =
+    useState(false);
+  const [showRepeatPartnerRequest, setShowRepeatPartnerRequest] =
+    useState(false);
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -959,13 +968,6 @@ export default function ActiveServiceScreen({
         currentUserId: getUserId(currentUser),
       });
 
-      // If review was dismissed and user hasn't submitted, don't show again automatically
-      // User can still access it from service history
-      if (reviewDismissed) {
-        console.log('⚠️ Review was dismissed, not showing again automatically');
-        return;
-      }
-
       // Try to get jobCardId from current jobCard or find it from consultation
       let currentJobCardId = jobCardId || jobCard?.id;
       
@@ -999,24 +1001,32 @@ export default function ActiveServiceScreen({
 
       if (currentJobCardId) {
         console.log('🔍 Checking if customer can review jobCard:', currentJobCardId);
+        const existingReview = await getJobCardReview(currentJobCardId);
+        if (existingReview) {
+          setSubmittedReview(existingReview);
+          return;
+        }
+        setSubmittedReview(null);
+
+        // If review was dismissed and user hasn't submitted, don't show again automatically
+        // User can still access it from service history / Rate button
+        if (reviewDismissed) {
+          console.log('⚠️ Review was dismissed, not showing again automatically');
+          return;
+        }
+
         const canReview = await canCustomerReview(currentJobCardId);
         console.log('📋 Can review:', canReview);
         
-      if (canReview) {
+        if (canReview) {
           console.log('✅ Customer can review, showing modal in 2 seconds');
           // Show modal after a short delay
-        setTimeout(() => {
+          setTimeout(() => {
             console.log('📱 Showing review modal from checkReviewStatus');
-          setShowReviewModal(true);
+            setShowReviewModal(true);
           }, 2000);
         } else {
-          // Check if review already exists
-          const existingReview = await getJobCardReview(currentJobCardId);
-          if (existingReview) {
-            console.log('ℹ️ Review already exists for this job');
-          } else {
-            console.log('⚠️ Cannot review - job may not be completed or customer mismatch');
-          }
+          console.log('⚠️ Cannot review - job may not be completed or customer mismatch');
         }
       } else if (status === 'completed' && serviceRequestId) {
         // If no jobCardId but service is completed, still try to show review
@@ -1350,19 +1360,20 @@ export default function ActiveServiceScreen({
   };
 
   const getStatusColor = (statusValue: string) => {
-    // Web ActivePage.css: finding/pending→warning, accepted/completed→success,
-    // in-progress→primary, cancelled/rejected→error
+    // pending→warning, accepted→primary (blue), completed→success (green),
+    // in-progress→warning/orange for live work, cancelled/rejected→error
     switch (String(statusValue || '').toLowerCase()) {
       case 'pending':
       case 'finding':
       case 'waiting-accept':
         return theme.warning;
       case 'accepted':
+        return theme.primary;
       case 'completed':
         return theme.success;
       case 'in-progress':
       case 'in_progress':
-        return theme.primary;
+        return theme.warning;
       case 'cancelled':
       case 'canceled':
       case 'rejected':
@@ -1538,6 +1549,44 @@ export default function ActiveServiceScreen({
   const providerDisplayName =
     assignedProviderName ||
     String(t('active.partnerFallback') || 'Someone');
+  const repeatPartnerId = String(
+    providerProfile?.id ||
+      providerProfile?._id ||
+      serviceRequest?.providerId ||
+      jobCard?.providerId ||
+      '',
+  ).trim();
+  const canRequestSamePartner =
+    status === 'completed' && Boolean(repeatPartnerId);
+  const repeatPartner: RequestableProvider | null = canRequestSamePartner
+    ? {
+        id: repeatPartnerId,
+        _id: repeatPartnerId,
+        name: assignedProviderName || providerDisplayName,
+        phone:
+          providerProfile?.phoneNumber ||
+          providerProfile?.phone ||
+          serviceRequest?.providerPhone,
+        phoneNumber:
+          providerProfile?.phoneNumber ||
+          providerProfile?.phone ||
+          serviceRequest?.providerPhone,
+        specialization:
+          providerProfile?.specialization ||
+          providerProfile?.specialty ||
+          serviceRequest?.serviceType ||
+          jobCard?.serviceType,
+        specialty: providerProfile?.specialty,
+        serviceType:
+          serviceRequest?.serviceType ||
+          jobCard?.serviceType ||
+          providerProfile?.serviceType,
+        rating: providerRating || undefined,
+        profileImage:
+          providerProfile?.profileImage || serviceRequest?.providerImage,
+        image: providerProfile?.profileImage || serviceRequest?.providerImage,
+      }
+    : null;
   const providerFirstName = String(providerDisplayName)
     .trim()
     .split(/\s+/)[0];
@@ -1873,6 +1922,18 @@ export default function ActiveServiceScreen({
             title={String(t('active.completionPhotos'))}
           />
 
+          {status === 'completed' && submittedReview ? (
+            <YourJobReview
+              review={submittedReview}
+              theme={theme}
+              title={String(
+                t('serviceHistory.yourReview') ||
+                  t('review.yourRating') ||
+                  'Your review',
+              )}
+            />
+          ) : null}
+
           {/* Comments — shared with provider & admin once a job card exists */}
           {jobCardId && !String(jobCardId).startsWith('sr_') ? (
             <JobCardComments
@@ -2035,13 +2096,86 @@ export default function ActiveServiceScreen({
         ) : null}
 
         {status === 'completed' ? (
-          <Button
-            title={String(t('activeService.viewHistory'))}
-            variant="primary"
-            block
-            onPress={() => navigation.navigate('ServiceHistory')}
-            colors={{primary: theme.primary, card: theme.card, text: '#fff', border: theme.primary}}
-          />
+          <>
+            {!submittedReview ? (
+              <Button
+                title={String(
+                  t('review.ratePartner') ||
+                    t('review.rateExperience') ||
+                    t('jobCard.review') ||
+                    'Rate your partner',
+                )}
+                variant="secondary"
+                block
+                onPress={() => setShowReviewModal(true)}
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: theme.primary,
+                  border: theme.primary,
+                }}
+              />
+            ) : null}
+            {canRequestSamePartner ? (
+              <Button
+                title={String(
+                  t('active.requestSamePartner') ||
+                    t('activeService.requestAgain') ||
+                    'Request same partner',
+                )}
+                variant="primary"
+                block
+                onPress={() => setShowRepeatPartnerConfirm(true)}
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: '#fff',
+                  border: theme.primary,
+                }}
+              />
+            ) : (
+              <Button
+                title={String(
+                  t('active.requestAgain') ||
+                    t('activeService.requestAgain') ||
+                    'Request again',
+                )}
+                variant="primary"
+                block
+                onPress={() =>
+                  navigation.navigate('Services', {
+                    screen: 'ServiceRequest',
+                    params: {
+                      serviceType:
+                        serviceRequest?.serviceType || jobCard?.serviceType,
+                    },
+                  })
+                }
+                colors={{
+                  primary: theme.primary,
+                  card: theme.card,
+                  text: '#fff',
+                  border: theme.primary,
+                }}
+              />
+            )}
+            <Button
+              title={String(
+                t('active.viewHistory') ||
+                  t('activeService.viewHistory') ||
+                  'View My Requests',
+              )}
+              variant="secondary"
+              block
+              onPress={() => navigation.navigate('ServiceHistory')}
+              colors={{
+                primary: theme.primary,
+                card: theme.card,
+                text: theme.primary,
+                border: theme.primary,
+              }}
+            />
+          </>
         ) : null}
       </View>
       ) : null}
@@ -2058,6 +2192,12 @@ export default function ActiveServiceScreen({
             setReviewDismissed(false); // Reset dismissed state
             // Reload data to show updated status
             loadServiceData();
+            const id = jobCardId || jobCard?.id;
+            if (id) {
+              void getJobCardReview(String(id)).then(r => {
+                if (r) setSubmittedReview(r);
+              });
+            }
             setAlertModalConfig({
               title: t('messages.thankYou'),
               message: t('activeService.thankYouReviewSubmitted'),
@@ -2103,6 +2243,43 @@ export default function ActiveServiceScreen({
         icon="refresh"
         onConfirm={confirmReRequest}
         onCancel={() => setShowReRequestModal(false)}
+      />
+
+      <ConfirmationModal
+        visible={showRepeatPartnerConfirm}
+        title={String(
+          t('active.requestSamePartnerConfirmTitle') ||
+            'Request this partner again?',
+        )}
+        message={String(
+          t('active.requestSamePartnerConfirmBody', {
+            name: providerDisplayName,
+            service: serviceLabel,
+          }) ||
+            `Do you want to request ${providerDisplayName} again for ${serviceLabel}?`,
+        )}
+        confirmText={String(t('common.continue') || t('actions.continue') || 'Continue')}
+        cancelText={String(t('common.cancel') || 'Cancel')}
+        type="info"
+        icon="refresh"
+        onConfirm={() => {
+          setShowRepeatPartnerConfirm(false);
+          setShowRepeatPartnerRequest(true);
+        }}
+        onCancel={() => setShowRepeatPartnerConfirm(false)}
+      />
+
+      <ProviderRequestModal
+        visible={showRepeatPartnerRequest && Boolean(repeatPartner)}
+        provider={repeatPartner}
+        requestedServiceType={
+          serviceRequest?.serviceType || jobCard?.serviceType || undefined
+        }
+        onClose={() => setShowRepeatPartnerRequest(false)}
+        onSuccess={newId => {
+          setShowRepeatPartnerRequest(false);
+          navigation.replace('ActiveService', {serviceRequestId: newId});
+        }}
       />
 
       {/* Alert Modal */}
