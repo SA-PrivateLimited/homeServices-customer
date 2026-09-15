@@ -30,7 +30,7 @@
   "unableToOpenEmail": "Unable to open email client.",
   "unableToMakeCall": "Unable to make phone call on this device.",
   "aboutHomeServices": "About HomeServices",
-  "aboutMessage": "Version: {{version}}\n\nHomeServices is a home services platform that connects customers with verified service providers for plumbing, electrical work, carpentry, AC repair, and more.\n\n© 2025 {{copyright}}. All rights reserved.",
+  "aboutMessage": "Version: {{version}}\n\nHomeServices is a home services platform that connects customers with verified service providers for plumbing, electrical work, carpentry, AC repair, and more.\n\n© {{copyright}}",
   "privacyPolicyMessage": "HomeServices respects your privacy. Your service request data is securely stored and encrypted. We do not share your personal information with third parties without your consent.\n\nAll service transactions and personal information are protected under our privacy policy.",
   "termsOfServiceMessage": "HomeServices provides home service connections between customers and verified service providers.\n\nBy using this app, you agree to use the services responsibly and understand that service terms are subject to agreement with your service provider.",
   "allRightsReserved": "All rights reserved",

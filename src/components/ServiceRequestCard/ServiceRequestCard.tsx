@@ -64,11 +64,12 @@ export type ServiceRequestCardProps = Props;
 function statusTint(statusKey: string | undefined, theme: Theme): string {
   switch (String(statusKey || '').toLowerCase()) {
     case 'accepted':
+      return theme.primary;
     case 'completed':
       return theme.success;
     case 'in-progress':
     case 'in_progress':
-      return theme.primary;
+      return theme.warning;
     case 'cancelled':
     case 'canceled':
     case 'rejected':

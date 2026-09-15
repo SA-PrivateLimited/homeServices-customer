@@ -29,7 +29,7 @@
   "callProvider": "सेवा प्रदाता को कॉल करें",
   "reRequestService": "सेवा पुनः अनुरोध करें",
   "cancelService": "सेवा रद्द करें",
-  "viewHistory": "मेरी सेवाएँ देखें",
+  "viewHistory": "मेरे अनुरोध देखें",
   "verifyTaskCompleted": "कार्य पूर्ण सत्यापित करें",
   "verifyTaskCompletionTitle": "कार्य पूर्णता की पुष्टि करें",
   "verifyTaskCompletionMessage": "क्या आपने सत्यापित किया है कि सेवा आपकी संतुष्टि के लिए पूर्ण हो गई है?",

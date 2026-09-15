@@ -2,6 +2,8 @@
   "title": "How was your service?",
   "subtitle": "{{service}} by {{name}}",
   "rateExperience": "Rate your experience",
+  "ratePartner": "Rate your partner",
+  "yourRating": "Your rating",
   "excellent": "Excellent!",
   "great": "Great!",
   "good": "Good",

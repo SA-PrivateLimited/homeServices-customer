@@ -20,6 +20,7 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
 import {getStoredJwt, logoutCustomer} from '../services/session';
+import {SUPPORT_PHONE_TEL} from '../config/support';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
@@ -249,7 +250,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   };
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:+918210900726').catch(() => {
+    Linking.openURL(SUPPORT_PHONE_TEL).catch(() => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
@@ -752,16 +753,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           />
         ) : null}
 
-        <Text
-          style={{
-            textAlign: 'center',
-            marginTop: 16,
-            marginBottom: 8,
-            fontSize: 12,
-            color: theme.textSecondary,
-          }}>
-          {String(t('login.productName') || 'Akansho')} · ©{' '}
-          {COPYRIGHT_OWNER || 'Akansho Pvt Ltd'}
+        <Text style={[styles.brandMark, {color: theme.textSecondary}]}>
+          © {COPYRIGHT_OWNER || 'Akansho'}
         </Text>
       </ScrollView>
 
@@ -873,8 +866,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
               <Text style={{color: theme.textSecondary, marginBottom: 4}}>
                 {String(t('settings.version', {version: '1.0.0'}) || 'Version 1.0.0')}
               </Text>
-              <Text style={{color: theme.textSecondary, marginBottom: 12}}>
-                © {COPYRIGHT_OWNER || 'Akansho Pvt Ltd'}
+              <Text style={[styles.brandMarkCompact, {color: theme.textSecondary}]}>
+                © {COPYRIGHT_OWNER || 'Akansho'}
               </Text>
               <ShareAkansoPanel />
               <TouchableOpacity
@@ -1050,6 +1043,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalTitle: {fontSize: 18, fontWeight: '700'},
+  brandMark: {
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.72,
+  },
+  brandMarkCompact: {
+    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.72,
+  },
 });
 
 export default SettingsScreen;

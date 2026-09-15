@@ -10,5 +10,7 @@
   "feedbackSend": "फ़ीडबैक भेजें",
   "feedbackWhatsApp": "WhatsApp पर फ़ीडबैक भेजें",
   "feedbackThanksTitle": "फ़ीडबैक के लिए धन्यवाद",
-  "feedbackThanksBody": "आपकी राय से हम Akansho को बेहतर बनाते हैं।"
+  "feedbackThanksBody": "आपकी राय से हम Akansho को बेहतर बनाते हैं।",
+  "unableToOpenWhatsApp": "इस डिवाइस पर WhatsApp उपलब्ध नहीं है। WhatsApp इंस्टॉल करें, या Akansho सहायता को कॉल करें।",
+  "unableToMakeCall": "इस डिवाइस पर कॉल उपलब्ध नहीं है। फ़ोन से कोशिश करें, या Akansho सहायता से चैट करें।"
 }

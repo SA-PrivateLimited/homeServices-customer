@@ -2,6 +2,8 @@
   "title": "आपकी सेवा कैसी रही?",
   "subtitle": "{{service}} — {{name}}",
   "rateExperience": "अपना अनुभव रेट करें",
+  "ratePartner": "पार्टनर को रेट करें",
+  "yourRating": "आपकी रेटिंग",
   "excellent": "बहुत बढ़िया!",
   "great": "अच्छा!",
   "good": "ठीक",
