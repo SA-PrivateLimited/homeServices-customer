@@ -10,10 +10,10 @@ import {
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {CUSTOMER_WEB} from 'sapvt-ltd-app-packages';
 import {useStore} from '../../store';
 import {lightTheme, darkTheme} from '../../utils/theme';
 import useTranslation from '../../hooks/useTranslation';
+import {glassTabOverlayPad} from '../../navigation/GlassTabBar';
 
 type Props = {
   onOpenHelp: () => void;
@@ -35,7 +35,8 @@ export function AkansoSupportChip({
   if (hidden) return null;
 
   const bottom =
-    (floatAboveTabs ? CUSTOMER_WEB.tabBarH : 0) + Math.max(insets.bottom, 0) + 16;
+    (floatAboveTabs ? glassTabOverlayPad(insets.bottom) : Math.max(insets.bottom, 0)) +
+    (floatAboveTabs ? 4 : 16);
 
   return (
     <View
