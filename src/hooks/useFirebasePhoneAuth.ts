@@ -8,13 +8,38 @@ import {
 
 type ConfirmationResult = FirebaseAuthTypes.ConfirmationResult;
 
+const SEND_OTP_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} timed out. Check your network, or install Chrome and try again.`,
+        ),
+      );
+    }, ms);
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      err => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 /**
  * Firebase Phone Auth for React Native — send OTP, verify code, get ID token.
  * Backend JWT is the app session; Firebase session is ephemeral.
  *
- * Lifecycle:
- * - Keep confirmation alive across sendOtp → OTP screen → verifyOtp
- * - Clear only on: unmount, reset(), failed send, or after backend accepts idToken
+ * Do not flip `appVerificationDisabledForTesting` just because Linking cannot
+ * probe a browser — that makes Firebase reject real numbers as invalid.
+ * If no browser can handle https VIEW, fail fast with a clear error instead of
+ * letting RecaptchaActivity hang / crash the sendOtp promise.
  */
 export function useFirebasePhoneAuth() {
   const confirmationRef = useRef<ConfirmationResult | null>(null);
@@ -55,26 +80,22 @@ export function useFirebasePhoneAuth() {
     if (!/^\+[1-9]\d{7,14}$/.test(e164)) {
       throw new Error('Enter a valid mobile number with country code.');
     }
+    if (sending) {
+      throw new Error('Phone verification is already in progress. Please wait a moment and try again.');
+    }
 
     /**
-     * When Play Integrity is unavailable, Firebase opens RecaptchaActivity which
-     * starts a browser Intent. No browser → ActivityNotFoundException kills the app.
+     * When Play Integrity is unavailable (common on emulators), Firebase opens
+     * RecaptchaActivity → browser Intent. No browser → native crash (guarded) and
+     * a hung JS promise / stuck Continue spinner. Fail before that.
      */
     const browserOk = await canOpenHttpsUrl();
     if (!browserOk) {
-      if (__DEV__) {
-        try {
-          auth().settings.appVerificationDisabledForTesting = true;
-        } catch {
-          /* ignore */
-        }
-      } else {
-        const err = new Error(BROWSER_REQUIRED_FOR_OTP_CODE) as Error & {
-          code: string;
-        };
-        err.code = BROWSER_REQUIRED_FOR_OTP_CODE;
-        throw err;
-      }
+      const err = new Error(BROWSER_REQUIRED_FOR_OTP_CODE) as Error & {
+        code: string;
+      };
+      err.code = BROWSER_REQUIRED_FOR_OTP_CODE;
+      throw err;
     }
 
     setSending(true);
@@ -82,10 +103,21 @@ export function useFirebasePhoneAuth() {
       confirmationRef.current = null;
       idTokenRef.current = null;
 
+      // Clear any half-finished Firebase session so a retry is not blocked by
+      // "reCAPTCHA flow already in progress".
+      try {
+        if (auth().currentUser) {
+          await auth().signOut();
+        }
+      } catch {
+        /* ignore */
+      }
+
       const forceResend = lastPhoneRef.current === e164;
-      const confirmation = await auth().signInWithPhoneNumber(
-        e164,
-        forceResend,
+      const confirmation = await withTimeout(
+        auth().signInWithPhoneNumber(e164, forceResend),
+        SEND_OTP_TIMEOUT_MS,
+        'Phone verification',
       );
 
       confirmationRef.current = confirmation;
@@ -111,7 +143,7 @@ export function useFirebasePhoneAuth() {
     } finally {
       if (mountedRef.current) setSending(false);
     }
-  }, []);
+  }, [sending]);
 
   const verifyOtp = useCallback(async (code: string) => {
     const otp = String(code || '').trim();

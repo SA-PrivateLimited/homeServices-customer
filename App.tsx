@@ -19,14 +19,21 @@ if (typeof window !== 'undefined') {
   }
 }
 
-import React, {useEffect, useState, useMemo} from 'react';
-import {StatusBar, Platform, InteractionManager} from 'react-native';
+import React, {useEffect, useState, useMemo, useCallback, useRef} from 'react';
+import {
+  StatusBar,
+  Platform,
+  InteractionManager,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {AppThemeProvider} from 'sapvt-ltd-app-packages';
 import {HelpRequestProvider} from './src/components/help/helpRequestContext';
 import {GreetingOverlay} from './src/components/GreetingOverlay';
 import {LocationPermissionExplanationHost} from './src/components/LocationPermissionExplanationHost';
-import {BootSplash} from './src/components/BootSplash';
+import {BootSplash, SPLASH_SKY} from './src/components/BootSplash';
+import {hideNativeSplash} from './src/native/nativeSplash';
 import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
@@ -38,6 +45,17 @@ import './src/i18n'; // Initialize i18n
 const App = () => {
   const {isDarkMode, hydrate, currentUser} = useStore();
   const [bootReady, setBootReady] = useState(false);
+  const [navReady, setNavReady] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
+  const nativeSplashHidden = useRef(false);
+  const handleNavReady = useCallback(() => setNavReady(true), []);
+  const handleSplashPainted = useCallback(() => {
+    if (nativeSplashHidden.current) {
+      return;
+    }
+    nativeSplashHidden.current = true;
+    hideNativeSplash();
+  }, []);
   const theme = isDarkMode ? darkTheme : lightTheme;
   const appThemeColors = useMemo(
     () => ({
@@ -71,27 +89,27 @@ const App = () => {
   );
 
   useEffect(() => {
-
     // Handle unhandled promise rejections for geolocation errors
     const rejectionHandler = (event: any) => {
       const error = event?.reason || event;
       const errorMessage = error?.message || String(error) || '';
-      
-      if (errorMessage.includes('RNFusedLocation') || 
-          errorMessage.includes('FusedLocationProviderClient') ||
-          errorMessage.includes('Could not invoke') ||
-          (errorMessage.includes('interface') && errorMessage.includes('class was expected'))) {
+
+      if (
+        errorMessage.includes('RNFusedLocation') ||
+        errorMessage.includes('FusedLocationProviderClient') ||
+        errorMessage.includes('Could not invoke') ||
+        (errorMessage.includes('interface') &&
+          errorMessage.includes('class was expected'))
+      ) {
         event.preventDefault?.();
         return;
       }
     };
 
-    // Add unhandled rejection listener (if available)
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('unhandledrejection', rejectionHandler);
     }
 
-    // Hydrate store + remote themeColors as colorPalette before first UI paint
     (async () => {
       try {
         await hydrate();
@@ -100,14 +118,23 @@ const App = () => {
         setBootReady(true);
       }
     })();
-    
-    // Cleanup
+
     return () => {
       if (typeof global.removeEventListener === 'function') {
         global.removeEventListener('unhandledrejection', rejectionHandler);
       }
     };
   }, [hydrate]);
+
+  useEffect(() => {
+    if (!bootReady || !navReady) {
+      return;
+    }
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setSplashVisible(false);
+    });
+    return () => handle.cancel();
+  }, [bootReady, navReady]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -118,10 +145,10 @@ const App = () => {
       });
   }, [currentUser]);
 
-  // One-time location permission when the app opens (Android).
+  // One-time location permission after splash is gone (Android).
   // Ask only if not already granted — do not spam after deny / never_ask_again.
   useEffect(() => {
-    if (!bootReady || Platform.OS !== 'android') {
+    if (splashVisible || Platform.OS !== 'android') {
       return;
     }
     let cancelled = false;
@@ -132,7 +159,6 @@ const App = () => {
           if (cancelled || status === 'granted') {
             return;
           }
-          // Slight delay so the first screen is mounted before the system dialog.
           await new Promise(resolve => setTimeout(resolve, 600));
           if (cancelled) {
             return;
@@ -149,28 +175,46 @@ const App = () => {
       cancelled = true;
       task.cancel?.();
     };
-  }, [bootReady]);
-
-  if (!bootReady) {
-    return <BootSplash />;
-  }
+  }, [splashVisible]);
 
   return (
     <SafeAreaProvider>
       <AppThemeProvider colors={appThemeColors}>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.background}
-        />
         <HelpRequestProvider>
-          <AppNavigator />
-          <GreetingOverlay />
-          <LocationPermissionExplanationHost />
+          <View style={styles.root}>
+            <StatusBar
+              barStyle={
+                isDarkMode && !splashVisible ? 'light-content' : 'dark-content'
+              }
+              backgroundColor={splashVisible ? SPLASH_SKY : theme.background}
+            />
+            <AppNavigator onReady={handleNavReady} />
+            <GreetingOverlay />
+            <LocationPermissionExplanationHost />
+            {splashVisible ? (
+              <View
+                style={styles.splashLayer}
+                pointerEvents="auto"
+                collapsable={false}>
+                <BootSplash onPainted={handleSplashPainted} />
+              </View>
+            ) : null}
+          </View>
         </HelpRequestProvider>
       </AppThemeProvider>
     </SafeAreaProvider>
   );
 };
 
-export default App;
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: SPLASH_SKY,
+  },
+  splashLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
+});
 
+export default App;

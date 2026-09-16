@@ -44,12 +44,31 @@ import {Banner} from 'sapvt-ltd-app-packages';
 import PhoneNumberInput from '../components/PhoneNumberInput';
 import {INDIA_DIAL_CODE, localTenDigits} from '../utils/phone';
 import {useFirebasePhoneAuth} from '../hooks/useFirebasePhoneAuth';
+import {isBrowserRequiredOtpError} from '../utils/canOpenHttpsUrl';
 import NotificationService from '../services/notificationService';
 import {PARTNER_WEB_URL} from '../services/partnerHandoff';
 import {isWeakPin, LOGIN_PIN_LENGTH, LOGIN_PIN_RE} from '../components/login/pinUtils';
 
 interface LoginScreenProps {
   navigation: any;
+}
+
+function authErrorMessage(
+  error: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  fallbackKey: string,
+): string {
+  if (isBrowserRequiredOtpError(error)) {
+    return (
+      t('auth.browserRequiredForOtp') ||
+      'Phone verification needs a browser on this device. Please install or enable Chrome (or another browser) and try again.'
+    );
+  }
+  const message =
+    error instanceof Error
+      ? error.message
+      : String((error as {message?: string})?.message || '');
+  return message || String(t(fallbackKey) || 'Something went wrong');
 }
 
 /**
@@ -267,7 +286,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
-        message: error.message || t('auth.loginError'),
+        message: authErrorMessage(error, t, 'auth.loginError'),
         type: 'error',
       });
     } finally {
@@ -355,7 +374,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setAlertModal({
         visible: true,
         title: t('common.error'),
-        message: error.message || t('auth.failedToSendCode'),
+        message: authErrorMessage(error, t, 'auth.failedToSendCode'),
         type: 'error',
       });
     } finally {
@@ -371,7 +390,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setOtpBanner(null);
       await firebasePhone.sendOtp(fullPhone());
     } catch (error: any) {
-      setInlineError(error.message || t('auth.failedToSendCode'));
+      setInlineError(authErrorMessage(error, t, 'auth.failedToSendCode'));
     } finally {
       setLoading(false);
     }
@@ -491,7 +510,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           await firebasePhone.sendOtp(fullPhone());
           setStep('otp');
         } catch (error: any) {
-          setInlineError(error.message || t('auth.failedToSendCode'));
+          setInlineError(authErrorMessage(error, t, 'auth.failedToSendCode'));
           await firebasePhone.reset();
           setStep(otpMode === 'forgot' ? 'pin' : 'phone');
         } finally {

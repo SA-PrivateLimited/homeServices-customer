@@ -27,6 +27,7 @@ export function isBrowserRequiredOtpError(error: unknown): boolean {
       : String((error as {message?: string}).message || '');
   return (
     message === BROWSER_REQUIRED_FOR_OTP_CODE ||
+    /needs a browser/i.test(message) ||
     /ActivityNotFoundException|No Activity found to handle Intent/i.test(message)
   );
 }
