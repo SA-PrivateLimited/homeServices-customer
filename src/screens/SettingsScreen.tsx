@@ -741,30 +741,32 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           }}
         />
         {currentUser ? (
-          <>
-            <SettingsAccountSection
-              theme={theme}
-              title=""
-              actionLabel={t('settings.deleteAccount') || 'Delete account'}
-              actionHint={
-                t('settings.deleteAccountHint') ||
-                'Permanently remove your data from this app'
-              }
-              variant="danger"
-              onAction={handleDeleteAccount}
-            />
-            <Text
-              style={[styles.deleteHint, {color: theme.primary}]}
+          <View style={styles.deleteQuietWrap}>
+            <Pressable
+              style={styles.deleteQuiet}
+              onPress={handleDeleteAccount}
+              accessibilityRole="button"
+              accessibilityLabel={String(
+                t('settings.deleteAccount') || 'Delete account',
+              )}>
+              <Text style={[styles.deleteQuietText, {color: theme.textSecondary}]}>
+                {t('settings.deleteAccount') || 'Delete account'}
+              </Text>
+            </Pressable>
+            <Pressable
               onPress={() =>
                 void Linking.openURL(ACCOUNT_DELETION_INFO_URL).catch(() =>
                   undefined,
                 )
               }
               accessibilityRole="link">
-              {t('settings.deleteAccountLearnMore') ||
-                'How deletion works'}
-            </Text>
-          </>
+              <Text
+                style={[styles.deleteLearnMore, {color: theme.textSecondary}]}>
+                {t('settings.deleteAccountLearnMore') ||
+                  'How deletion works (Privacy Policy)'}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <Text style={[styles.brandMark, {color: theme.textSecondary}]}>
@@ -1066,12 +1068,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     opacity: 0.72,
   },
-  deleteHint: {
-    marginHorizontal: 16,
-    marginBottom: 8,
+  deleteQuietWrap: {
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 4,
+    paddingHorizontal: 16,
+  },
+  deleteQuiet: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  deleteQuietText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
+    textAlign: 'center',
     textDecorationLine: 'underline',
+  },
+  deleteLearnMore: {
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   brandMarkCompact: {
     marginBottom: 12,
