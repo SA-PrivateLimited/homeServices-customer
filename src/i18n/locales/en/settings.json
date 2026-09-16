@@ -64,6 +64,7 @@
   "deleteAccountHint": "Permanently remove your data from this app",
   "deleteAccountConfirm": "This permanently deletes your account and Partner access on the same phone. This cannot be undone.",
   "deleteAccountFailed": "Could not delete your account. Try again.",
+  "deleteAccountLearnMore": "How deletion works",
   "colorTheme": {
     "label": "Theme color",
     "brand": "Brand",
