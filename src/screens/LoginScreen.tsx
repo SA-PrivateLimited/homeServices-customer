@@ -12,6 +12,7 @@ import {
   Linking,
   Share,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -37,6 +38,7 @@ import AlertModal from '../components/AlertModal';
 import useTranslation from '../hooks/useTranslation';
 import {LoginStepIndicator} from '../components/login/LoginStepIndicator';
 import {LoginLangSwitcher} from '../components/login/LoginLangSwitcher';
+import {BootSplash} from '../components/BootSplash';
 import {LoginTermsMini} from '../components/login/LoginTermsMini';
 import {Banner} from 'sapvt-ltd-app-packages';
 import PhoneNumberInput from '../components/PhoneNumberInput';
@@ -53,10 +55,11 @@ interface LoginScreenProps {
 /**
  * phone → enter mobile, lookup
  * pin   → existing user: enter PIN
- * otp   → new number (signup) or forgot PIN: OTP + set own PIN
+ * otp   → new number (signup) or forgot PIN: verify OTP
+ * createPin → after OTP: set own PIN
  * showPin → reveal PIN once after create/reset
  */
-type Step = 'phone' | 'pin' | 'otp' | 'showPin';
+type Step = 'phone' | 'pin' | 'otp' | 'createPin' | 'showPin';
 type OtpMode = 'signup' | 'forgot';
 
 type OtpBanner = {
@@ -166,11 +169,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     let mounted = true;
     const loadRemembered = async () => {
       try {
+        // Match customer-web: prefill last phone only. Never skip to PIN —
+        // PIN is only after Continue → lookupPhone (exists && hasPin).
         const remembered = await getRememberedPhone();
         if (!mounted || !remembered) return;
         setPhoneNumber(localTenDigits(remembered.phoneLocal));
-        // Within 30 days: PIN only
-        setStep('pin');
       } finally {
         if (mounted) setBooting(false);
       }
@@ -374,11 +377,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     }
   };
 
-  const handleVerifyOtpAndSetPin = async () => {
+  const handleVerifyOtp = async () => {
     if (!otp.trim()) {
       setInlineError(t('auth.pleaseEnterCode'));
       return;
     }
+    setLoading(true);
+    setInlineError(null);
+    try {
+      await firebasePhone.verifyOtp(otp.trim());
+      setNewPin('');
+      setConfirmPin('');
+      setOtpBanner(null);
+      setStep('createPin');
+    } catch (error: any) {
+      setInlineError(error.message || t('auth.failedToVerifyCode'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetPin = async () => {
     if (!LOGIN_PIN_RE.test(newPin.trim())) {
       setInlineError(t('auth.pinMustBeFourDigits'));
       return;
@@ -395,7 +414,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setLoading(true);
     setInlineError(null);
     try {
-      await firebasePhone.verifyOtp(otp.trim());
       const idToken = await firebasePhone.getIdToken();
       const result =
         otpMode === 'signup'
@@ -429,13 +447,85 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setCreatedPin(null);
     setInlineError(null);
     setOtpBanner(null);
+    setPartnerOnly(false);
     setOtpMode('signup');
     setStep('phone');
   };
 
+  /** Soft step-back for Android hardware Back — does not clear session/remembered phone. */
+  const goBackAuthStep = () => {
+    if (loading || creatingCustomer || pinLoginInFlight.current) {
+      return true;
+    }
+    if (step === 'pin') {
+      setPin('');
+      setInlineError(null);
+      setPartnerOnly(false);
+      setStep('phone');
+      return true;
+    }
+    if (step === 'otp') {
+      void firebasePhone.reset();
+      setOtp('');
+      setNewPin('');
+      setConfirmPin('');
+      setInlineError(null);
+      setOtpBanner(null);
+      if (otpMode === 'forgot') {
+        setStep('pin');
+      } else {
+        setStep('phone');
+      }
+      return true;
+    }
+    if (step === 'createPin') {
+      // OTP already consumed — resend so the user can verify again (matches customer web).
+      setNewPin('');
+      setConfirmPin('');
+      setOtp('');
+      setInlineError(null);
+      setOtpBanner(null);
+      void (async () => {
+        setLoading(true);
+        try {
+          await firebasePhone.sendOtp(fullPhone());
+          setStep('otp');
+        } catch (error: any) {
+          setInlineError(error.message || t('auth.failedToSendCode'));
+          await firebasePhone.reset();
+          setStep(otpMode === 'forgot' ? 'pin' : 'phone');
+        } finally {
+          setLoading(false);
+        }
+      })();
+      return true;
+    }
+    if (step === 'showPin') {
+      // Session already applied in finishWithPinReveal — continue into app.
+      navigateAfterAuth();
+      return true;
+    }
+    // phone: allow default system back (exit / leave Login)
+    return false;
+  };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return undefined;
+    }
+    const sub = BackHandler.addEventListener(
+      'hardwareBackPress',
+      goBackAuthStep,
+    );
+    return () => sub.remove();
+  }, [step, loading, creatingCustomer, otpMode]);
 
   const titleForStep = () => {
     switch (step) {
+      case 'createPin':
+        return otpMode === 'forgot'
+          ? t('login.createPinTitleForgot')
+          : t('login.createPinTitle');
       case 'showPin':
         return t('login.createPinTitle');
       case 'pin':
@@ -449,6 +539,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
   const subtitleForStep = () => {
     switch (step) {
+      case 'createPin':
       case 'showPin':
         return t('login.createPinSubtitle');
       case 'pin':
@@ -463,11 +554,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   };
 
   if (booting) {
-    return (
-      <View style={web.boot}>
-        <ActivityIndicator size="large" color={WEB.primary} />
-      </View>
-    );
+    return <BootSplash />;
   }
 
   const fillBtn = [web.primaryFill, loading && {opacity: 0.65}];
@@ -494,13 +581,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
               showsVerticalScrollIndicator={false}>
               <View style={web.cardTop}>
                 <View style={web.toolbar}>
-                  {step === 'phone' ? (
+                  {step === 'phone' || step === 'pin' || step === 'showPin' ? (
                     <View style={web.toolbarSpacer} />
                   ) : (
                     <TouchableOpacity
                       style={web.backToolbar}
                       onPress={() => void handleUseAnotherNumber()}
-                      disabled={loading}>
+                      disabled={loading}
+                      accessibilityRole="button"
+                      accessibilityLabel={String(t('login.changeMobile'))}>
                       <Text style={web.backText}>{t('login.changeMobile')}</Text>
                     </TouchableOpacity>
                   )}
@@ -512,7 +601,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   flow={
                     step === 'pin'
                       ? 'pinLogin'
-                      : step === 'otp' || step === 'showPin'
+                      : step === 'otp' ||
+                          step === 'createPin' ||
+                          step === 'showPin'
                         ? 'otpFlow'
                         : 'preview'
                   }
@@ -548,7 +639,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       <Icon name="chatbubble-ellipses" size={26} color={WEB.otpIcon} />
                     </View>
                   ) : null}
-                  {step === 'pin' || step === 'showPin' ? (
+                  {step === 'pin' || step === 'createPin' || step === 'showPin' ? (
                     <View style={[web.stepIcon, web.stepIconPin]}>
                       <Icon name="key" size={26} color={WEB.primary} />
                     </View>
@@ -675,6 +766,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
                 {step === 'otp' ? (
                   <View style={web.form}>
+                    <View style={web.readonlyPhone}>
+                      <View style={web.readonlyPhoneTop}>
+                        <Text style={web.readonlyPhoneLabel}>
+                          {t('login.mobileLabel')}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => void handleUseAnotherNumber()}
+                          disabled={loading}
+                          hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                          accessibilityRole="button"
+                          accessibilityLabel={String(t('login.changeMobile'))}>
+                          <Text style={web.changeNumberLink}>
+                            {t('shareContact.change') || t('common.change') || 'Change'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={web.readonlyPhoneValue}>{fullPhone()}</Text>
+                    </View>
+                    <Text style={web.label}>{t('login.otpLabel')}</Text>
                     <View style={web.otpInput}>
                       <Icon name="chatbubble-ellipses-outline" size={20} color={WEB.textSecondary} />
                       <TextInput
@@ -683,14 +793,54 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         placeholderTextColor={WEB.textSecondary}
                         value={otp}
                         onChangeText={text => {
-                          setOtp(text.replace(/\D/g, '').slice(0, 8));
+                          setOtp(text.replace(/\D/g, '').slice(0, 6));
                           setInlineError(null);
                         }}
                         keyboardType="number-pad"
-                        maxLength={8}
+                        maxLength={6}
                         editable={!loading}
                         autoFocus
                       />
+                    </View>
+                    {inlineError ? <Text style={web.fieldError}>{inlineError}</Text> : null}
+                    <TouchableOpacity
+                      style={[fillBtn, otp.length !== 6 && {opacity: 0.65}]}
+                      onPress={() => void handleVerifyOtp()}
+                      disabled={loading || otp.length !== 6}>
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={web.primaryFillText}>{t('login.verifyOtp')}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[web.textLink, web.textLinkCenter]}
+                      onPress={() => void handleResendOtp()}
+                      disabled={loading}>
+                      <Text style={web.textLinkLabel}>{t('login.resendOtp')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {step === 'createPin' ? (
+                  <View style={web.form}>
+                    <View style={web.readonlyPhone}>
+                      <View style={web.readonlyPhoneTop}>
+                        <Text style={web.readonlyPhoneLabel}>
+                          {t('login.mobileLabel')}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => void handleUseAnotherNumber()}
+                          disabled={loading}
+                          hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                          accessibilityRole="button"
+                          accessibilityLabel={String(t('login.changeMobile'))}>
+                          <Text style={web.changeNumberLink}>
+                            {t('shareContact.change') || t('common.change') || 'Change'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={web.readonlyPhoneValue}>{fullPhone()}</Text>
                     </View>
                     <Text style={web.label}>{t('login.newPinLabel')}</Text>
                     <PinBoxesInput
@@ -701,6 +851,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         setInlineError(null);
                       }}
                       editable={!loading}
+                      autoFocus
                       secure={false}
                       cellBackground={WEB.card}
                       cellBorder={WEB.border}
@@ -729,7 +880,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         (newPin.length !== LOGIN_PIN_LENGTH ||
                           confirmPin.length !== LOGIN_PIN_LENGTH) && {opacity: 0.65},
                       ]}
-                      onPress={() => void handleVerifyOtpAndSetPin()}
+                      onPress={() => void handleSetPin()}
                       disabled={
                         loading ||
                         newPin.length !== LOGIN_PIN_LENGTH ||
@@ -738,13 +889,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       {loading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={web.primaryFillText}>
-                          {otpMode === 'signup' ? t('login.setPinCta') : t('login.verifyOtp')}
-                        </Text>
+                        <Text style={web.primaryFillText}>{t('login.setPinCta')}</Text>
                       )}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[web.textLink, web.textLinkCenter]} onPress={() => void handleResendOtp()} disabled={loading}>
-                      <Text style={web.textLinkLabel}>{t('login.resendOtp')}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}

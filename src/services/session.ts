@@ -134,7 +134,7 @@ export async function clearAllCredentials(): Promise<void> {
 
 /**
  * Customer logout: clear JWT session only.
- * Keeps remembered phone (30 days) so next visit asks for PIN only.
+ * Keeps remembered phone (30 days) to prefill mobile (customer-web parity).
  * Also unlinks this device's FCM token from the outgoing customer account.
  */
 export async function logoutCustomer(): Promise<void> {
@@ -227,7 +227,7 @@ export function getUserId(user: any | null | undefined): string | null {
 
 /**
  * Clear session + store when JWT is expired/invalid (401 or local exp).
- * Keeps remembered phone for PIN-only return.
+ * Keeps remembered phone to prefill mobile (customer-web parity).
  */
 export async function forceLogoutExpiredSession(): Promise<void> {
   await logoutCustomer();

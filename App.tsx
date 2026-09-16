@@ -26,6 +26,7 @@ import {AppThemeProvider} from 'sapvt-ltd-app-packages';
 import {HelpRequestProvider} from './src/components/help/helpRequestContext';
 import {GreetingOverlay} from './src/components/GreetingOverlay';
 import {LocationPermissionExplanationHost} from './src/components/LocationPermissionExplanationHost';
+import {BootSplash} from './src/components/BootSplash';
 import AppNavigator from './src/navigation/AppNavigator';
 import {useStore} from './src/store';
 import NotificationService from './src/services/notificationService';
@@ -151,7 +152,7 @@ const App = () => {
   }, [bootReady]);
 
   if (!bootReady) {
-    return null;
+    return <BootSplash />;
   }
 
   return (
