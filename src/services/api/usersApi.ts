@@ -141,7 +141,7 @@ export async function clearFcmToken(
 
 /** Permanently delete the signed-in customer account. */
 export async function deleteMe(): Promise<void> {
-  await apiDelete('/users/me');
+  await apiDelete('/customer/account-deletion');
 }
 
 /**

@@ -21,6 +21,7 @@ import {lightTheme, darkTheme} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
 import {getStoredJwt, logoutCustomer} from '../services/session';
 import {SUPPORT_PHONE_TEL} from '../config/support';
+import {ACCOUNT_DELETION_INFO_URL} from '../config/legal';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import AlertModal from '../components/AlertModal';
 import SuccessModal from '../components/SuccessModal';
@@ -740,17 +741,30 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           }}
         />
         {currentUser ? (
-          <SettingsAccountSection
-            theme={theme}
-            title=""
-            actionLabel={t('settings.deleteAccount') || 'Delete account'}
-            actionHint={
-              t('settings.deleteAccountHint') ||
-              'Permanently remove your data from this app'
-            }
-            variant="danger"
-            onAction={handleDeleteAccount}
-          />
+          <>
+            <SettingsAccountSection
+              theme={theme}
+              title=""
+              actionLabel={t('settings.deleteAccount') || 'Delete account'}
+              actionHint={
+                t('settings.deleteAccountHint') ||
+                'Permanently remove your data from this app'
+              }
+              variant="danger"
+              onAction={handleDeleteAccount}
+            />
+            <Text
+              style={[styles.deleteHint, {color: theme.primary}]}
+              onPress={() =>
+                void Linking.openURL(ACCOUNT_DELETION_INFO_URL).catch(() =>
+                  undefined,
+                )
+              }
+              accessibilityRole="link">
+              {t('settings.deleteAccountLearnMore') ||
+                'How deletion works'}
+            </Text>
+          </>
         ) : null}
 
         <Text style={[styles.brandMark, {color: theme.textSecondary}]}>
@@ -1051,6 +1065,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
     opacity: 0.72,
+  },
+  deleteHint: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   brandMarkCompact: {
     marginBottom: 12,
