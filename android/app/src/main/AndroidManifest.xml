@@ -19,7 +19,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
-    <!-- Android 11+ package visibility — dialer / WhatsApp / browser for support links -->
+    <!-- Android 11+ package visibility: dialer / WhatsApp / browser for support +
+         Firebase Phone Auth reCAPTCHA (VIEW https). Without a browser resolve,
+         RecaptchaActivity can throw ActivityNotFoundException. -->
     <queries>
       <intent>
         <action android:name="android.intent.action.DIAL" />
@@ -31,12 +33,20 @@
       </intent>
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="https" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="http" />
       </intent>
       <intent>
         <action android:name="android.intent.action.VIEW" />
         <data android:scheme="whatsapp" />
       </intent>
+      <package android:name="com.android.chrome" />
+      <package android:name="com.google.android.apps.chrome" />
       <package android:name="com.whatsapp" />
       <package android:name="com.whatsapp.w4b" />
     </queries>

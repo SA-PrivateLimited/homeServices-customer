@@ -13,12 +13,11 @@ import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {
   CUSTOMER_WEB,
-  webTabBarStyle,
-  webTabLabelStyle,
 } from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
+import {GlassTabBar, glassTabOverlayPad} from './GlassTabBar';
 
 import SettingsScreen from '../screens/SettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -470,6 +469,7 @@ const MainTabs = () => {
         <View style={{flex: 1}}>
           <Tab.Navigator
             initialRouteName="Providers"
+            tabBar={props => (hideTabBar ? null : <GlassTabBar {...props} />)}
             screenListeners={{
               state: e => {
                 const state = (e as any)?.data?.state;
@@ -511,38 +511,15 @@ const MainTabs = () => {
               },
               tabBarActiveTintColor: theme.primary,
               tabBarInactiveTintColor: theme.textSecondary,
-              tabBarStyle: hideTabBar
-                ? {display: 'none', height: 0}
-                : webTabBarStyle({
-                    height: CUSTOMER_WEB.tabBarH,
-                    padTop: CUSTOMER_WEB.tabBarPadTop,
-                    safeBottom: insets.bottom,
-                    borderTopColor: CUSTOMER_WEB.border50,
-                  }),
-              tabBarItemStyle: {
-                borderWidth: 0,
-                borderRightWidth: 0,
-                borderLeftWidth: 0,
+              tabBarStyle: {
+                position: 'absolute',
+                backgroundColor: 'transparent',
+                borderTopWidth: 0,
+                elevation: 0,
+                height: hideTabBar ? 0 : glassTabOverlayPad(insets.bottom),
+                display: hideTabBar ? 'none' : 'flex',
               },
-              tabBarButton: props => (
-                <TouchableOpacity
-                  {...props}
-                  style={[
-                    props.style,
-                    {
-                      borderWidth: 0,
-                      borderRightWidth: 0,
-                      borderLeftWidth: 0,
-                      borderColor: 'transparent',
-                    },
-                  ]}
-                />
-              ),
               tabBarShowLabel: true,
-              tabBarLabelStyle: webTabLabelStyle(
-                CUSTOMER_WEB.tabLabelSize,
-                CUSTOMER_WEB.tabLabelWeight,
-              ),
             })}>
             <Tab.Screen
               name="Providers"

@@ -5,9 +5,10 @@ import {
   CommonActions,
 } from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {View, ActivityIndicator, StyleSheet} from 'react-native';
+import {View} from 'react-native';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
+import {SPLASH_SKY} from '../components/BootSplash';
 import useTranslation from '../hooks/useTranslation';
 import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
 import {onSessionExpired} from '../services/sessionExpiry';
@@ -30,7 +31,7 @@ import LegalDocumentScreen from '../screens/LegalDocumentScreen';
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
-export default function AppNavigator() {
+export default function AppNavigator({onReady}: {onReady?: () => void}) {
   const [initializing, setInitializing] = useState(true);
   const {isDarkMode, setCurrentUser, currentUser} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
@@ -84,11 +85,7 @@ export default function AppNavigator() {
   }, [setCurrentUser]);
 
   if (initializing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-      </View>
-    );
+    return <View style={{flex: 1, backgroundColor: SPLASH_SKY}} />;
   }
 
   return (
@@ -98,6 +95,7 @@ export default function AppNavigator() {
         setNotificationNavigationRef(navigationRef);
         flushPendingNotificationNavigation();
         NotificationService.bindOpenHandlers();
+        onReady?.();
       }}
       linking={customerLinking}
       theme={{
@@ -161,12 +159,3 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-});

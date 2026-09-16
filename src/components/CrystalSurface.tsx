@@ -21,6 +21,58 @@ type CrystalOpts = {
   intensity?: 'default' | 'job';
 };
 
+function parseColor(
+  input: string,
+): {r: number; g: number; b: number} | null {
+  const raw = String(input || '').trim();
+  if (raw.startsWith('#')) {
+    const h = raw.slice(1);
+    if (h.length === 3) {
+      return {
+        r: parseInt(h[0] + h[0], 16),
+        g: parseInt(h[1] + h[1], 16),
+        b: parseInt(h[2] + h[2], 16),
+      };
+    }
+    if (h.length >= 6) {
+      return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    return null;
+  }
+  const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!m) {
+    return null;
+  }
+  return {r: Number(m[1]), g: Number(m[2]), b: Number(m[3])};
+}
+
+function toHex(rgb: {r: number; g: number; b: number}): string {
+  const h = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${h(rgb.r)}${h(rgb.g)}${h(rgb.b)}`;
+}
+
+/** CSS `color-mix(in srgb, fg amount, bg)` for RN — used by glass tab bar. */
+export function mixColor(fg: string, bg: string, amount: number): string {
+  const a = parseColor(fg);
+  const b = parseColor(bg);
+  if (!a || !b) {
+    return bg;
+  }
+  const t = Math.max(0, Math.min(1, amount));
+  return toHex({
+    r: b.r + (a.r - b.r) * t,
+    g: b.g + (a.g - b.g) * t,
+    b: b.b + (a.b - b.b) * t,
+  });
+}
+
 /**
  * Approximate Customer Web crystal-glass `color-mix` fills for RN
  * (no CSS color-mix / backdrop-filter).

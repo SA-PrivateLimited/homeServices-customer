@@ -2,6 +2,8 @@
  * Map Firebase Auth / network errors to user-friendly messages (React Native).
  */
 
+import {BROWSER_REQUIRED_FOR_OTP_CODE} from './canOpenHttpsUrl';
+
 export function mapFirebaseAuthError(error: unknown): string {
   const code =
     error && typeof error === 'object' && 'code' in error
@@ -11,6 +13,8 @@ export function mapFirebaseAuthError(error: unknown): string {
     error instanceof Error ? error.message : 'Something went wrong';
 
   switch (code) {
+    case BROWSER_REQUIRED_FOR_OTP_CODE:
+      return 'Phone verification needs a browser on this device. Please install or enable Chrome (or another browser) and try again.';
     case 'auth/invalid-phone-number':
       return 'Enter a valid mobile number with country code.';
     case 'auth/missing-phone-number':
@@ -27,9 +31,10 @@ export function mapFirebaseAuthError(error: unknown): string {
       return 'Enter the OTP sent to your phone.';
     case 'auth/captcha-check-failed':
     case 'auth/invalid-app-credential':
-      return 'Security check failed. Try again, or check Firebase Phone Auth setup (SHA keys / Play Integrity).';
+    case 'auth/missing-client-identifier':
+      return 'Phone verification could not finish. Close Chrome if it opened, wait a few seconds, and tap Continue again. On an emulator without Play Store this often fails — try a real phone, or use a Firebase test number.';
     case 'auth/app-not-authorized':
-      return 'App not authorized for phone authentication. Add SHA-1/SHA-256 in Firebase Console.';
+      return 'App not authorized for phone authentication. In Firebase → Project settings → Akansho (com.akansho.customer), add this build’s SHA-1/SHA-256 (including Play App Signing key).';
     case 'auth/network-request-failed':
       return 'Network error. Check your connection and try again.';
     case 'auth/operation-not-allowed':
@@ -37,6 +42,15 @@ export function mapFirebaseAuthError(error: unknown): string {
     case 'auth/argument-error':
       return 'Could not start phone verification. Please try again.';
     default:
+      if (/ActivityNotFoundException|No Activity found to handle Intent/i.test(message)) {
+        return 'Phone verification needs a browser on this device. Please install or enable Chrome (or another browser) and try again.';
+      }
+      if (/missing a valid app identifier|17093|already in progress/i.test(message)) {
+        return 'Phone verification could not finish. Close Chrome if it opened, wait a few seconds, and tap Continue again. On an emulator without Play Store this often fails — try a real phone, or use a Firebase test number.';
+      }
+      if (/timed out/i.test(message)) {
+        return message;
+      }
       if (/network/i.test(message)) {
         return 'Network error. Check your connection and try again.';
       }
