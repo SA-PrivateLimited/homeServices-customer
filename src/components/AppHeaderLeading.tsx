@@ -29,7 +29,9 @@ export function AppHeaderLeading({title}: Props) {
       {title ? (
         <Text
           style={[styles.title, {color: theme.text}]}
-          numberOfLines={1}>
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}>
           {title}
         </Text>
       ) : null}
@@ -42,8 +44,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    maxWidth: 220,
+    flex: 1,
+    minWidth: 0,
     paddingLeft: 4,
+    paddingRight: 6,
     minHeight: 44,
   },
   brand: {
@@ -62,6 +66,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
     lineHeight: 20,
   },
 });

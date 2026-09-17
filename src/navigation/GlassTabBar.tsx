@@ -13,8 +13,8 @@ import {useStore} from '../store';
 import {darkTheme, lightTheme} from '../utils/theme';
 import {mixColor} from '../components/CrystalSurface';
 
-const BAR_H = 60;
-const PILL_H = 50;
+const BAR_H = 68;
+const PILL_H = 56;
 
 /** Extra list padding so the last card can scroll above the floating tab bar. */
 export function glassTabOverlayPad(safeBottom: number) {
@@ -222,7 +222,11 @@ export function GlassTabBar({state, descriptors, navigation}: BottomTabBarProps)
               }}
               style={styles.item}>
               {icon}
-              <Text style={[styles.label, {color}]} numberOfLines={1}>
+              <Text
+                style={[styles.label, {color}]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}>
                 {labelOf(options) || route.name}
               </Text>
             </Pressable>
@@ -284,14 +288,19 @@ const styles = StyleSheet.create({
   },
   item: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
     zIndex: 2,
+    paddingHorizontal: 2,
   },
   label: {
+    width: '100%',
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 13,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 });
