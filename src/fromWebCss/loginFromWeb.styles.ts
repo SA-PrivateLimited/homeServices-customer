@@ -490,4 +490,20 @@ export const loginFromWeb = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  bioPrimary: {
+    marginTop: 4,
+  },
+  bioPrimaryInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  bioHint: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: WEB.textSecondary,
+    textAlign: 'center',
+  },
 });

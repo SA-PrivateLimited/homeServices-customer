@@ -8,7 +8,7 @@ export type LoginStepFlow = 'preview' | 'pinLogin' | 'otpFlow';
 
 type Props = {
   theme: Theme;
-  step: 'phone' | 'pin' | 'otp' | 'createPin' | 'showPin';
+  step: 'phone' | 'pin' | 'otp' | 'createPin' | 'showPin' | 'bioOffer';
   flow: LoginStepFlow;
 };
 
@@ -42,7 +42,7 @@ export function LoginStepIndicator({step, flow}: Props) {
               state:
                 step === 'otp'
                   ? 'todo'
-                  : step === 'createPin' || step === 'showPin'
+                  : step === 'createPin' || step === 'showPin' || step === 'bioOffer'
                     ? 'current'
                     : 'done',
             },
