@@ -48,6 +48,10 @@ import {isBrowserRequiredOtpError} from '../utils/canOpenHttpsUrl';
 import NotificationService from '../services/notificationService';
 import {PARTNER_WEB_URL} from '../services/partnerHandoff';
 import {isWeakPin, LOGIN_PIN_LENGTH, LOGIN_PIN_RE} from '../components/login/pinUtils';
+import {BiometricUnlockButton} from '../components/login/BiometricUnlockButton';
+import {BiometricOfferPanel} from '../components/login/BiometricOfferPanel';
+import {useCustomerBiometric} from '../hooks/useCustomerBiometric';
+import {normalizeBindingPhone} from '../services/biometricBinding';
 
 interface LoginScreenProps {
   navigation: any;
@@ -78,7 +82,7 @@ function authErrorMessage(
  * createPin → after OTP: set own PIN
  * showPin → reveal PIN once after create/reset
  */
-type Step = 'phone' | 'pin' | 'otp' | 'createPin' | 'showPin';
+type Step = 'phone' | 'pin' | 'otp' | 'createPin' | 'showPin' | 'bioOffer';
 type OtpMode = 'signup' | 'forgot';
 
 type OtpBanner = {
@@ -111,6 +115,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [otpBanner, setOtpBanner] = useState<OtpBanner | null>(null);
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
   const pinLoginInFlight = useRef(false);
+  const enrollPinRef = useRef<string | null>(null);
+  const bioAutoPromptedRef = useRef(false);
+  const didNavigateRef = useRef(false);
   const firebasePhone = useFirebasePhoneAuth();
 
   const {
@@ -122,6 +129,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const theme = isDarkMode ? darkTheme : lightTheme;
   const {t} = useTranslation();
   const insets = useSafeAreaInsets();
+  const bio = useCustomerBiometric(t);
 
   const [alertModal, setAlertModal] = useState<{
     visible: boolean;
@@ -204,6 +212,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   }, []);
 
   const navigateAfterAuth = () => {
+    if (didNavigateRef.current) {
+      return;
+    }
+    didNavigateRef.current = true;
+    enrollPinRef.current = null;
     if (redirectAfterLogin?.route) {
       const redirect = redirectAfterLogin;
       setRedirectAfterLogin(null);
@@ -221,6 +234,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       index: 0,
       routes: [{name: 'Main'}],
     });
+  };
+
+  const continueAfterAuth = async (
+    pinForEnroll?: string,
+    fromPinSetup = false,
+  ) => {
+    const phone = fullPhone();
+    if (pinForEnroll) {
+      await bio.syncPin(phone, pinForEnroll);
+      enrollPinRef.current = pinForEnroll;
+    }
+    await bio.probe(phone);
+    const offer = fromPinSetup
+      ? await bio.canOfferAfterPinSetup(phone)
+      : await bio.canOffer(phone);
+    if (offer) {
+      setStep('bioOffer');
+      return;
+    }
+    navigateAfterAuth();
   };
 
   const handleContinueAsGuest = () => {
@@ -304,24 +337,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setCreatedPin(revealedPin);
       setStep('showPin');
     } else {
-      navigateAfterAuth();
+      await continueAfterAuth(enrollPinRef.current || undefined, true);
     }
   };
 
-  const handleLoginWithPin = async (pinOverride?: string) => {
+  const handleLoginWithPin = async (
+    pinOverride?: string,
+    options?: {fromBiometric?: boolean},
+  ) => {
     const code = (pinOverride ?? pin).trim();
     if (!LOGIN_PIN_RE.test(code)) {
       setInlineError(t('auth.pinMustBeFourDigits'));
       return;
     }
     if (pinLoginInFlight.current || loading) return;
+    const phoneAtStart = fullPhone();
     pinLoginInFlight.current = true;
     setLoading(true);
     setInlineError(null);
     try {
-      const result = await loginPin(fullPhone(), code);
+      const result = await loginPin(phoneAtStart, code);
+      if (
+        normalizeBindingPhone(fullPhone()) !==
+        normalizeBindingPhone(phoneAtStart)
+      ) {
+        return;
+      }
       await applySession(result.token, result.user);
-      navigateAfterAuth();
+      if (options?.fromBiometric) {
+        navigateAfterAuth();
+        return;
+      }
+      await continueAfterAuth(code);
     } catch (error: any) {
       const msg = String(error?.message || '');
       if (
@@ -329,6 +376,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         /Create a Customer account/i.test(msg)
       ) {
         setPartnerOnly(true);
+        setInlineError(null);
+      } else if (options?.fromBiometric) {
+        bio.setPreferPin(true);
+        bio.setMessage(String(t('login.biometricFailed')));
         setInlineError(null);
       } else {
         setInlineError(error.message || t('auth.incorrectPin'));
@@ -351,7 +402,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     try {
       const result = await enableCustomerProfile(fullPhone(), code);
       await applySession(result.token, result.user);
-      navigateAfterAuth();
+      await continueAfterAuth(code);
     } catch (error: any) {
       setInlineError(error.message || t('auth.incorrectPin'));
     } finally {
@@ -441,10 +492,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
             })
           : await resetPin(fullPhone(), newPin.trim(), {idToken});
       await firebasePhone.reset();
+      const setPinValue = result.pin || newPin.trim();
+      enrollPinRef.current = setPinValue;
+      await bio.syncPin(fullPhone(), setPinValue);
       await finishWithPinReveal(
         result.token,
         result.user,
-        result.pin || newPin.trim(),
+        setPinValue,
       );
       setOtpBanner(null);
     } catch (error: any) {
@@ -468,12 +522,75 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setOtpBanner(null);
     setPartnerOnly(false);
     setOtpMode('signup');
+    enrollPinRef.current = null;
+    bioAutoPromptedRef.current = false;
+    didNavigateRef.current = false;
+    bio.resetUi();
     setStep('phone');
   };
 
+  const handleBiometricUnlock = async () => {
+    if (loading || pinLoginInFlight.current || bio.busy) {
+      return;
+    }
+    const phoneAtStart = fullPhone();
+    const unlockedPin = await bio.authenticate(phoneAtStart);
+    if (!unlockedPin) {
+      return;
+    }
+    if (
+      normalizeBindingPhone(fullPhone()) !==
+      normalizeBindingPhone(phoneAtStart)
+    ) {
+      return;
+    }
+    await handleLoginWithPin(unlockedPin, {fromBiometric: true});
+  };
+
+  const handleEnableBiometric = async () => {
+    const pinToStore = enrollPinRef.current || createdPin;
+    if (!pinToStore) {
+      navigateAfterAuth();
+      return;
+    }
+    const enabled = await bio.enroll(fullPhone(), pinToStore);
+    if (enabled) {
+      navigateAfterAuth();
+    }
+  };
+
+  const handleSkipBiometric = async () => {
+    await bio.skipOffer(fullPhone());
+    navigateAfterAuth();
+  };
+
+  useEffect(() => {
+    if (step !== 'pin') {
+      bioAutoPromptedRef.current = false;
+      return;
+    }
+    void bio.probe(fullPhone());
+  }, [step, phoneNumber]);
+
+  useEffect(() => {
+    if (
+      step !== 'pin' ||
+      !bio.enrolled ||
+      bio.preferPin ||
+      bio.busy ||
+      loading ||
+      partnerOnly ||
+      bioAutoPromptedRef.current
+    ) {
+      return;
+    }
+    bioAutoPromptedRef.current = true;
+    void handleBiometricUnlock();
+  }, [step, bio.enrolled, bio.preferPin, bio.busy, loading, partnerOnly]);
+
   /** Soft step-back for Android hardware Back — does not clear session/remembered phone. */
   const goBackAuthStep = () => {
-    if (loading || creatingCustomer || pinLoginInFlight.current) {
+    if (loading || creatingCustomer || pinLoginInFlight.current || bio.busy) {
       return true;
     }
     if (step === 'pin') {
@@ -519,8 +636,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       })();
       return true;
     }
-    if (step === 'showPin') {
-      // Session already applied in finishWithPinReveal — continue into app.
+    if (step === 'showPin' || step === 'bioOffer') {
+      // Session already applied — continue into app (skip biometric offer).
       navigateAfterAuth();
       return true;
     }
@@ -537,7 +654,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       goBackAuthStep,
     );
     return () => sub.remove();
-  }, [step, loading, creatingCustomer, otpMode]);
+  }, [step, loading, creatingCustomer, otpMode, bio.busy]);
 
   const titleForStep = () => {
     switch (step) {
@@ -547,6 +664,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
           : t('login.createPinTitle');
       case 'showPin':
         return t('login.createPinTitle');
+      case 'bioOffer':
+        return t('login.bioOfferTitle');
       case 'pin':
         return t('login.pinTitle');
       case 'otp':
@@ -561,6 +680,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       case 'createPin':
       case 'showPin':
         return t('login.createPinSubtitle');
+      case 'bioOffer':
+        return t('login.bioOfferSubtitle');
       case 'pin':
         return t('login.pinSubtitle');
       case 'otp':
@@ -600,7 +721,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
               showsVerticalScrollIndicator={false}>
               <View style={web.cardTop}>
                 <View style={web.toolbar}>
-                  {step === 'phone' || step === 'pin' || step === 'showPin' ? (
+                  {step === 'phone' ||
+                  step === 'pin' ||
+                  step === 'showPin' ||
+                  step === 'bioOffer' ? (
                     <View style={web.toolbarSpacer} />
                   ) : (
                     <TouchableOpacity
@@ -618,12 +742,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                   theme={theme}
                   step={step}
                   flow={
-                    step === 'pin'
-                      ? 'pinLogin'
-                      : step === 'otp' ||
-                          step === 'createPin' ||
-                          step === 'showPin'
-                        ? 'otpFlow'
+                    step === 'otp' ||
+                    step === 'createPin' ||
+                    step === 'showPin' ||
+                    (step === 'bioOffer' && !!createdPin)
+                      ? 'otpFlow'
+                      : step === 'pin' || step === 'bioOffer'
+                        ? 'pinLogin'
                         : 'preview'
                   }
                 />
@@ -707,7 +832,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         </Text>
                         <TouchableOpacity
                           onPress={() => void handleUseAnotherNumber()}
-                          disabled={loading}
+                          disabled={loading || bio.busy}
                           hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
                           accessibilityRole="button"
                           accessibilityLabel={String(t('login.changeMobile'))}>
@@ -718,25 +843,56 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       </View>
                       <Text style={web.readonlyPhoneValue}>{fullPhone()}</Text>
                     </View>
-                    <Text style={web.label}>{t('login.enterPinLabel')}</Text>
-                    <PinBoxesInput
-                      value={pin}
-                      length={LOGIN_PIN_LENGTH}
-                      onChange={text => {
-                        setPin(text);
-                        setInlineError(null);
-                      }}
-                      onComplete={code => {
-                        void handleLoginWithPin(code);
-                      }}
-                      editable={!loading}
-                      autoFocus
-                      secure={false}
-                      cellBackground={WEB.card}
-                      cellBorder={WEB.border}
-                      textColor={WEB.text}
-                      focusedBorder={WEB.primary}
-                    />
+                    {bio.enrolled && bio.kind && !bio.preferPin && !partnerOnly ? (
+                      <>
+                        <BiometricUnlockButton
+                          kind={bio.kind}
+                          busy={bio.busy || loading}
+                          label={bio.unlockLabel}
+                          checkingLabel={bio.checkingLabel}
+                          onPress={() => void handleBiometricUnlock()}
+                        />
+                        {bio.message ? (
+                          <Text style={web.fieldError}>{bio.message}</Text>
+                        ) : null}
+                        <TouchableOpacity
+                          style={web.textLink}
+                          onPress={() => {
+                            bio.setPreferPin(true);
+                            bio.setMessage(null);
+                          }}
+                          disabled={loading || bio.busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={String(t('login.usePin'))}>
+                          <Text style={web.textLinkLabel}>{t('login.usePin')}</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={web.label}>{t('login.enterPinLabel')}</Text>
+                        <PinBoxesInput
+                          value={pin}
+                          length={LOGIN_PIN_LENGTH}
+                          onChange={text => {
+                            setPin(text);
+                            setInlineError(null);
+                          }}
+                          onComplete={code => {
+                            if (bio.busy) {
+                              return;
+                            }
+                            void handleLoginWithPin(code);
+                          }}
+                          editable={!loading && !bio.busy}
+                          autoFocus={!bio.enrolled || bio.preferPin}
+                          secure={false}
+                          cellBackground={WEB.card}
+                          cellBorder={WEB.border}
+                          textColor={WEB.text}
+                          focusedBorder={WEB.primary}
+                        />
+                      </>
+                    )}
                     {partnerOnly ? (
                       <View style={web.customerOnly}>
                         <Text style={web.customerOnlyTitle}>{t('login.partnerOnlyTitle')}</Text>
@@ -760,23 +916,35 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                           <Text style={web.guestBtnText}>{t('login.partnerLogin')}</Text>
                         </TouchableOpacity>
                       </View>
-                    ) : (
+                    ) : !bio.enrolled || bio.preferPin ? (
                       <>
                         {inlineError ? <Text style={web.fieldError}>{inlineError}</Text> : null}
+                        {bio.message ? (
+                          <Text style={web.fieldError}>{bio.message}</Text>
+                        ) : null}
                         <TouchableOpacity
                           style={fillBtn}
                           onPress={() => void handleLoginWithPin()}
-                          disabled={loading || pin.length !== LOGIN_PIN_LENGTH}>
+                          disabled={loading || bio.busy || pin.length !== LOGIN_PIN_LENGTH}>
                           {loading ? (
                             <ActivityIndicator color="#fff" />
                           ) : (
                             <Text style={web.primaryFillText}>{t('login.loginCta')}</Text>
                           )}
                         </TouchableOpacity>
+                        {bio.enrolled && bio.kind ? (
+                          <BiometricUnlockButton
+                            kind={bio.kind}
+                            busy={bio.busy || loading}
+                            label={bio.unlockLabel}
+                            checkingLabel={bio.checkingLabel}
+                            onPress={() => void handleBiometricUnlock()}
+                          />
+                        ) : null}
                       </>
-                    )}
+                    ) : null}
                     <View style={web.linkRow}>
-                      <TouchableOpacity style={web.textLink} onPress={() => void handleForgotPin()} disabled={loading}>
+                      <TouchableOpacity style={web.textLink} onPress={() => void handleForgotPin()} disabled={loading || bio.busy}>
                         <Text style={web.textLinkLabel}>{t('login.forgotPin')}</Text>
                       </TouchableOpacity>
                     </View>
@@ -920,13 +1088,39 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                       <Text style={web.label}>{t('login.pinLabel')}</Text>
                       <Text style={web.pinValue}>{createdPin}</Text>
                     </View>
-                    <TouchableOpacity style={web.primaryFill} onPress={navigateAfterAuth}>
+                    <TouchableOpacity
+                      style={web.primaryFill}
+                      onPress={() =>
+                        void continueAfterAuth(createdPin || undefined, true)
+                      }>
                       <Text style={web.primaryFillText}>{t('login.continue')}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}
 
-                {step !== 'showPin' ? (
+                {step === 'bioOffer' ? (
+                  <>
+                    <BiometricOfferPanel
+                      kind={bio.kind || 'fingerprint'}
+                      busy={bio.busy}
+                      title={String(t('login.bioOfferTitle'))}
+                      subtitle={String(t('login.bioOfferSubtitle'))}
+                      enableLabel={String(
+                        bio.kind === 'face'
+                          ? t('login.useFaceUnlock')
+                          : t('login.enableFingerprint'),
+                      )}
+                      skipLabel={String(t('login.skipBiometric'))}
+                      onEnable={() => void handleEnableBiometric()}
+                      onSkip={() => void handleSkipBiometric()}
+                    />
+                    {bio.message ? (
+                      <Text style={web.fieldError}>{bio.message}</Text>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {step !== 'showPin' && step !== 'bioOffer' ? (
                   <>
                     <View style={web.orRow}>
                       <View style={web.orLine} />

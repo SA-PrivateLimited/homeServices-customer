@@ -20,6 +20,7 @@ import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
 import {getStoredJwt, logoutCustomer} from '../services/session';
+import {clearBinding} from '../services/biometricAuth';
 import {SUPPORT_PHONE_TEL} from '../config/support';
 import {ACCOUNT_DELETION_INFO_URL} from '../config/legal';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
@@ -304,7 +305,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           onPress: () => {
             void (async () => {
               try {
+                const phone =
+                  currentUser?.phoneNumber || currentUser?.phone || '';
                 await deleteMe();
+                if (phone) {
+                  await clearBinding(String(phone));
+                }
                 await logoutCustomer();
                 await setCurrentUser(null);
                 navigation.reset({index: 0, routes: [{name: 'Login'}]});

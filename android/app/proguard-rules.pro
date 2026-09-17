@@ -79,3 +79,7 @@
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
 -verbose
+
+# react-native-keychain (Android Keystore / biometrics)
+-keep class com.oblador.keychain.** { *; }
+-dontwarn androidx.biometric.**
