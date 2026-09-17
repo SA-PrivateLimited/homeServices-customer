@@ -62,17 +62,22 @@ function headerWithChrome(
   return {
     ...stackHeaderOptions(theme),
     title: '',
-    headerTitle: () => null,
+    headerBackVisible: false,
     headerTitleAlign: 'left' as const,
-    headerLeft: () => <AppHeaderLeading title={title} />,
+    headerLeft: () => null,
+    headerTitle: () => <AppHeaderLeading title={title} />,
     headerRight: () => <HeaderAccountActions navigation={navigation} />,
-    headerLeftContainerStyle: {
-      flexGrow: 1,
-      maxWidth: '52%',
-      alignItems: 'center',
+    headerTitleContainerStyle: {
+      left: 0,
+      right: 128,
+      marginHorizontal: 0,
+      paddingLeft: 4,
+      maxWidth: '100%',
+      alignItems: 'flex-start',
       justifyContent: 'center',
     },
     headerRightContainerStyle: {
+      flexShrink: 0,
       paddingRight: 2,
       alignItems: 'center',
       justifyContent: 'center',

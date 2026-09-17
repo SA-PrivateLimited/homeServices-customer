@@ -200,15 +200,24 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: '',
-      headerTitle: () => null,
+      headerBackVisible: false,
       headerTitleAlign: 'left',
-      headerLeftContainerStyle: {flexGrow: 1, maxWidth: '52%'},
+      headerLeft: () => null,
+      headerTitleContainerStyle: {
+        left: 0,
+        right: 168,
+        marginHorizontal: 0,
+        paddingLeft: 4,
+        maxWidth: '100%',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+      },
       headerRightContainerStyle: {
         paddingRight: 2,
         alignItems: 'center',
         justifyContent: 'center',
       },
-      headerLeft: () => (
+      headerTitle: () => (
         <AppHeaderLeading
           title={String(t('settings.title') || t('nav.settings') || 'Settings')}
         />
