@@ -184,6 +184,43 @@ export const loginFromWeb = StyleSheet.create({
     gap: 10,
     marginBottom: 0,
   },
+  intentRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 4,
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: WEB.border,
+    backgroundColor: '#F3F4F6',
+  },
+  intentBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intentBtnActive: {
+    backgroundColor: WEB.card,
+  },
+  intentBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WEB.textSecondary,
+  },
+  intentBtnTextActive: {
+    color: WEB.text,
+  },
+  intentSwitch: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  intentSwitchText: {
+    color: WEB.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   label: {
     fontSize: 13,
     fontWeight: '600',
