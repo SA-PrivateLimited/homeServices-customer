@@ -30,19 +30,28 @@ export function LoginStepIndicator({step, flow}: Props) {
         ]
       : flow === 'otpFlow'
         ? [
-            {id: 'phone', label: phone, state: 'done' as const},
+            {
+              id: 'phone',
+              label: phone,
+              state: step === 'phone' ? 'current' : 'done',
+            },
             {
               id: 'otp',
               label: otp,
-              state: step === 'otp' ? 'current' : 'done',
+              state:
+                step === 'phone'
+                  ? 'todo'
+                  : step === 'otp'
+                    ? 'current'
+                    : 'done',
             },
             {
               id: 'pin',
               label: pin,
               state:
-                step === 'otp'
+                step === 'phone' || step === 'otp'
                   ? 'todo'
-                  : step === 'createPin' || step === 'showPin' || step === 'bioOffer'
+                  : step === 'createPin'
                     ? 'current'
                     : 'done',
             },

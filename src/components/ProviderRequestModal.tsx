@@ -345,6 +345,10 @@ export default function ProviderRequestModal({
 
   if (!provider) return null;
 
+  const isDark = theme.background === '#0B1220';
+  const sheetBg = isDark ? '#151E2E' : '#E8F4FC';
+  const fieldBg = isDark ? '#0B1220' : '#F4FAFE';
+
   return (
     <Modal
       visible={visible}
@@ -354,7 +358,7 @@ export default function ProviderRequestModal({
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.sheet, {backgroundColor: theme.card}]}>
+        <View style={[styles.sheet, {backgroundColor: sheetBg}]}>
           <View style={styles.header}>
             <View style={{flex: 1}}>
               <Text style={[styles.title, {color: theme.text}]}>
@@ -423,7 +427,7 @@ export default function ProviderRequestModal({
                 {
                   color: theme.text,
                   borderColor: theme.border,
-                  backgroundColor: theme.background,
+                  backgroundColor: fieldBg,
                 },
               ]}
               multiline
@@ -471,11 +475,11 @@ export default function ProviderRequestModal({
                   onChange={onPhotosPicked}
                   colors={{
                     primary: theme.primary,
-                    card: theme.card,
+                    card: fieldBg,
                     text: theme.text,
                     textSecondary: theme.textSecondary,
-                    border: theme.border,
-                    background: theme.background,
+                    border: fieldBg,
+                    background: sheetBg,
                   }}
                 />
               ) : null}

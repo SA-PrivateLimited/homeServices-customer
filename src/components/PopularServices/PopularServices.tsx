@@ -29,6 +29,7 @@ type CatalogProps = {
   onSelect: (apiName: string) => void;
   /** When provided, chips use this list and skip their own catalog fetch. */
   services?: BrowseService[];
+  onMore?: () => void;
 };
 
 function ServiceRow({
@@ -139,6 +140,10 @@ export function ServiceCatalogOverlay({
     onClose();
   };
 
+  const isDark = theme.background === '#0B1220';
+  const sheetBg = isDark ? '#151E2E' : '#E8F4FC';
+  const searchBg = isDark ? '#0B1220' : '#F4FAFE';
+
   const renderGroup = ({item: group}: {item: ServiceGroup}) => (
     <View style={overlayStyles.groupBlock}>
       <Text style={[overlayStyles.groupTitle, {color: theme.text}]}>
@@ -166,7 +171,7 @@ export function ServiceCatalogOverlay({
       onRequestClose={handleClose}>
       <View style={overlayStyles.modalRoot}>
         <Pressable style={overlayStyles.backdrop} onPress={handleClose} />
-        <View style={[overlayStyles.sheet, {backgroundColor: theme.card}]}>
+        <View style={[overlayStyles.sheet, {backgroundColor: sheetBg}]}>
           <View style={overlayStyles.sheetHead}>
             <Text style={[overlayStyles.sheetTitle, {color: theme.text}]}>
               {t('browse.allServicesTitle')}
@@ -180,7 +185,7 @@ export function ServiceCatalogOverlay({
             style={[
               overlayStyles.searchWrap,
               {
-                backgroundColor: theme.background,
+                backgroundColor: searchBg,
                 borderColor: theme.border,
               },
             ]}>
@@ -251,6 +256,7 @@ export function PopularServices({
   selectedApiName,
   onSelect,
   services: servicesProp,
+  onMore,
 }: CatalogProps) {
   const {t, i18n} = useTranslation();
   const isHindi = String(i18n.language || '').startsWith('hi');
@@ -336,6 +342,18 @@ export function PopularServices({
               </TouchableOpacity>
             );
           })}
+          {onMore ? (
+            <TouchableOpacity
+              onPress={onMore}
+              style={[styles.chip, {borderColor: theme.primary}]}
+              accessibilityRole="button"
+              accessibilityLabel={String(t('browse.more') || 'More')}>
+              <Icon name="apps" size={16} color={theme.primary} />
+              <Text style={[styles.label, {color: theme.primary}]}>
+                {String(t('browse.more') || 'More')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       )}
     </View>

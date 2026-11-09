@@ -6,6 +6,7 @@ import {AppHeaderLeading} from './AppHeaderLeading';
 import {HeaderAccountActions} from './account/HeaderAccountActions';
 import {BrowseLocationChip} from './BrowseLocationSection/BrowseLocationChip';
 import type {Theme} from '../utils/theme';
+import {appHeaderBg} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
 
 type Props = {
@@ -38,11 +39,11 @@ export function ProvidersBrowseHeader({
       style={[
         styles.wrap,
         {
-          backgroundColor: theme.card,
+          backgroundColor: appHeaderBg(theme),
           paddingTop: insets.top,
-          borderBottomColor: theme.border,
+          borderBottomColor: appHeaderBg(theme),
           zIndex: 4,
-          elevation: 4,
+          elevation: 0,
         },
       ]}>
       <View style={styles.topRow}>

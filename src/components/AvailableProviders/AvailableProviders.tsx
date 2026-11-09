@@ -1,7 +1,7 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {Avatar, Button} from 'sapvt-ltd-app-packages';
+import {Avatar, Button, matchingStroke} from 'sapvt-ltd-app-packages';
 import type {Theme} from '../../utils/theme';
 
 export type AvailableProviderItem = {
@@ -48,7 +48,10 @@ export function AvailableProviders({
     <View
       style={[
         styles.card,
-        {backgroundColor: theme.card, borderColor: theme.border},
+        {
+          backgroundColor: theme.card,
+          borderColor: matchingStroke(theme.border, theme.card),
+        },
       ]}>
       <View style={styles.header}>
         <View style={[styles.headerMark, {backgroundColor: theme.success}]} />

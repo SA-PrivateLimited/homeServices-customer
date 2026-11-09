@@ -73,23 +73,60 @@ export function ProviderCard({
   const hasActions = showCall || showContact || Boolean(onRequest);
   const callOnly = hasActions && !onRequest && (showCall || showContact);
   const isDark = theme.background === '#0B1220';
+  const cardFill = isDark
+    ? 'rgba(255, 255, 255, 0.08)'
+    : 'rgba(255, 255, 255, 0.16)';
+  const frostText = isDark
+    ? styles.frostTextNight
+    : styles.frostText;
   const showcase = (showcasePhotos || [])
     .filter(u => typeof u === 'string' && isUsableMediaUrl(u))
     .slice(0, 3);
   const showcaseExtra = Math.max(0, showcase.length - 1);
 
   const avatarSize = compact ? 40 : 48;
-  const cardRadius = compact ? 14 : 18;
+  const cardRadius = compact ? 16 : 22;
 
   return (
     <CrystalSurface
       primary={theme.primary}
-      card={theme.card}
+      card={cardFill}
       isDark={isDark}
       accent
       radius={cardRadius}
-      style={styles.card}
+      style={[
+        styles.card,
+        {
+          borderWidth: 0,
+          shadowColor: '#1E3C5A',
+          shadowOffset: {width: 0, height: 18},
+          shadowOpacity: isDark ? 0.38 : 0.22,
+          shadowRadius: 36,
+        },
+      ]}
       contentStyle={compact ? styles.cardInnerCompact : styles.cardInner}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.mirrorShine,
+          {
+            backgroundColor: isDark
+              ? 'rgba(255,255,255,0.12)'
+              : 'rgba(255,255,255,0.58)',
+          },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.mirrorFloor,
+          {
+            backgroundColor: isDark
+              ? 'rgba(255,255,255,0.05)'
+              : 'rgba(255,255,255,0.22)',
+          },
+        ]}
+      />
       <Pressable
         style={({pressed}) => [
           styles.main,
@@ -127,7 +164,7 @@ export function ProviderCard({
               <View
                 style={[
                   styles.onlineDot,
-                  {backgroundColor: theme.success, borderColor: theme.card},
+                  {backgroundColor: theme.success, borderColor: cardFill},
                 ]}
               />
             ) : null}
@@ -138,6 +175,7 @@ export function ProviderCard({
             <Text
               style={[
                 compact ? styles.nameCompact : styles.name,
+                frostText,
                 {color: theme.text},
               ]}>
               {name}
@@ -171,6 +209,7 @@ export function ProviderCard({
             <Text
               style={[
                 compact ? styles.professionCompact : styles.profession,
+                frostText,
                 {color: theme.text},
               ]}>
               {profession}
@@ -241,7 +280,12 @@ export function ProviderCard({
               {location ? (
                 <View style={styles.metaRow}>
                   <Icon name="place" size={14} color={theme.primary} />
-                  <Text style={[styles.meta, {color: theme.textSecondary}]}>
+                  <Text
+                    style={[
+                      styles.meta,
+                      frostText,
+                      {color: theme.textSecondary},
+                    ]}>
                     {location}
                   </Text>
                 </View>
@@ -257,7 +301,8 @@ export function ProviderCard({
               {typeof rating === 'number' && rating > 0 ? (
                 <View style={styles.metaRow}>
                   <Icon name="star" size={14} color="#FFD700" />
-                  <Text style={[styles.ratingValue, {color: theme.text}]}>
+                  <Text
+                    style={[styles.ratingValue, frostText, {color: theme.text}]}>
                     {rating.toFixed(1)}
                   </Text>
                   {reviewsLabel ? (
@@ -389,17 +434,46 @@ const styles = StyleSheet.create({
   card: {
     margin: 0,
   },
+  mirrorShine: {
+    position: 'absolute',
+    top: -36,
+    left: -24,
+    width: '78%',
+    height: 88,
+    borderRadius: 80,
+    zIndex: 0,
+  },
+  mirrorFloor: {
+    position: 'absolute',
+    right: -20,
+    bottom: -28,
+    width: '70%',
+    height: 72,
+    borderRadius: 80,
+    zIndex: 0,
+  },
+  frostText: {
+    textShadowColor: 'rgba(255, 255, 255, 0.95)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 8,
+  },
+  frostTextNight: {
+    textShadowColor: 'rgba(11, 18, 32, 0.85)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 8,
+  },
   cardInner: {
-    padding: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
   },
   cardInnerCompact: {
-    padding: 10,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
   },
   main: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    overflow: 'hidden',
     borderRadius: 12,
   },
   avatarWrap: {

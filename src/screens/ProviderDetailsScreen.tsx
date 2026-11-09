@@ -66,6 +66,9 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
   };
   const {isDarkMode, currentUser, setRedirectAfterLogin} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const isDark = theme.background === '#0B1220';
+  const pageBg = 'transparent';
+  const panelBg = isDark ? '#151E2E' : '#E8F4FC';
   const {t} = useTranslation();
   const insets = useSafeAreaInsets();
   const [imageError, setImageError] = React.useState(false);
@@ -269,7 +272,7 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
       );
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.background}]}>
+    <View style={[styles.container, {backgroundColor: pageBg}]}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -379,8 +382,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           style={[
             styles.section,
             {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
+              backgroundColor: panelBg,
+              borderColor: panelBg,
             },
           ]}>
           <Text style={[styles.sectionTitle, {color: theme.text}]}>
@@ -428,8 +431,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           style={[
             styles.section,
             {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
+              backgroundColor: panelBg,
+              borderColor: panelBg,
             },
           ]}>
           <ReviewsList
@@ -446,8 +449,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
           style={[
             styles.footer,
             {
-              backgroundColor: theme.card,
-              borderTopColor: theme.border,
+              backgroundColor: panelBg,
+              borderTopColor: panelBg,
               paddingBottom: footerPadBottom,
             },
           ]}>
@@ -509,8 +512,8 @@ const ProviderDetailsScreen: React.FC<ProviderDetailsScreenProps> = ({
             styles.footer,
             styles.footerUnavailable,
             {
-              backgroundColor: theme.card,
-              borderTopColor: theme.border,
+              backgroundColor: panelBg,
+              borderTopColor: panelBg,
               paddingBottom: footerPadBottom,
             },
           ]}>

@@ -95,8 +95,8 @@ const ALL_DISTRICTS = '__all_districts__';
 
 /** Debounce for professional-name filter (local). Text field stays instant. */
 const PROVIDER_NAME_SEARCH_DEBOUNCE_MS = 400;
-/** Past this offset the in-list service block has scrolled away. */
-const SERVICE_PIN_MIN_Y = 72;
+/** Fallback until the in-list service block reports its height. */
+const SERVICE_PIN_MIN_Y = 200;
 /** Meaningful downward movement before hiding the pinned service bar. */
 const SERVICE_PIN_HIDE_PX = 28;
 /** Small upward movement to reveal pinned service controls. */
@@ -1596,6 +1596,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
   const accumDownRef = useRef(0);
   const accumUpRef = useRef(0);
   const providerCountRef = useRef(0);
+  const discoveryChromeHRef = useRef(SERVICE_PIN_MIN_Y);
   const [pinnedServiceVisible, setPinnedServiceVisible] = useState(false);
   providerCountRef.current = filteredProviders.length;
 
@@ -1628,8 +1629,11 @@ export default function ProvidersListScreen({navigation, route}: any) {
       const dy = y - lastScrollYRef.current;
       lastScrollYRef.current = y;
 
-      // Near top: in-list service block is visible — hide overlay duplicate.
-      if (y < SERVICE_PIN_MIN_Y || providerCountRef.current === 0) {
+      // Near top: in-list service block is still on screen — hide overlay.
+      if (
+        y < discoveryChromeHRef.current ||
+        providerCountRef.current === 0
+      ) {
         accumDownRef.current = 0;
         accumUpRef.current = 0;
         setPinnedServiceBar(false);
@@ -1709,6 +1713,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
           onSelect={name =>
             setSelectedProfession(name ? name : ALL_PROFESSIONS)
           }
+          onMore={() => setCatalogOpen(true)}
         />
 
         {isGuest ? (
@@ -1739,11 +1744,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
 
   const renderResultsMeta = useCallback(
     () => (
-      <View
-        style={[
-          styles.resultsMeta,
-          {backgroundColor: theme.background},
-        ]}>
+      <View style={styles.resultsMeta}>
         {!loading ? (
           <View style={styles.resultsHead}>
             <Text
@@ -1764,6 +1765,12 @@ export default function ProvidersListScreen({navigation, route}: any) {
                   t('browse.searchProviders') ||
                   t('providers.searchProviders'),
               )}
+              colors={{
+                card: theme.card,
+                border: theme.card,
+                text: theme.text,
+                textSecondary: theme.textSecondary,
+              }}
             />
           </View>
         ) : null}
@@ -1796,10 +1803,14 @@ export default function ProvidersListScreen({navigation, route}: any) {
           style={[
             styles.discoveryChrome,
             {
-              backgroundColor: theme.card,
+              backgroundColor: 'transparent',
               borderBottomColor: theme.border,
             },
-          ]}>
+          ]}
+          onLayout={e => {
+            const h = Math.round(e.nativeEvent.layout.height);
+            if (h > 0) discoveryChromeHRef.current = h;
+          }}>
           {renderServiceSelector()}
         </View>
         {renderResultsMeta()}
@@ -1924,7 +1935,10 @@ export default function ProvidersListScreen({navigation, route}: any) {
 
   return (
     <SafeAreaView
-      style={[styles.container, {backgroundColor: theme.background}]}
+      style={[
+        styles.container,
+        {backgroundColor: isDarkMode ? theme.background : 'transparent'},
+      ]}
       edges={[]}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
@@ -1972,8 +1986,10 @@ export default function ProvidersListScreen({navigation, route}: any) {
           style={[
             styles.pinnedServiceBar,
             {
-              backgroundColor: theme.card,
-              borderBottomColor: theme.border,
+              backgroundColor: isDarkMode
+                ? theme.background
+                : 'rgba(214, 236, 250, 0.97)',
+              borderBottomColor: 'transparent',
               opacity: pinnedServiceAnim,
               transform: [
                 {
@@ -2096,13 +2112,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    elevation: 6,
+    elevation: 0,
     paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    borderBottomWidth: 0,
+    shadowColor: '#1E3C5A',
+    shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowRadius: 8,
   },
   listSeparator: {height: 8},
   discoveryChrome: {
@@ -2363,11 +2379,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   imageWrap: {
     marginRight: 12,

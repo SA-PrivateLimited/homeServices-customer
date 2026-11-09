@@ -52,6 +52,7 @@ function FieldTrigger({
   placeholder,
   disabled,
   onPress,
+  fill,
 }: {
   theme: Theme;
   label: string;
@@ -59,6 +60,7 @@ function FieldTrigger({
   placeholder: string;
   disabled?: boolean;
   onPress: () => void;
+  fill: string;
 }) {
   return (
     <View style={styles.fieldWrap}>
@@ -71,8 +73,8 @@ function FieldTrigger({
         style={[
           styles.fieldTrigger,
           {
-            backgroundColor: theme.background,
-            borderColor: theme.border,
+            backgroundColor: fill,
+            borderColor: fill,
             opacity: disabled ? 0.55 : 1,
           },
         ]}
@@ -142,7 +144,10 @@ export function BrowseLocationPickerModal({
     return () => clearTimeout(handle);
   }, [searchText, activeField]);
 
-  const primaryTint = 'rgba(74, 144, 226, 0.12)';
+  const isDark = theme.background === '#0B1220';
+  const sheetBg = isDark ? '#151E2E' : '#E8F4FC';
+  const fieldBg = isDark ? '#0B1220' : '#FFFFFF';
+  const primaryTint = isDark ? '#1B2A40' : '#F4FAFE';
 
   const filteredDistricts = useMemo(
     () => (stateId ? districts.filter(d => d.stateId === stateId) : []),
@@ -255,7 +260,7 @@ export function BrowseLocationPickerModal({
         <View
           style={[
             styles.sheet,
-            {backgroundColor: theme.card},
+            {backgroundColor: sheetBg},
             // Option lists keep a fixed sheet height — search result count
             // must never shrink/expand the bottom sheet.
             activeField ? styles.sheetFixed : null,
@@ -300,7 +305,7 @@ export function BrowseLocationPickerModal({
                 styles.searchWrap,
                 {
                   borderColor: theme.border,
-                  backgroundColor: theme.background,
+                  backgroundColor: fieldBg,
                 },
               ]}>
               <Icon name="search" size={18} color={theme.textSecondary} />
@@ -440,6 +445,7 @@ export function BrowseLocationPickerModal({
 
               <FieldTrigger
                 theme={theme}
+                fill={fieldBg}
                 label={String(t('browse.selectState'))}
                 valueLabel={stateLabel}
                 placeholder={String(t('browse.selectState'))}
@@ -448,6 +454,7 @@ export function BrowseLocationPickerModal({
 
               <FieldTrigger
                 theme={theme}
+                fill={fieldBg}
                 label={String(t('browse.selectDistrict'))}
                 valueLabel={districtLabel}
                 placeholder={String(t('browse.selectDistrict'))}
@@ -458,6 +465,7 @@ export function BrowseLocationPickerModal({
               {onBlockChange ? (
                 <FieldTrigger
                   theme={theme}
+                  fill={fieldBg}
                   label={String(t('browse.selectBlock'))}
                   valueLabel={blockLabel}
                   placeholder={

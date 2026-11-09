@@ -43,6 +43,7 @@ const TRUST = [
 export default function PublicHomeScreen({navigation}: any) {
   const {isDarkMode} = useStore();
   const theme = isDarkMode ? darkTheme : lightTheme;
+  const homeCard = theme.card;
   const {t, i18n} = useTranslation();
   const isHindi = String(i18n.language || '').startsWith('hi');
   const [services, setServices] = useState<BrowseService[]>([]);
@@ -97,7 +98,11 @@ export default function PublicHomeScreen({navigation}: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, {backgroundColor: theme.background}]}>
+    <SafeAreaView
+      style={[
+        styles.safe,
+        {backgroundColor: isDarkMode ? theme.background : 'transparent'},
+      ]}>
       <ScrollView contentContainerStyle={styles.pad}>
         <View style={styles.topBar}>
           <Text style={[styles.eyebrow, {color: theme.primary}]}>
@@ -135,7 +140,7 @@ export default function PublicHomeScreen({navigation}: any) {
         {/* Web `.public-home__search` — crystal/glass card with primary wash */}
         <CrystalSurface
           primary={theme.primary}
-          card={theme.card}
+          card={homeCard}
           isDark={isDarkMode}
           accent
           radius={22}
@@ -235,7 +240,12 @@ export default function PublicHomeScreen({navigation}: any) {
           {t('home.howTitle') || t('home.how1Title')}
         </Text>
         {HOW.map(step => (
-          <View key={step.titleKey} style={[styles.step, {backgroundColor: 'rgba(49, 130, 206, 0.08)'}]}>
+          <View
+            key={step.titleKey}
+            style={[
+              styles.step,
+              {backgroundColor: homeCard, borderColor: homeCard},
+            ]}>
             <Icon name={step.icon} size={22} color={theme.primary} />
             <View style={{flex: 1}}>
               <Text style={[styles.stepTitle, {color: theme.text}]}>
@@ -268,7 +278,10 @@ export default function PublicHomeScreen({navigation}: any) {
         {[1, 2, 3, 4, 5].map(n => (
           <View
             key={n}
-            style={[styles.step, {backgroundColor: 'rgba(49, 130, 206, 0.06)'}]}>
+            style={[
+              styles.step,
+              {backgroundColor: homeCard, borderColor: homeCard},
+            ]}>
             <View style={{flex: 1}}>
               <Text style={[styles.stepTitle, {color: theme.text}]}>
                 {t(`home.faq${n}Q`)}
@@ -288,7 +301,7 @@ export default function PublicHomeScreen({navigation}: any) {
 
         <CrystalSurface
           primary={theme.primary}
-          card={theme.card}
+          card={homeCard}
           isDark={isDarkMode}
           accent
           radius={20}
@@ -423,6 +436,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     alignItems: 'flex-start',
+    borderWidth: 1,
+    elevation: 0,
   },
   stepTitle: {fontSize: 15, fontWeight: '700', marginBottom: 2},
   trust: {flexDirection: 'row', gap: 10, alignItems: 'flex-start'},

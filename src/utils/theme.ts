@@ -71,7 +71,7 @@ export const NIGHT_VISION_SURFACES: Pick<
   background: '#0B1220',
   card: '#151E2E',
   text: '#E8EDF5',
-  textSecondary: '#94A3B8',
+  textSecondary: '#CBD5E1',
   border: '#273449',
   tabBar: '#151E2E',
   placeholder: '#64748B',
@@ -86,6 +86,11 @@ const defaultDark: Theme = {
 /** Mutable — applyColorPalette updates in place before first paint. */
 export const lightTheme: Theme = {...defaultLight};
 export const darkTheme: Theme = {...defaultDark};
+
+/** Sticky app header — opaque white (night: #151E2E), never glass. */
+export function appHeaderBg(theme: Theme): string {
+  return theme.background === '#0B1220' ? '#151E2E' : '#FFFFFF';
+}
 
 /** Customer account-level color themes (accents). Brand = admin client colors. */
 export type CustomerColorThemeId = 'brand' | 'cool' | 'warm';
@@ -122,12 +127,26 @@ let adminBrandPalette: ColorPalette | null = null;
 let currentCustomerColorTheme: CustomerColorThemeId = 'brand';
 let nightVisionActive = false;
 
+function isDefaultWhiteSurface(value?: string): boolean {
+  const n = String(value || '')
+    .trim()
+    .toLowerCase();
+  return (
+    !n ||
+    n === '#fff' ||
+    n === '#ffffff' ||
+    n === 'white' ||
+    n === '#f8fafc' ||
+    n === '#f5f7fa'
+  );
+}
+
 function writeBrandBaseFromPalette(colorPalette: ColorPalette): void {
   lightTheme.primary = colorPalette.primary;
   lightTheme.primaryDark = colorPalette.primaryDark || colorPalette.primary;
   if (colorPalette.secondary) lightTheme.secondary = colorPalette.secondary;
   if (colorPalette.background) lightTheme.background = colorPalette.background;
-  if (colorPalette.surface) {
+  if (colorPalette.surface && !isDefaultWhiteSurface(colorPalette.surface)) {
     lightTheme.card = colorPalette.surface;
     lightTheme.tabBar = colorPalette.surface;
   }
@@ -247,9 +266,7 @@ export function paintCustomerWebChrome(isNightVision: boolean): void {
   nightVisionActive = isNightVision;
   const t = resolveTheme(isNightVision);
   (CUSTOMER_WEB as {background: string}).background = t.background;
-  (CUSTOMER_WEB as {card: string}).card = isNightVision
-    ? t.card
-    : 'rgba(255,255,255,0.82)';
+  (CUSTOMER_WEB as {card: string}).card = t.card;
   (CUSTOMER_WEB as {text: string}).text = t.text;
   (CUSTOMER_WEB as {textSecondary: string}).textSecondary = t.textSecondary;
   (CUSTOMER_WEB as {border: string}).border = t.border;
@@ -283,11 +300,11 @@ export function applyNightVisionMode(isNightVision: boolean): void {
 
 export const commonStyles = {
   shadowSmall: {
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowColor: '#1E3C5A',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 0,
   },
   shadowMedium: {
     shadowColor: '#000',

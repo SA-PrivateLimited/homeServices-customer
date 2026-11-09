@@ -116,10 +116,9 @@ const LANGUAGE_KEY = '@app_language';
 const getStoredLanguage = async (): Promise<string> => {
   try {
     const stored = await AsyncStorage.getItem(LANGUAGE_KEY);
-    // Hindi-first: first launch / empty storage → hi. Existing user choice is preserved.
-    return stored || 'hi';
+    return stored || 'en';
   } catch {
-    return 'hi';
+    return 'en';
   }
 };
 
@@ -132,8 +131,8 @@ i18n
       en: {translation: en},
       hi: {translation: hi},
     },
-    lng: 'hi', // Default language (rural / semi-rural Hindi-first)
-    fallbackLng: 'en', // Missing HI keys still fall back to English
+    lng: 'en',
+    fallbackLng: 'en',
     interpolation: {
       escapeValue: false, // React already escapes values
     },

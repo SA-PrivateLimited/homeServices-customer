@@ -7,7 +7,7 @@ import {
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {View} from 'react-native';
 import {useStore} from '../store';
-import {lightTheme, darkTheme} from '../utils/theme';
+import {lightTheme, darkTheme, appHeaderBg} from '../utils/theme';
 import {SPLASH_SKY} from '../components/BootSplash';
 import useTranslation from '../hooks/useTranslation';
 import {getStoredJwt, normalizeUser, readStoredUser} from '../services/session';
@@ -102,8 +102,8 @@ export default function AppNavigator({onReady}: {onReady?: () => void}) {
         dark: isDarkMode,
         colors: {
           primary: theme.primary,
-          background: theme.background,
-          card: theme.card,
+          background: isDarkMode ? theme.background : 'transparent',
+          card: appHeaderBg(theme),
           text: theme.text,
           border: theme.border,
           notification: theme.primary,
@@ -121,7 +121,7 @@ export default function AppNavigator({onReady}: {onReady?: () => void}) {
           options={{
             headerShown: true,
             title: t('services.requestService'),
-            headerStyle: {backgroundColor: theme.card},
+            headerStyle: {backgroundColor: appHeaderBg(theme)},
             headerTintColor: theme.text,
           }}
         />
@@ -131,7 +131,7 @@ export default function AppNavigator({onReady}: {onReady?: () => void}) {
           options={{
             headerShown: true,
             title: t('services.serviceHistory'),
-            headerStyle: {backgroundColor: theme.card},
+            headerStyle: {backgroundColor: appHeaderBg(theme)},
             headerTintColor: theme.text,
           }}
         />
@@ -141,7 +141,7 @@ export default function AppNavigator({onReady}: {onReady?: () => void}) {
           options={{
             headerShown: true,
             title: t('services.activeService'),
-            headerStyle: {backgroundColor: theme.card},
+            headerStyle: {backgroundColor: appHeaderBg(theme)},
             headerTintColor: theme.text,
           }}
         />

@@ -25,7 +25,6 @@ import {
 import type {ServiceCategory} from '../services/serviceCategoriesService';
 import {toSafeMaterialIcon} from '../utils/serviceIcons';
 import useTranslation from '../hooks/useTranslation';
-import {CrystalSurface} from './CrystalSurface';
 
 type ThemeColors = {
   text: string;
@@ -68,6 +67,20 @@ function ServicePickCard({
   const {primary, secondary} = bilingualServiceNames(category.name, lang, {
     nameHi: category.nameHi,
   });
+  const fill = isDark
+    ? selected
+      ? '#1B2A40'
+      : '#151E2E'
+    : selected
+      ? '#E7F4FF'
+      : '#FFFFFF';
+  const stroke = isDark
+    ? selected
+      ? theme.primary
+      : '#273449'
+    : selected
+      ? 'rgba(49, 130, 206, 0.45)'
+      : 'rgba(49, 130, 206, 0.16)';
 
   return (
     <Pressable
@@ -75,69 +88,44 @@ function ServicePickCard({
       accessibilityRole="button"
       accessibilityState={{selected}}
       android_ripple={{
-        color: 'rgba(49, 130, 206, 0.28)',
+        color: 'rgba(49, 130, 206, 0.22)',
         borderless: false,
-        foreground: true, // draw above CrystalSurface (not a sharp underlay)
       }}
       style={({pressed}) => [
         styles.pickWrap,
-        selected
-          ? {
-              borderColor: `${theme.primary}55`,
-              backgroundColor: `${theme.primary}14`,
-            }
-          : {
-              borderColor: 'transparent',
-              backgroundColor: 'transparent',
-            },
+        {
+          backgroundColor: fill,
+          borderColor: stroke,
+        },
         Platform.OS !== 'android' && pressed ? {opacity: 0.88} : null,
       ]}>
-      <CrystalSurface
-        primary={theme.primary}
-        card={theme.card}
-        isDark={isDark}
-        accent
-        radius={16}
-        style={[
-          styles.pickCard,
-          selected
-            ? {
-                shadowColor: theme.primary,
-                shadowOpacity: 0.2,
-                shadowRadius: 8,
-                elevation: 3,
-              }
-            : null,
-        ]}
-        contentStyle={styles.pickInner}>
-        {selected ? (
-          <Icon
-            name="check-circle"
-            size={18}
-            color={theme.primary}
-            style={styles.pickCheck}
-          />
-        ) : null}
-        <View style={[styles.pickIcon, {backgroundColor: `${tint}24`}]}>
-          <Icon name={iconName} size={22} color={tint} />
-        </View>
-        <View style={styles.pickNameBlock}>
+      {selected ? (
+        <Icon
+          name="check-circle"
+          size={18}
+          color={theme.primary}
+          style={styles.pickCheck}
+        />
+      ) : null}
+      <View style={[styles.pickIcon, {backgroundColor: `${tint}22`}]}>
+        <Icon name={iconName} size={26} color={tint} />
+      </View>
+      <View style={styles.pickNameBlock}>
+        <Text
+          style={[styles.pickName, {color: theme.text}]}
+          numberOfLines={1}
+          ellipsizeMode="tail">
+          {primary}
+        </Text>
+        {secondary ? (
           <Text
-            style={[styles.pickName, {color: theme.text}]}
+            style={[styles.pickNameSecondary, {color: theme.textSecondary}]}
             numberOfLines={1}
             ellipsizeMode="tail">
-            {primary}
+            {secondary}
           </Text>
-          {secondary ? (
-            <Text
-              style={[styles.pickNameSecondary, {color: theme.textSecondary}]}
-              numberOfLines={1}
-              ellipsizeMode="tail">
-              {secondary}
-            </Text>
-          ) : null}
-        </View>
-      </CrystalSurface>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -240,7 +228,7 @@ export default function ServiceSelectionModal({
           style={[
             styles.sheet,
             {
-              backgroundColor: isDark ? theme.card : 'rgba(255,255,255,0.96)',
+              backgroundColor: isDark ? '#151E2E' : '#E8F4FC',
               height: sheetH,
               maxHeight: sheetH,
             },
@@ -266,10 +254,8 @@ export default function ServiceSelectionModal({
               styles.search,
               {
                 color: theme.text,
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(255,255,255,0.9)',
-                borderColor: theme.border,
+                backgroundColor: isDark ? '#0B1220' : '#F4FAFE',
+                borderColor: isDark ? '#0B1220' : '#F4FAFE',
               },
             ]}
             autoCorrect={false}
@@ -383,20 +369,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     maxWidth: '48.5%',
     borderRadius: 18,
-    overflow: 'hidden', // clip Android ripple — no sharp white underlay
-    borderWidth: 2,
-  },
-  pickCard: {
-    minHeight: 108,
-    maxHeight: 120,
-  },
-  pickInner: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    minHeight: 118,
+    maxHeight: 132,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 10,
-    gap: 6,
-    minHeight: 108,
+    gap: 10,
+    elevation: 0,
   },
   pickCheck: {
     position: 'absolute',
@@ -405,9 +387,9 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   pickIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },

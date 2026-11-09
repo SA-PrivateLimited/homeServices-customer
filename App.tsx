@@ -40,6 +40,7 @@ import NotificationService from './src/services/notificationService';
 import GeolocationService from './src/services/geolocationService';
 import {loadAndApplyBranding} from './src/services/brandingService';
 import {lightTheme, darkTheme} from './src/utils/theme';
+import {AppBackdrop} from './src/components/AppBackdrop';
 import './src/i18n'; // Initialize i18n
 
 const App = () => {
@@ -182,6 +183,7 @@ const App = () => {
       <AppThemeProvider colors={appThemeColors}>
         <HelpRequestProvider>
           <View style={styles.root}>
+            <AppBackdrop dark={isDarkMode && !splashVisible}>
             <StatusBar
               barStyle={
                 isDarkMode && !splashVisible ? 'light-content' : 'dark-content'
@@ -199,6 +201,7 @@ const App = () => {
                 <BootSplash onPainted={handleSplashPainted} />
               </View>
             ) : null}
+            </AppBackdrop>
           </View>
         </HelpRequestProvider>
       </AppThemeProvider>
