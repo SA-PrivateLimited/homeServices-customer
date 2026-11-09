@@ -1558,6 +1558,8 @@ export default function ServiceRequestScreen({
       )
       .slice(0, 6);
   }, [serviceCategories]);
+  const showMoreServices =
+    serviceCategories.filter(c => c.name).length > popularCategories.length;
 
   const primarySelectOptions = useMemo(() => {
     if (!primaryProblemQ?.options?.length) return [];
@@ -1728,6 +1730,40 @@ export default function ServiceRequestScreen({
                     </CrystalSurface>
                   </TouchableOpacity>
                 ))}
+                {showMoreServices ? (
+                  <TouchableOpacity
+                    style={styles.serviceTile}
+                    activeOpacity={0.8}
+                    onPress={() => setShowServiceTypeModal(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={String(t('browse.more') || 'More')}>
+                    <CrystalSurface
+                      primary={theme.primary}
+                      card={theme.card}
+                      isDark={isDarkMode}
+                      accent
+                      radius={18}
+                      style={styles.serviceTileSurface}
+                      contentStyle={styles.serviceTileInner}>
+                      <View
+                        style={[
+                          styles.serviceTileIcon,
+                          {backgroundColor: `${theme.primary}24`},
+                        ]}>
+                        <Icon name="apps" size={22} color={theme.primary} />
+                      </View>
+                      <Text
+                        style={[
+                          styles.serviceTileName,
+                          styles.serviceTileMoreName,
+                          {color: theme.primary},
+                        ]}
+                        numberOfLines={1}>
+                        {String(t('browse.more') || 'More')}
+                      </Text>
+                    </CrystalSurface>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -2575,6 +2611,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  serviceTileMoreName: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   serviceSelectedRow: {
     flexDirection: 'row',

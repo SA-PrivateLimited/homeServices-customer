@@ -102,7 +102,7 @@ export default function AppNavigator({onReady}: {onReady?: () => void}) {
         dark: isDarkMode,
         colors: {
           primary: theme.primary,
-          background: theme.background,
+          background: isDarkMode ? theme.background : 'transparent',
           card: theme.card,
           text: theme.text,
           border: theme.border,

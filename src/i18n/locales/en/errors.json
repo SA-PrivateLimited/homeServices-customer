@@ -5,5 +5,6 @@
   "notFound": "Not found",
   "unauthorized": "Unauthorized access",
   "serverError": "Server error. Please try again later.",
-  "loadingFailed": "Loading failed"
+  "loadingFailed": "Loading failed",
+  "enterName": "Please enter your full name."
 }

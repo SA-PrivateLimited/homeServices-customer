@@ -5,14 +5,14 @@
 import {StyleSheet} from 'react-native';
 
 export const WEB = {
-  background: '#F5F7FA',
+  background: '#1477C8',
   card: '#FFFFFF',
   text: '#1A202C',
   textSecondary: '#718096',
   primary: '#3182CE',
   border: '#E2E8F0',
   error: '#FF3B30',
-  navyBand: '#0F2F4F',
+  navyBand: '#1477C8',
   navyMix: '#103843',
   otpIconBg: '#E8F1F8',
   otpIcon: '#2B6CB0',
@@ -183,6 +183,19 @@ export const loginFromWeb = StyleSheet.create({
     flexDirection: 'column',
     gap: 10,
     marginBottom: 0,
+  },
+  nameInput: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: WEB.text,
+    backgroundColor: WEB.card,
+    borderColor: WEB.border,
+  },
+  nameInputError: {
+    borderColor: WEB.error,
   },
   intentRow: {
     flexDirection: 'row',

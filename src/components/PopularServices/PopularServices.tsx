@@ -29,6 +29,7 @@ type CatalogProps = {
   onSelect: (apiName: string) => void;
   /** When provided, chips use this list and skip their own catalog fetch. */
   services?: BrowseService[];
+  onMore?: () => void;
 };
 
 function ServiceRow({
@@ -251,6 +252,7 @@ export function PopularServices({
   selectedApiName,
   onSelect,
   services: servicesProp,
+  onMore,
 }: CatalogProps) {
   const {t, i18n} = useTranslation();
   const isHindi = String(i18n.language || '').startsWith('hi');
@@ -336,6 +338,18 @@ export function PopularServices({
               </TouchableOpacity>
             );
           })}
+          {onMore ? (
+            <TouchableOpacity
+              onPress={onMore}
+              style={[styles.chip, {borderColor: theme.primary}]}
+              accessibilityRole="button"
+              accessibilityLabel={String(t('browse.more') || 'More')}>
+              <Icon name="apps" size={16} color={theme.primary} />
+              <Text style={[styles.label, {color: theme.primary}]}>
+                {String(t('browse.more') || 'More')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       )}
     </View>

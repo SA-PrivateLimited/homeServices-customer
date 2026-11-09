@@ -97,7 +97,11 @@ export default function PublicHomeScreen({navigation}: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, {backgroundColor: theme.background}]}>
+    <SafeAreaView
+      style={[
+        styles.safe,
+        {backgroundColor: isDarkMode ? theme.background : 'transparent'},
+      ]}>
       <ScrollView contentContainerStyle={styles.pad}>
         <View style={styles.topBar}>
           <Text style={[styles.eyebrow, {color: theme.primary}]}>

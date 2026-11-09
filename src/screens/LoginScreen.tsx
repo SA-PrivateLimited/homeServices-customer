@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  ImageBackground,
   Linking,
   Share,
   StatusBar,
@@ -48,6 +49,7 @@ import {isBrowserRequiredOtpError} from '../utils/canOpenHttpsUrl';
 import NotificationService from '../services/notificationService';
 import {PARTNER_WEB_URL} from '../services/partnerHandoff';
 import {isWeakPin, LOGIN_PIN_LENGTH, LOGIN_PIN_RE} from '../components/login/pinUtils';
+import {markProfileCompletionPrompt} from '../utils/profileCompletionPrompt';
 import {BiometricUnlockButton} from '../components/login/BiometricUnlockButton';
 import {BiometricOfferPanel} from '../components/login/BiometricOfferPanel';
 import {useCustomerBiometric} from '../hooks/useCustomerBiometric';
@@ -87,6 +89,10 @@ type OtpMode = 'signup' | 'forgot';
 type AuthIntent = 'login' | 'signup';
 type PhoneMismatch = 'none' | 'noAccount' | 'alreadyRegistered';
 
+function normalizeSignupName(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim();
+}
+
 type OtpBanner = {
   otp: string;
   phone: string;
@@ -102,6 +108,7 @@ function formatMmSs(totalSeconds: number): string {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [fullName, setFullName] = useState('');
   const [pin, setPin] = useState('');
   const [otp, setOtp] = useState('');
   const [newPin, setNewPin] = useState('');
@@ -114,6 +121,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const [loading, setLoading] = useState(false);
   const [booting, setBooting] = useState(true);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [partnerOnly, setPartnerOnly] = useState(false);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [otpBanner, setOtpBanner] = useState<OtpBanner | null>(null);
@@ -287,7 +295,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     void NotificationService.saveTokenToBackend();
   };
 
+  const nameRequiredMessage = () =>
+    String(t('errors.enterName') || t('auth.enterName') || 'Please enter your full name.');
+
   const handleContinuePhone = async (intentOverride?: AuthIntent) => {
+    const signingUp = (intentOverride ?? intent) === 'signup';
+    const signupName = normalizeSignupName(fullName);
+    if (signingUp && signupName.length < 2) {
+      setNameError(nameRequiredMessage());
+      setInlineError(null);
+      return;
+    }
     const numericPhone = phoneNumber.replace(/\D/g, '');
     if (numericPhone.length !== 10) {
       setAlertModal({
@@ -301,8 +319,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
 
     setLoading(true);
     setInlineError(null);
+    setNameError(null);
     setPhoneMismatch('none');
-    const signingUp = (intentOverride ?? intent) === 'signup';
     try {
       const lookup = await lookupPhone(fullPhone());
       await rememberPhone(numericPhone, INDIA_DIAL_CODE);
@@ -330,6 +348,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         return;
       }
       if (lookup.exists && !lookup.hasPin) {
+        if (signupName.length < 2) {
+          setIntent('signup');
+          setNameError(nameRequiredMessage());
+          return;
+        }
         setOtpMode('signup');
         setOtpBanner(null);
         await firebasePhone.sendOtp(fullPhone());
@@ -424,6 +447,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setInlineError(null);
     try {
       const result = await enableCustomerProfile(fullPhone(), code);
+      markProfileCompletionPrompt();
       await applySession(result.token, result.user);
       await continueAfterAuth(code);
     } catch (error: any) {
@@ -503,6 +527,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
       setInlineError(t('errors.weakPin'));
       return;
     }
+    if (otpMode === 'signup' && normalizeSignupName(fullName).length < 2) {
+      setIntent('signup');
+      setStep('phone');
+      setNameError(nameRequiredMessage());
+      return;
+    }
 
     setLoading(true);
     setInlineError(null);
@@ -512,12 +542,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         otpMode === 'signup'
           ? await registerWithOtp(fullPhone(), newPin.trim(), {
               idToken,
+              fullName: normalizeSignupName(fullName),
             })
           : await resetPin(fullPhone(), newPin.trim(), {idToken});
       await firebasePhone.reset();
       const setPinValue = result.pin || newPin.trim();
       enrollPinRef.current = setPinValue;
       await bio.syncPin(fullPhone(), setPinValue);
+      if (otpMode === 'signup') {
+        markProfileCompletionPrompt();
+      }
       await finishWithPinReveal(
         result.token,
         result.user,
@@ -536,6 +570,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     await clearAllCredentials();
     setCurrentUser(null);
     setPhoneNumber('');
+    setFullName('');
+    setNameError(null);
     setPin('');
     setOtp('');
     setNewPin('');
@@ -559,6 +595,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setIntent(next);
     setPhoneMismatch('none');
     setInlineError(null);
+    setNameError(null);
     setPartnerOnly(false);
   };
 
@@ -574,7 +611,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
     setIntent('signup');
     setPhoneMismatch('none');
     setInlineError(null);
-    void handleContinuePhone('signup');
+    setNameError(
+      normalizeSignupName(fullName).length < 2 ? nameRequiredMessage() : null,
+    );
   };
 
   const handleBiometricUnlock = async () => {
@@ -761,11 +800,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
   const fillBtn = [web.primaryFill, loading && {opacity: 0.65}];
 
   return (
-    <KeyboardAvoidingView
+    <ImageBackground
+      source={require('../assets/fromWeb/app-backdrop.jpg')}
       style={web.layout}
+      resizeMode="cover"
+      imageStyle={{width: '100%', height: '100%'}}>
+    <KeyboardAvoidingView
+      style={{flex: 1}}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="light-content" backgroundColor={WEB.navyBand} />
-      <View style={web.navyBand} />
       <View
         style={[
           web.stage,
@@ -893,7 +936,41 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
                         </Text>
                       </TouchableOpacity>
                     </View>
-                    <Text style={web.label}>{t('login.mobileLabel')}</Text>
+                    {intent === 'signup' ? (
+                      <>
+                        <Text style={web.label}>{t('login.fullNameLabel')}</Text>
+                        <TextInput
+                          key="signup-full-name"
+                          value={fullName}
+                          onChangeText={text => {
+                            setFullName(text);
+                            setNameError(null);
+                            setInlineError(null);
+                          }}
+                          placeholder={t('login.fullNamePlaceholder')}
+                          placeholderTextColor={WEB.textSecondary}
+                          editable={!loading}
+                          autoCapitalize="words"
+                          autoComplete="name"
+                          textContentType="name"
+                          autoFocus
+                          returnKeyType="next"
+                          style={[
+                            web.nameInput,
+                            nameError ? web.nameInputError : null,
+                          ]}
+                          accessibilityLabel={String(t('login.fullNameLabel'))}
+                        />
+                        {nameError ? (
+                          <Text style={web.fieldError}>{nameError}</Text>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <Text style={web.label}>
+                      {intent === 'signup'
+                        ? t('login.signupMobileLabel') || t('login.mobileLabel')
+                        : t('login.mobileLabel')}
+                    </Text>
                     <PhoneNumberInput
                       value={phoneNumber}
                       onChangeText={text => {
@@ -1306,6 +1383,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({navigation}) => {
         onClose={() => setAlertModal({...alertModal, visible: false})}
       />
     </KeyboardAvoidingView>
+    </ImageBackground>
   );
 };
 

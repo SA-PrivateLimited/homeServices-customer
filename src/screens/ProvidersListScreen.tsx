@@ -1709,6 +1709,7 @@ export default function ProvidersListScreen({navigation, route}: any) {
           onSelect={name =>
             setSelectedProfession(name ? name : ALL_PROFESSIONS)
           }
+          onMore={() => setCatalogOpen(true)}
         />
 
         {isGuest ? (
@@ -1924,7 +1925,10 @@ export default function ProvidersListScreen({navigation, route}: any) {
 
   return (
     <SafeAreaView
-      style={[styles.container, {backgroundColor: theme.background}]}
+      style={[
+        styles.container,
+        {backgroundColor: isDarkMode ? theme.background : 'transparent'},
+      ]}
       edges={[]}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
@@ -2363,11 +2367,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   imageWrap: {
     marginRight: 12,

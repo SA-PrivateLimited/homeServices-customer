@@ -7,7 +7,7 @@ const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
  * Resolve monorepo sapvt-ltd-app-packages and force a single React instance.
  */
 const projectRoot = __dirname;
-const monorepoPackages = path.resolve(projectRoot, '../packages');
+const monorepoPackages = path.resolve(projectRoot, '../../packages');
 const appPackagesRoot = path.resolve(monorepoPackages, 'saPvtLtdAppPackages');
 const appNodeModules = path.resolve(projectRoot, 'node_modules');
 

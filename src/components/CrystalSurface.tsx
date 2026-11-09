@@ -6,6 +6,7 @@ import {
   type ViewProps,
   type ViewStyle,
 } from 'react-native';
+import {Card, surfaceLiftStyle} from 'sapvt-ltd-app-packages';
 
 export type CrystalTone = 'default' | 'accent' | 'status';
 
@@ -23,7 +24,7 @@ type CrystalOpts = {
 
 function parseColor(
   input: string,
-): {r: number; g: number; b: number} | null {
+): {r: number; g: number; b: number; a: number} | null {
   const raw = String(input || '').trim();
   if (raw.startsWith('#')) {
     const h = raw.slice(1);
@@ -32,6 +33,7 @@ function parseColor(
         r: parseInt(h[0] + h[0], 16),
         g: parseInt(h[1] + h[1], 16),
         b: parseInt(h[2] + h[2], 16),
+        a: 1,
       };
     }
     if (h.length >= 6) {
@@ -39,23 +41,40 @@ function parseColor(
         r: parseInt(h.slice(0, 2), 16),
         g: parseInt(h.slice(2, 4), 16),
         b: parseInt(h.slice(4, 6), 16),
+        a: 1,
       };
     }
     return null;
   }
-  const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  const m = raw.match(
+    /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/i,
+  );
   if (!m) {
     return null;
   }
-  return {r: Number(m[1]), g: Number(m[2]), b: Number(m[3])};
+  return {
+    r: Number(m[1]),
+    g: Number(m[2]),
+    b: Number(m[3]),
+    a: m[4] != null ? Number(m[4]) : 1,
+  };
 }
 
-function toHex(rgb: {r: number; g: number; b: number}): string {
-  const h = (n: number) =>
-    Math.max(0, Math.min(255, Math.round(n)))
-      .toString(16)
-      .padStart(2, '0');
-  return `#${h(rgb.r)}${h(rgb.g)}${h(rgb.b)}`;
+function formatColor(rgb: {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}): string {
+  const r = Math.max(0, Math.min(255, Math.round(rgb.r)));
+  const g = Math.max(0, Math.min(255, Math.round(rgb.g)));
+  const b = Math.max(0, Math.min(255, Math.round(rgb.b)));
+  const a = Math.max(0, Math.min(1, rgb.a));
+  if (a < 0.999) {
+    return `rgba(${r}, ${g}, ${b}, ${Number(a.toFixed(3))})`;
+  }
+  const h = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`;
 }
 
 /** CSS `color-mix(in srgb, fg amount, bg)` for RN — used by glass tab bar. */
@@ -66,10 +85,11 @@ export function mixColor(fg: string, bg: string, amount: number): string {
     return bg;
   }
   const t = Math.max(0, Math.min(1, amount));
-  return toHex({
+  return formatColor({
     r: b.r + (a.r - b.r) * t,
     g: b.g + (a.g - b.g) * t,
     b: b.b + (a.b - b.b) * t,
+    a: b.a,
   });
 }
 
@@ -107,10 +127,10 @@ export function crystalWashColor({
 export function crystalSurfaceStyle(opts: CrystalOpts): ViewStyle {
   const isDark = Boolean(opts.isDark);
   const wash = opts.statusColor || opts.primary;
+  const glass = !isDark && (parseColor(opts.card)?.a ?? 1) <= 0.35;
   return {
     borderRadius: 18,
-    borderWidth: 0,
-    overflow: 'hidden',
+    overflow: 'visible',
     backgroundColor: opts.card,
     shadowColor:
       opts.intensity === 'job' && wash
@@ -118,11 +138,21 @@ export function crystalSurfaceStyle(opts: CrystalOpts): ViewStyle {
         : isDark
           ? '#000000'
           : '#1E3C5A',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity:
-      opts.intensity === 'job' ? (isDark ? 0.35 : 0.18) : isDark ? 0.28 : 0.06,
-    shadowRadius: 12,
-    elevation: opts.intensity === 'job' ? 4 : 3,
+    ...(glass
+      ? surfaceLiftStyle(opts.card)
+      : {
+          shadowOffset: {width: 0, height: 6},
+          shadowOpacity:
+            opts.intensity === 'job'
+              ? isDark
+                ? 0.35
+                : 0.18
+              : isDark
+                ? 0.28
+                : 0.12,
+          shadowRadius: 16,
+          elevation: opts.intensity === 'job' ? 6 : 8,
+        }),
   };
 }
 
@@ -159,6 +189,7 @@ export function CrystalSurface({
     statusColor,
     intensity,
   });
+  const translucent = !isDark && (parseColor(card)?.a ?? 1) <= 0.35;
   const highlight = isDark
     ? 'rgba(255, 255, 255, 0.1)'
     : 'rgba(255, 255, 255, 0.85)';
@@ -167,8 +198,10 @@ export function CrystalSurface({
     : 'rgba(255, 255, 255, 0.45)';
 
   return (
-    <View
-      {...rest}
+    <Card
+      padding="none"
+      bordered={translucent || !isDark}
+      colors={{card, primary}}
       style={[
         crystalSurfaceStyle({
           primary,
@@ -178,26 +211,33 @@ export function CrystalSurface({
           statusColor,
           intensity,
         }),
-        {borderRadius: radius},
+        {borderRadius: radius, marginBottom: 0},
         style,
       ]}>
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFillObject, {backgroundColor: wash}]}
-      />
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFillObject,
-          {backgroundColor: sheen, opacity: intensity === 'job' ? 0.65 : 0.55},
-        ]}
-      />
-      <View
-        pointerEvents="none"
-        style={[styles.highlight, {backgroundColor: highlight}]}
-      />
-      <View style={[styles.body, contentStyle]}>{children}</View>
-    </View>
+      {translucent ? null : (
+        <>
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFillObject, {backgroundColor: wash}]}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: sheen,
+                opacity: intensity === 'job' ? 0.65 : 0.55,
+              },
+            ]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.highlight, {backgroundColor: highlight}]}
+          />
+        </>
+      )}
+      <View {...rest} style={[styles.body, contentStyle]}>{children}</View>
+    </Card>
   );
 }
 

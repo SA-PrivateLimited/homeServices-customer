@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {customerDisplayName, isCustomerProfileIncomplete} from 'sapvt-ltd-app-packages';
+import {customerProfileCompletionPercent} from '../utils/profileCompletion';
+import {useRoute} from '@react-navigation/native';
 import {useStore} from '../store';
 import {lightTheme, darkTheme} from '../utils/theme';
 import {COPYRIGHT_OWNER} from '@env';
@@ -54,6 +56,7 @@ interface SettingsScreenProps {
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
+  const route = useRoute<any>();
   const {
     isDarkMode,
     currentUser,
@@ -82,7 +85,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarX] = useState(() => new Animated.Value(DRAWER_WIDTH));
 
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(
+    () => Boolean(route.params?.editProfile),
+  );
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoPreviewUri, setPhotoPreviewUri] = useState<string | null>(null);
@@ -171,6 +176,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   useEffect(() => {
     syncFormFromUser();
   }, [syncFormFromUser]);
+
+  useEffect(() => {
+    if (!route.params?.editProfile) return;
+    setIsEditing(true);
+    navigation.setParams?.({editProfile: undefined});
+  }, [navigation, route.params?.editProfile]);
 
   const resetEdit = () => {
     syncFormFromUser();
@@ -569,6 +580,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
     currentUser?.phone || currentUser?.phoneNumber || t('profile.notAvailable');
   const identityName = customerDisplayName(currentUser);
   const profileIncomplete = isCustomerProfileIncomplete(currentUser);
+  const completionPercent = customerProfileCompletionPercent(currentUser);
   const headerImageUrl = (
     photoPreviewUri ||
     currentUser?.profileImage ||
@@ -576,7 +588,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
   ).trim();
 
   return (
-    <View style={[styles.root, {backgroundColor: theme.background}]}>
+    <View
+      style={[
+        styles.root,
+        {backgroundColor: isDarkMode ? theme.background : 'transparent'},
+      ]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -609,6 +625,56 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({navigation}) => {
           onPickGallery={pickFromGallery}
           onPhotoPicked={uris => void handlePhotoPicked(uris)}
         />
+
+        {currentUser && completionPercent < 100 ? (
+          <View
+            style={[
+              styles.completeCard,
+              {backgroundColor: theme.card, borderColor: theme.border},
+            ]}>
+            <View style={styles.completeHead}>
+              <Text style={[styles.completeTitle, {color: theme.text}]}>
+                {String(
+                  t('profile.percentComplete', {percent: completionPercent}) ||
+                    `Profile ${completionPercent}% complete`,
+                )}
+              </Text>
+            </View>
+            <View style={[styles.completeTrack, {backgroundColor: theme.border}]}>
+              <View
+                style={[
+                  styles.completeFill,
+                  {
+                    width: `${completionPercent}%`,
+                    backgroundColor: theme.primary,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.completeHint, {color: theme.textSecondary}]}>
+              {String(
+                t('profile.completionHint') ||
+                  'Add your details so partners can know you better.',
+              )}
+            </Text>
+            <TouchableOpacity
+              style={[styles.completeCta, {backgroundColor: theme.primary}]}
+              onPress={() => setIsEditing(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={String(
+                t('profile.completeCta') || t('profile.completionUpdate'),
+              )}>
+              <Text style={styles.completeCtaText}>
+                {String(
+                  t('profile.completeCta') ||
+                    t('profile.completionUpdate') ||
+                    'Update profile',
+                )}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {currentUser ? (
           <SettingsPersonalInformation
@@ -988,6 +1054,27 @@ const styles = StyleSheet.create({
   root: {flex: 1, overflow: 'hidden'},
   container: {flex: 1},
   content: {paddingVertical: 12, paddingBottom: 24},
+  completeCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+  },
+  completeHead: {flexDirection: 'row', justifyContent: 'space-between'},
+  completeTitle: {fontSize: 15, fontWeight: '700'},
+  completeTrack: {height: 6, borderRadius: 99, overflow: 'hidden'},
+  completeFill: {height: 6, borderRadius: 99},
+  completeHint: {fontSize: 13, lineHeight: 18},
+  completeCta: {
+    marginTop: 4,
+    minHeight: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completeCtaText: {color: '#fff', fontSize: 14, fontWeight: '700'},
   fieldLabel: {fontSize: 12, fontWeight: '600', marginTop: 10, marginBottom: 4},
   fieldValue: {fontSize: 15, lineHeight: 22, fontWeight: '600'},
   cancelBtn: {

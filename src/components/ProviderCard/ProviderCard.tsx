@@ -399,7 +399,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    overflow: 'hidden',
     borderRadius: 12,
   },
   avatarWrap: {
