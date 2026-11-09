@@ -74,8 +74,8 @@ export function ProviderCard({
   const callOnly = hasActions && !onRequest && (showCall || showContact);
   const isDark = theme.background === '#0B1220';
   const cardFill = isDark
-    ? 'rgba(147, 197, 253, 0.14)'
-    : 'rgba(210, 234, 250, 0.88)';
+    ? 'rgba(255, 255, 255, 0.08)'
+    : 'rgba(255, 255, 255, 0.16)';
   const frostText = isDark
     ? styles.frostTextNight
     : styles.frostText;
@@ -108,11 +108,22 @@ export function ProviderCard({
       <View
         pointerEvents="none"
         style={[
-          styles.crystalEdge,
+          styles.mirrorShine,
           {
             backgroundColor: isDark
-              ? 'rgba(148, 163, 184, 0.12)'
-              : 'rgba(186, 222, 246, 0.4)',
+              ? 'rgba(255,255,255,0.12)'
+              : 'rgba(255,255,255,0.58)',
+          },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.mirrorFloor,
+          {
+            backgroundColor: isDark
+              ? 'rgba(255,255,255,0.05)'
+              : 'rgba(255,255,255,0.22)',
           },
         ]}
       />
@@ -423,13 +434,22 @@ const styles = StyleSheet.create({
   card: {
     margin: 0,
   },
-  crystalEdge: {
+  mirrorShine: {
     position: 'absolute',
-    left: 8,
-    right: 8,
-    bottom: 0,
-    height: 8,
-    borderRadius: 8,
+    top: -36,
+    left: -24,
+    width: '78%',
+    height: 88,
+    borderRadius: 80,
+    zIndex: 0,
+  },
+  mirrorFloor: {
+    position: 'absolute',
+    right: -20,
+    bottom: -28,
+    width: '70%',
+    height: 72,
+    borderRadius: 80,
     zIndex: 0,
   },
   frostText: {

@@ -45,12 +45,14 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function stackHeaderOptions(theme: typeof lightTheme) {
+  const isDark = theme.background === '#0B1220';
   return {
     headerShown: true,
     headerStyle: {backgroundColor: appHeaderBg(theme)},
     headerTintColor: theme.text,
     headerTitleStyle: {fontWeight: '700' as const, fontSize: 17},
     headerShadowVisible: false,
+    contentStyle: {backgroundColor: isDark ? theme.background : 'transparent'},
   };
 }
 
@@ -471,7 +473,7 @@ const MainTabs = () => {
   return (
     <>
       <AccountMenuProvider>
-        <View style={{flex: 1}}>
+        <View style={{flex: 1, backgroundColor: 'transparent'}}>
           <Tab.Navigator
             initialRouteName="Providers"
             tabBar={props => (hideTabBar ? null : <GlassTabBar {...props} />)}
@@ -516,6 +518,9 @@ const MainTabs = () => {
               },
               tabBarActiveTintColor: theme.primary,
               tabBarInactiveTintColor: theme.textSecondary,
+              sceneContainerStyle: {
+                backgroundColor: isDarkMode ? theme.background : 'transparent',
+              },
               tabBarStyle: {
                 position: 'absolute',
                 backgroundColor: 'transparent',
