@@ -228,7 +228,7 @@ export function SettingsPersonalInformation({
         </Text>
         {isEditing ? (
           <Select
-            variant="crystal"
+            variant="outlined"
             options={genderOptions}
             value={gender}
             placeholder={genderPlaceholder}
@@ -236,9 +236,9 @@ export function SettingsPersonalInformation({
             clearAriaLabel="Clear"
             onChange={onGenderChange}
             colors={{
-              card: isDark
-                ? 'rgba(255,255,255,0.1)'
-                : 'rgba(255,255,255,0.55)',
+              card: theme.card,
+              border: theme.border,
+              text: theme.text,
             }}
           />
         ) : (

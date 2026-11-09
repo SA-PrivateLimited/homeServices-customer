@@ -238,11 +238,10 @@ export function ServiceAddressFields({
       .map(b => ({value: b._id, label: b.name}));
   }, [blocks, value.districtId]);
 
-  const crystalColors = {
-    card:
-      theme.background.toLowerCase() === '#0b1220'
-        ? 'rgba(255,255,255,0.1)'
-        : 'rgba(255,255,255,0.55)',
+  const fieldColors = {
+    card: theme.card,
+    border: theme.border,
+    text: theme.text,
   };
 
   const patch = (partial: Partial<ServiceAddressValue>) => {
@@ -582,7 +581,7 @@ export function ServiceAddressFields({
             {t('request.state') || t('services.state')}
           </Text>
           <Select
-            variant="crystal"
+            variant="outlined"
             options={stateOptions}
             value={value.stateId || ''}
             placeholder={String(
@@ -592,7 +591,7 @@ export function ServiceAddressFields({
             allowClear
             clearAriaLabel={String(t('common.clear') || 'Clear')}
             onChange={onStateChange}
-            colors={crystalColors}
+            colors={fieldColors}
             showSearch
             searchPlaceholder={String(
               t('browse.searchStatePlaceholder') || 'Search state...',
@@ -607,7 +606,7 @@ export function ServiceAddressFields({
             {t('request.district') || t('services.districtLabel')}
           </Text>
           <Select
-            variant="crystal"
+            variant="outlined"
             options={districtOptions}
             value={value.districtId || ''}
             placeholder={String(
@@ -617,7 +616,7 @@ export function ServiceAddressFields({
             allowClear
             clearAriaLabel={String(t('common.clear') || 'Clear')}
             onChange={onDistrictChange}
-            colors={crystalColors}
+            colors={fieldColors}
             showSearch
             searchPlaceholder={String(
               t('browse.searchDistrictPlaceholder') || 'Search district...',
@@ -634,7 +633,7 @@ export function ServiceAddressFields({
                 {t('browse.selectBlock') || 'Select block'}
               </Text>
               <Select
-                variant="crystal"
+                variant="outlined"
                 options={blockOptions}
                 value={value.blockId || ''}
                 placeholder={String(t('browse.selectBlock') || 'Select block')}
@@ -642,7 +641,7 @@ export function ServiceAddressFields({
                 allowClear
                 clearAriaLabel={String(t('common.clear') || 'Clear')}
                 onChange={onBlockChange}
-                colors={crystalColors}
+                colors={fieldColors}
                 showSearch
                 searchPlaceholder={String(
                   t('browse.searchBlockPlaceholder') || 'Search block...',
