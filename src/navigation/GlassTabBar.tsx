@@ -11,7 +11,6 @@ import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useStore} from '../store';
 import {darkTheme, lightTheme} from '../utils/theme';
-import {mixColor} from '../components/CrystalSurface';
 
 const BAR_H = 68;
 const PILL_H = 56;
@@ -140,11 +139,11 @@ export function GlassTabBar({state, descriptors, navigation}: BottomTabBarProps)
   );
 
   const barBg = isDarkMode
-    ? mixColor(theme.primary, theme.card, 0.08)
-    : mixColor(theme.primary, theme.card, 0.04);
+    ? 'rgba(21, 30, 46, 0.72)'
+    : 'rgba(210, 234, 250, 0.78)';
   const pillFill = isDarkMode
-    ? mixColor('#FFFFFF', theme.card, 0.18)
-    : mixColor('#FFFFFF', mixColor(theme.primary, theme.card, 0.12), 0.72);
+    ? 'rgba(255, 255, 255, 0.14)'
+    : 'rgba(255, 255, 255, 0.62)';
 
   return (
     <View
@@ -159,8 +158,8 @@ export function GlassTabBar({state, descriptors, navigation}: BottomTabBarProps)
           {
             backgroundColor: barBg,
             borderColor: isDarkMode
-              ? 'rgba(255,255,255,0.08)'
-              : 'rgba(255,255,255,0.7)',
+              ? 'rgba(255,255,255,0.16)'
+              : 'rgba(255,255,255,0.5)',
           },
         ]}
         onLayout={e => setBarW(e.nativeEvent.layout.width)}
@@ -223,7 +222,11 @@ export function GlassTabBar({state, descriptors, navigation}: BottomTabBarProps)
               style={styles.item}>
               {icon}
               <Text
-                style={[styles.label, {color}]}
+                style={[
+                  styles.label,
+                  isDarkMode ? styles.labelFrostNight : styles.labelFrost,
+                  {color},
+                ]}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}>
@@ -251,9 +254,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#1E3C5A',
     shadowOffset: {width: 0, height: 10},
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.12,
     shadowRadius: 22,
-    elevation: 12,
+    elevation: 0,
   },
   pill: {
     position: 'absolute',
@@ -265,9 +268,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#1E3C5A',
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 0,
   },
   pillSheen: {
     position: 'absolute',
@@ -302,5 +305,15 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     textAlign: 'center',
     includeFontPadding: false,
+  },
+  labelFrost: {
+    textShadowColor: 'rgba(255, 255, 255, 0.9)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 6,
+  },
+  labelFrostNight: {
+    textShadowColor: 'rgba(11, 18, 32, 0.8)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 6,
   },
 });

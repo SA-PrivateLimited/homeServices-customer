@@ -140,6 +140,10 @@ export function ServiceCatalogOverlay({
     onClose();
   };
 
+  const isDark = theme.background === '#0B1220';
+  const sheetBg = isDark ? '#151E2E' : '#E8F4FC';
+  const searchBg = isDark ? '#0B1220' : '#F4FAFE';
+
   const renderGroup = ({item: group}: {item: ServiceGroup}) => (
     <View style={overlayStyles.groupBlock}>
       <Text style={[overlayStyles.groupTitle, {color: theme.text}]}>
@@ -167,7 +171,7 @@ export function ServiceCatalogOverlay({
       onRequestClose={handleClose}>
       <View style={overlayStyles.modalRoot}>
         <Pressable style={overlayStyles.backdrop} onPress={handleClose} />
-        <View style={[overlayStyles.sheet, {backgroundColor: theme.card}]}>
+        <View style={[overlayStyles.sheet, {backgroundColor: sheetBg}]}>
           <View style={overlayStyles.sheetHead}>
             <Text style={[overlayStyles.sheetTitle, {color: theme.text}]}>
               {t('browse.allServicesTitle')}
@@ -181,7 +185,7 @@ export function ServiceCatalogOverlay({
             style={[
               overlayStyles.searchWrap,
               {
-                backgroundColor: theme.background,
+                backgroundColor: searchBg,
                 borderColor: theme.border,
               },
             ]}>

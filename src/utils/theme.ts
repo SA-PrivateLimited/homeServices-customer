@@ -38,7 +38,7 @@ export interface ColorPalette {
 /** Match customer-web DEFAULT_LIGHT_THEME */
 const defaultLight: Theme = {
   background: '#F5F7FA',
-  card: 'rgba(226, 232, 240, 0.22)',
+  card: '#FFFFFF',
   text: '#1A202C',
   textSecondary: '#718096',
   primary: '#3182CE',
@@ -86,6 +86,11 @@ const defaultDark: Theme = {
 /** Mutable — applyColorPalette updates in place before first paint. */
 export const lightTheme: Theme = {...defaultLight};
 export const darkTheme: Theme = {...defaultDark};
+
+/** Sticky app header — opaque white (night: #151E2E), never glass. */
+export function appHeaderBg(theme: Theme): string {
+  return theme.background === '#0B1220' ? '#151E2E' : '#FFFFFF';
+}
 
 /** Customer account-level color themes (accents). Brand = admin client colors. */
 export type CustomerColorThemeId = 'brand' | 'cool' | 'warm';

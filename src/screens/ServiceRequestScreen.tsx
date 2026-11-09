@@ -1697,29 +1697,31 @@ export default function ServiceRequestScreen({
             </TouchableOpacity>
             {!editId && popularCategories.length > 0 ? (
               <View style={styles.serviceGrid}>
-                {popularCategories.map(c => (
-                  <TouchableOpacity
-                    key={c.id || c.name}
-                    style={styles.serviceTile}
-                    activeOpacity={0.8}
-                    onPress={() => applyServiceType(c)}>
-                    <CrystalSurface
-                      primary={theme.primary}
-                      card={theme.card}
-                      isDark={isDarkMode}
-                      accent
-                      radius={18}
-                      style={styles.serviceTileSurface}
-                      contentStyle={styles.serviceTileInner}>
+                {popularCategories.map(c => {
+                  const tint = c.color || theme.primary;
+                  return (
+                    <TouchableOpacity
+                      key={c.id || c.name}
+                      style={[
+                        styles.serviceTile,
+                        {
+                          backgroundColor: isDarkMode ? '#151E2E' : '#FFFFFF',
+                          borderColor: isDarkMode
+                            ? '#273449'
+                            : 'rgba(49, 130, 206, 0.16)',
+                        },
+                      ]}
+                      activeOpacity={0.82}
+                      onPress={() => applyServiceType(c)}>
                       <View
                         style={[
                           styles.serviceTileIcon,
-                          {backgroundColor: `${theme.primary}24`},
+                          {backgroundColor: `${tint}22`},
                         ]}>
                         <Icon
                           name={toSafeMaterialIcon(c.icon, c.name)}
-                          size={22}
-                          color={c.color || theme.primary}
+                          size={26}
+                          color={tint}
                         />
                       </View>
                       <Text
@@ -1727,41 +1729,40 @@ export default function ServiceRequestScreen({
                         numberOfLines={2}>
                         {localizedCategoryName(c)}
                       </Text>
-                    </CrystalSurface>
-                  </TouchableOpacity>
-                ))}
+                    </TouchableOpacity>
+                  );
+                })}
                 {showMoreServices ? (
                   <TouchableOpacity
-                    style={styles.serviceTile}
-                    activeOpacity={0.8}
+                    style={[
+                      styles.serviceTile,
+                      {
+                        backgroundColor: isDarkMode ? '#151E2E' : '#FFFFFF',
+                        borderColor: isDarkMode
+                          ? '#273449'
+                          : 'rgba(49, 130, 206, 0.16)',
+                      },
+                    ]}
+                    activeOpacity={0.82}
                     onPress={() => setShowServiceTypeModal(true)}
                     accessibilityRole="button"
                     accessibilityLabel={String(t('browse.more') || 'More')}>
-                    <CrystalSurface
-                      primary={theme.primary}
-                      card={theme.card}
-                      isDark={isDarkMode}
-                      accent
-                      radius={18}
-                      style={styles.serviceTileSurface}
-                      contentStyle={styles.serviceTileInner}>
-                      <View
-                        style={[
-                          styles.serviceTileIcon,
-                          {backgroundColor: `${theme.primary}24`},
-                        ]}>
-                        <Icon name="apps" size={22} color={theme.primary} />
-                      </View>
-                      <Text
-                        style={[
-                          styles.serviceTileName,
-                          styles.serviceTileMoreName,
-                          {color: theme.primary},
-                        ]}
-                        numberOfLines={1}>
-                        {String(t('browse.more') || 'More')}
-                      </Text>
-                    </CrystalSurface>
+                    <View
+                      style={[
+                        styles.serviceTileIcon,
+                        {backgroundColor: `${theme.primary}22`},
+                      ]}>
+                      <Icon name="apps" size={26} color={theme.primary} />
+                    </View>
+                    <Text
+                      style={[
+                        styles.serviceTileName,
+                        styles.serviceTileMoreName,
+                        {color: theme.primary},
+                      ]}
+                      numberOfLines={1}>
+                      {String(t('browse.more') || 'More')}
+                    </Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -1787,9 +1788,7 @@ export default function ServiceRequestScreen({
               <Select
                 variant="crystal"
                 colors={{
-                  card: isDarkMode
-                    ? 'rgba(255,255,255,0.12)'
-                    : 'rgba(255,255,255,0.72)',
+                  card: isDarkMode ? '#151E2E' : '#FFFFFF',
                 }}
                 style={{marginBottom: 0}}
                 options={primarySelectOptions}
@@ -2580,37 +2579,38 @@ const styles = StyleSheet.create({
   serviceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   serviceTile: {
     width: '48%',
     flexGrow: 1,
     maxWidth: '48.5%',
-  },
-  serviceTileSurface: {
-    width: '100%',
-  },
-  serviceTileInner: {
-    minHeight: 100,
-    maxHeight: 120,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
+    minHeight: 118,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
+    elevation: 0,
+    shadowColor: '#1E3C5A',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
   },
   serviceTileIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   serviceTileName: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 18,
   },
   serviceTileMoreName: {
     fontSize: 15,

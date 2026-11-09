@@ -127,32 +127,17 @@ export function crystalWashColor({
 export function crystalSurfaceStyle(opts: CrystalOpts): ViewStyle {
   const isDark = Boolean(opts.isDark);
   const wash = opts.statusColor || opts.primary;
-  const glass = !isDark && (parseColor(opts.card)?.a ?? 1) <= 0.35;
   return {
     borderRadius: 18,
-    overflow: 'visible',
+    overflow: 'hidden',
     backgroundColor: opts.card,
+    ...surfaceLiftStyle(opts.card),
     shadowColor:
       opts.intensity === 'job' && wash
         ? wash
         : isDark
           ? '#000000'
           : '#1E3C5A',
-    ...(glass
-      ? surfaceLiftStyle(opts.card)
-      : {
-          shadowOffset: {width: 0, height: 6},
-          shadowOpacity:
-            opts.intensity === 'job'
-              ? isDark
-                ? 0.35
-                : 0.18
-              : isDark
-                ? 0.28
-                : 0.12,
-          shadowRadius: 16,
-          elevation: opts.intensity === 'job' ? 6 : 8,
-        }),
   };
 }
 
@@ -189,7 +174,7 @@ export function CrystalSurface({
     statusColor,
     intensity,
   });
-  const translucent = !isDark && (parseColor(card)?.a ?? 1) <= 0.35;
+  const translucent = !isDark && (parseColor(card)?.a ?? 1) < 0.92;
   const highlight = isDark
     ? 'rgba(255, 255, 255, 0.1)'
     : 'rgba(255, 255, 255, 0.85)';
@@ -211,10 +196,10 @@ export function CrystalSurface({
           statusColor,
           intensity,
         }),
-        {borderRadius: radius, marginBottom: 0},
+        {borderRadius: radius, overflow: 'hidden', marginBottom: 0},
         style,
       ]}>
-      {translucent ? null : (
+      {statusColor || intensity === 'job' ? (
         <>
           <View
             pointerEvents="none"
@@ -235,7 +220,7 @@ export function CrystalSurface({
             style={[styles.highlight, {backgroundColor: highlight}]}
           />
         </>
-      )}
+      ) : null}
       <View {...rest} style={[styles.body, contentStyle]}>{children}</View>
     </Card>
   );

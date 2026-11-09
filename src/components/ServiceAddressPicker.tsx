@@ -401,10 +401,12 @@ export default function ServiceAddressPicker({
                         // Web `.addr-chip--card.is-selected`: soft primary ring
                         // (box-shadow 0 0 0 2px @14%), no hard border / elevation.
                         backgroundColor: selected
-                          ? `${theme.primary}0F`
+                          ? isDark
+                            ? '#1B2A40'
+                            : '#E7F4FF'
                           : isDark
-                            ? 'rgba(255,255,255,0.08)'
-                            : 'rgba(255,255,255,0.82)',
+                            ? '#151E2E'
+                            : '#FFFFFF',
                         borderWidth: 0,
                         elevation: 0,
                         shadowColor: theme.primary,
@@ -489,8 +491,8 @@ export default function ServiceAddressPicker({
                       value.mode === 'new'
                         ? `${theme.primary}14`
                         : isDark
-                          ? 'rgba(255,255,255,0.08)'
-                          : 'rgba(255,255,255,0.82)',
+                          ? '#151E2E'
+                          : '#FFFFFF',
                     borderWidth: value.mode === 'new' ? 2 : 0,
                     borderColor:
                       value.mode === 'new'
@@ -719,6 +721,7 @@ export default function ServiceAddressPicker({
       <ConfirmationModal
         visible={Boolean(pendingDelete)}
         type="danger"
+        icon="delete"
         title={String(t('request.deleteAddressTitle') || 'Delete address?')}
         message={String(
           t('request.deleteAddressMessage') ||

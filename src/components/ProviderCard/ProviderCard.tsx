@@ -73,23 +73,49 @@ export function ProviderCard({
   const hasActions = showCall || showContact || Boolean(onRequest);
   const callOnly = hasActions && !onRequest && (showCall || showContact);
   const isDark = theme.background === '#0B1220';
+  const cardFill = isDark
+    ? 'rgba(147, 197, 253, 0.14)'
+    : 'rgba(210, 234, 250, 0.88)';
+  const frostText = isDark
+    ? styles.frostTextNight
+    : styles.frostText;
   const showcase = (showcasePhotos || [])
     .filter(u => typeof u === 'string' && isUsableMediaUrl(u))
     .slice(0, 3);
   const showcaseExtra = Math.max(0, showcase.length - 1);
 
   const avatarSize = compact ? 40 : 48;
-  const cardRadius = compact ? 14 : 18;
+  const cardRadius = compact ? 16 : 22;
 
   return (
     <CrystalSurface
       primary={theme.primary}
-      card={theme.card}
+      card={cardFill}
       isDark={isDark}
       accent
       radius={cardRadius}
-      style={styles.card}
+      style={[
+        styles.card,
+        {
+          borderWidth: 0,
+          shadowColor: '#1E3C5A',
+          shadowOffset: {width: 0, height: 18},
+          shadowOpacity: isDark ? 0.38 : 0.22,
+          shadowRadius: 36,
+        },
+      ]}
       contentStyle={compact ? styles.cardInnerCompact : styles.cardInner}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.crystalEdge,
+          {
+            backgroundColor: isDark
+              ? 'rgba(148, 163, 184, 0.12)'
+              : 'rgba(186, 222, 246, 0.4)',
+          },
+        ]}
+      />
       <Pressable
         style={({pressed}) => [
           styles.main,
@@ -127,7 +153,7 @@ export function ProviderCard({
               <View
                 style={[
                   styles.onlineDot,
-                  {backgroundColor: theme.success, borderColor: theme.card},
+                  {backgroundColor: theme.success, borderColor: cardFill},
                 ]}
               />
             ) : null}
@@ -138,6 +164,7 @@ export function ProviderCard({
             <Text
               style={[
                 compact ? styles.nameCompact : styles.name,
+                frostText,
                 {color: theme.text},
               ]}>
               {name}
@@ -171,6 +198,7 @@ export function ProviderCard({
             <Text
               style={[
                 compact ? styles.professionCompact : styles.profession,
+                frostText,
                 {color: theme.text},
               ]}>
               {profession}
@@ -241,7 +269,12 @@ export function ProviderCard({
               {location ? (
                 <View style={styles.metaRow}>
                   <Icon name="place" size={14} color={theme.primary} />
-                  <Text style={[styles.meta, {color: theme.textSecondary}]}>
+                  <Text
+                    style={[
+                      styles.meta,
+                      frostText,
+                      {color: theme.textSecondary},
+                    ]}>
                     {location}
                   </Text>
                 </View>
@@ -257,7 +290,8 @@ export function ProviderCard({
               {typeof rating === 'number' && rating > 0 ? (
                 <View style={styles.metaRow}>
                   <Icon name="star" size={14} color="#FFD700" />
-                  <Text style={[styles.ratingValue, {color: theme.text}]}>
+                  <Text
+                    style={[styles.ratingValue, frostText, {color: theme.text}]}>
                     {rating.toFixed(1)}
                   </Text>
                   {reviewsLabel ? (
@@ -389,11 +423,32 @@ const styles = StyleSheet.create({
   card: {
     margin: 0,
   },
+  crystalEdge: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 0,
+    height: 8,
+    borderRadius: 8,
+    zIndex: 0,
+  },
+  frostText: {
+    textShadowColor: 'rgba(255, 255, 255, 0.95)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 8,
+  },
+  frostTextNight: {
+    textShadowColor: 'rgba(11, 18, 32, 0.85)',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 8,
+  },
   cardInner: {
-    padding: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
   },
   cardInnerCompact: {
-    padding: 10,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
   },
   main: {
     flexDirection: 'row',

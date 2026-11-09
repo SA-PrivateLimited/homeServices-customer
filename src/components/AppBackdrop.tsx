@@ -18,6 +18,7 @@ export function AppBackdrop({
       source={BACKDROP}
       style={styles.fill}
       resizeMode="cover">
+      <View pointerEvents="none" style={styles.wash} />
       {children}
     </ImageBackground>
   );
@@ -25,4 +26,8 @@ export function AppBackdrop({
 
 const styles = StyleSheet.create({
   fill: {flex: 1},
+  wash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+  },
 });

@@ -15,7 +15,7 @@ import {
   CUSTOMER_WEB,
 } from 'sapvt-ltd-app-packages';
 import {useStore} from '../store';
-import {lightTheme, darkTheme} from '../utils/theme';
+import {lightTheme, darkTheme, appHeaderBg} from '../utils/theme';
 import useTranslation from '../hooks/useTranslation';
 import {GlassTabBar, glassTabOverlayPad} from './GlassTabBar';
 
@@ -47,7 +47,7 @@ const Tab = createBottomTabNavigator();
 function stackHeaderOptions(theme: typeof lightTheme) {
   return {
     headerShown: true,
-    headerStyle: {backgroundColor: theme.card},
+    headerStyle: {backgroundColor: appHeaderBg(theme)},
     headerTintColor: theme.text,
     headerTitleStyle: {fontWeight: '700' as const, fontSize: 17},
     headerShadowVisible: false,
@@ -391,8 +391,8 @@ const GuestTabs = () => {
               style={[
                 helpStyles.bar,
                 {
-                  backgroundColor: theme.card,
-                  borderBottomColor: theme.border,
+                  backgroundColor: appHeaderBg(theme),
+                  borderBottomColor: appHeaderBg(theme),
                 },
               ]}>
               <Text style={[helpStyles.title, {color: theme.text}]}>
